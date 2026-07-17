@@ -1,11 +1,19 @@
-# PS2-RL: Provably Safe, yet Scalable Reinforcement Learning
+<h1 align="center">PS2-RL</h1>
 
-Reference implementation for the paper **"Provably Safe, yet Scalable Reinforcement Learning"** ([arXiv:2606.14536](https://arxiv.org/abs/2606.14536)).
+<p align="center">
+  <b><a href="https://arxiv.org/abs/2606.14536">Provably Safe, yet Scalable Reinforcement Learning</a></b>
+  <br><br>
+  <a href="https://kaiyun717.github.io/">Kai S. Yun</a> &nbsp;·&nbsp; <a href="https://scholar.google.com/citations?user=gksmrPsAAAAJ&hl=en">Zeyang Li</a> &nbsp;·&nbsp; <a href="https://azizan.mit.edu/index.html">Navid Azizan</a>
+  <br>
+  <i>Massachusetts Institute of Technology</i>
+</p>
 
-PS2-RL trains reinforcement-learning policies that are **safe by construction** without sacrificing scalability. Every action a policy proposes is passed through a differentiable **Control-Invariant Layer (CIL)** that projects it onto the set of actions guaranteed to keep the system inside a forward-invariant safe set. Because the layer is differentiable, the policy is trained *end-to-end through it* with standard SAC, so it learns to perform well while safety is enforced at every step, at train and deploy time alike.
 
-The whole stack — environment stepping, backup-flow rollouts, the BCBF-QP, and training —
-is **JAX-native and GPU-accelerated** (`jit` / `lax.scan` / `vmap`).
+PS2-RL trains reinforcement-learning policies that are **safe by construction** without sacrificing scalability. Every action a policy proposes is passed through a differentiable **Control-Invariant Layer (CIL)** that projects it onto the set of actions guaranteed to keep the system inside a forward-invariant safe set. Because the layer is differentiable, the policy is trained *end-to-end through it* with any standard RL backbone, so it learns to perform well while safety is enforced at every step, at train and deploy time alike.
+
+The whole stack is **JAX-native and GPU-accelerated** (`jit` / `lax.scan` / `vmap`).
+
+---
 
 ## Method at a glance
 
