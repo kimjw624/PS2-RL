@@ -163,6 +163,20 @@ def parse_args(argv=None):
         help="Whether to continue episode after safety violation.",
     )
 
+    parser.add_argument(
+        "--disturbance_mode",
+        type=str,
+        default="none",
+        choices=["none", "sinusoidal"],
+        help="Optional fixed world-frame translational acceleration disturbance.",
+    )
+    parser.add_argument("--disturbance_amplitude", type=float, default=0.0, help="Sinusoid amplitude [m/s^2].")
+    parser.add_argument("--disturbance_frequency_hz", type=float, default=0.1, help="Sinusoid frequency [Hz].")
+    parser.add_argument("--disturbance_phase", type=float, default=0.0, help="Sinusoid phase [rad].")
+    parser.add_argument("--disturbance_direction_x", type=float, default=1.0)
+    parser.add_argument("--disturbance_direction_y", type=float, default=0.0)
+    parser.add_argument("--disturbance_direction_z", type=float, default=0.0)
+
     parser.add_argument("--num_steps", type=int, default=100, help="N in tau_0 < ... < tau_N")
     parser.add_argument("--horizon_T", type=float, default=2.0, help="Backup-CBF horizon")
     parser.add_argument(
@@ -410,6 +424,13 @@ def main(argv=None):
         omega_max=args.omega_max,
         z_max=args.z_max,
         terminate_on_violation=not args.not_terminate_on_violation,
+        disturbance_mode=args.disturbance_mode,
+        disturbance_amplitude=args.disturbance_amplitude,
+        disturbance_frequency_hz=args.disturbance_frequency_hz,
+        disturbance_phase=args.disturbance_phase,
+        disturbance_direction_x=args.disturbance_direction_x,
+        disturbance_direction_y=args.disturbance_direction_y,
+        disturbance_direction_z=args.disturbance_direction_z,
         reward_mode=args.reward_mode,
         reference_path=args.reference_path,
         reference_dt=args.reference_dt,
