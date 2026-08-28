@@ -25,7 +25,27 @@ matplotlib-cache/
 
 # Local training, checkpoint, and Python artifacts
 /outputs/
-/checkpoints/
+
+# Ignore arbitrary checkpoints, but publish the exact lightweight policies
+# required by PS2RL_SITL_final.md.
+/checkpoints/*
+!/checkpoints/sitl_delay_comparison/
+/checkpoints/sitl_delay_comparison/*
+!/checkpoints/sitl_delay_comparison/policies/
+/checkpoints/sitl_delay_comparison/policies/*
+
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/
+/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/*
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/configs.json
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/final_weights.pkl
+
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/
+/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/*
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/configs.json
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/summary.json
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/best_weights.pkl
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/final_weights.pkl
+
 /.venv/
 **/__pycache__/
 *.py[cod]
