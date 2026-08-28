@@ -22,3 +22,10 @@ slurm-*.err
 # Caches
 .matplotlib/
 matplotlib-cache/
+
+# Local training, checkpoint, and Python artifacts
+/outputs/
+/checkpoints/
+/.venv/
+**/__pycache__/
+*.py[cod]
