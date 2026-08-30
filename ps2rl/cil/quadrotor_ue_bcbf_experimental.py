@@ -57,6 +57,7 @@ class ExperimentalUEConfig:
     safe_rho_scale: float = 1.0
     terminal_rho_scale: float = 1.0
     terminal_mode: str = "quadratic"
+    compute_radius_diagnostics: bool = True
 
     def __post_init__(self) -> None:
         for name in (
@@ -81,6 +82,7 @@ class ExperimentalUEConfig:
         if mode not in {"quadratic", "nominal"}:
             raise ValueError(f"terminal_mode must be 'quadratic' or 'nominal', got {self.terminal_mode!r}")
         object.__setattr__(self, "terminal_mode", mode)
+        object.__setattr__(self, "compute_radius_diagnostics", bool(self.compute_radius_diagnostics))
 
 
 def _controller_for_cfg(cfg: QuadrotorBCBFConfig) -> QuadrotorDLQR:
@@ -165,7 +167,14 @@ def rollout_ue_quantities(
         tau_end = (k.astype(x0.dtype) + 1.0) * dt
         q_end = e_bar + delta_v * tau_end
         generators_next = generators_next.at[k].set(g9 * q_end)
-        radius_next = tube_scale * jnp.sum(_spectral_norm_9x3_batch(generators_next))
+        if ue_cfg.compute_radius_diagnostics:
+            radius_next = tube_scale * jnp.sum(_spectral_norm_9x3_batch(generators_next))
+        else:
+            # The full-state spectral-norm radius is diagnostic-only. The actual
+            # UE constraints below still use the exact generator supports for the
+            # ceiling and terminal quadratic barrier. Skipping this during
+            # training removes repeated eigensolves without changing the QP rows.
+            radius_next = jnp.asarray(0.0, dtype=x0.dtype)
         # Direct support of the ceiling output delta p_z.  This is always no
         # larger than the full physical-state radius and is the margin that is
         # actually relevant for h_S = z_max - p_z.
@@ -177,10 +186,9 @@ def rollout_ue_quantities(
             theta_next,
             radius_next,
             safe_eps_next,
-            generators_next,
         )
 
-    (_, _, _, _), (xs_tail, phi_tail, theta_tail, r_tail, safe_eps_tail, generators_tail) = jax.lax.scan(
+    (_, _, _, generators_final), (xs_tail, phi_tail, theta_tail, r_tail, safe_eps_tail) = jax.lax.scan(
         scan_step,
         (x0, phi0, theta0, gen0),
         jnp.arange(n_steps, dtype=jnp.int32),
@@ -191,7 +199,6 @@ def rollout_ue_quantities(
     thetas = jnp.concatenate([theta0[None, :, :], theta_tail], axis=0)
     radii = jnp.concatenate([jnp.zeros((1,), dtype=x0.dtype), r_tail], axis=0)
     safe_eps = jnp.concatenate([jnp.zeros((1,), dtype=x0.dtype), safe_eps_tail], axis=0)
-    generators_final = generators_tail[-1]
     info = {
         "all_finite": (
             jnp.all(jnp.isfinite(xs))

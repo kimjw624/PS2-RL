@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import pickle
 import time
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -23,7 +23,8 @@ from ps2rl.cil.quadrotor_backup_cbf import (
     solve_backup_cbf_qp_batch,
     solve_backup_cbf_qp_batch_with_info,
 )
-from ps2rl.envs.quadrotor_env import QuadrotorEnvConfig, build_quadrotor_env
+from ps2rl.cil.quadrotor_ue_bcbf_experimental import ExperimentalUEConfig, QuadrotorExperimentalUEProjector
+from ps2rl.envs.quadrotor_env import QuadrotorEnvConfig, build_quadrotor_env, quadrotor_dynamics
 from ps2rl.utils.angles import wrap_angle_np
 from ps2rl.utils.policy import ActorConfig
 from ps2rl.utils.networks import CriticConfig
@@ -35,6 +36,9 @@ from ps2rl.phase2_ps2.ps2_trainer_core import (
     SACConfig,
     build_ps2_action_fns_for,
     build_ps2_batched_action_fn_for,
+    build_ps2_action_fns,
+    build_ps2_batched_action_fn,
+    build_ps2_update_fn,
     build_ps2_one_vec_step,
     build_ps2_update_fn_for,
     init_sac_state,
@@ -51,6 +55,193 @@ from ps2rl.utils.seed import make_prng_key
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 _PHYS_DIM = 10
+
+
+class _UEObserverEnvState(NamedTuple):
+    env_state: Any
+    observer_xi: jax.Array
+    elapsed: jax.Array
+
+
+class _UEObserverEnvFns(NamedTuple):
+    obs_dim: int
+    action_dim: int
+    reset: Callable[..., Any]
+    step: Callable[..., Any]
+    reset_batched: Callable[..., Any]
+    step_batched: Callable[..., Any]
+
+
+def _build_ue_observer_env(
+    env_cfg: QuadrotorEnvConfig,
+    ue_cfg: ExperimentalUEConfig,
+) -> Tuple[_UEObserverEnvFns, int]:
+    """Wrap the regular quad env with replayable UE observer context.
+
+    The policy/critics still receive the original observation.  Five values
+    are appended only for the safety layer and replay buffer:
+    ``[d_hat(3), e_bar, elapsed]``.
+    """
+
+    base = build_quadrotor_env(env_cfg)
+    base_obs_dim = int(base.obs_dim)
+    dt = float(env_cfg.dt)
+    lam = float(ue_cfg.observer_lambda)
+    delta_d = float(ue_cfg.delta_d)
+    delta_v = float(ue_cfg.delta_v)
+
+    def _augment(obs_base, velocity, xi, elapsed):
+        d_hat = jnp.asarray(lam, dtype=velocity.dtype) * (velocity - xi)
+        lam_arr = jnp.asarray(lam, dtype=velocity.dtype)
+        decay = jnp.exp(-lam_arr * elapsed)
+        e_bar = (
+            decay * jnp.asarray(delta_d, dtype=velocity.dtype)
+            + (jnp.asarray(delta_v, dtype=velocity.dtype) / lam_arr) * (1.0 - decay)
+        )
+        return jnp.concatenate(
+            [obs_base, d_hat, jnp.reshape(e_bar, (1,)), jnp.reshape(elapsed, (1,))],
+            axis=0,
+        )
+
+    def reset(key):
+        env_state, obs_base = base.reset(key)
+        xi = env_state.x[3:6]
+        elapsed = jnp.asarray(0.0, dtype=env_state.x.dtype)
+        obs = _augment(obs_base, env_state.x[3:6], xi, elapsed)
+        return _UEObserverEnvState(env_state, xi, elapsed), obs
+
+    def step(state: _UEObserverEnvState, action, key):
+        x_now = state.env_state.x
+        d_hat = jnp.asarray(lam, dtype=x_now.dtype) * (x_now[3:6] - state.observer_xi)
+        nominal_accel = quadrotor_dynamics(
+            x_now,
+            action,
+            env_cfg.gravity,
+            env_cfg.a_cmd_min,
+            env_cfg.a_cmd_max,
+            env_cfg.omega_max,
+        )[3:6]
+        xi_pred = state.observer_xi + jnp.asarray(dt, dtype=x_now.dtype) * (nominal_accel + d_hat)
+        elapsed_true = state.elapsed + jnp.asarray(dt, dtype=x_now.dtype)
+
+        env_state_out, next_obs_true_base, next_obs_out_base, rew, done, info = base.step(
+            state.env_state, action, key
+        )
+
+        next_velocity_true = next_obs_true_base[3:6]
+        next_obs_true = _augment(next_obs_true_base, next_velocity_true, xi_pred, elapsed_true)
+
+        xi_out = jnp.where(done, env_state_out.x[3:6], xi_pred)
+        elapsed_out = jnp.where(done, jnp.asarray(0.0, dtype=x_now.dtype), elapsed_true)
+        next_obs_out = _augment(next_obs_out_base, env_state_out.x[3:6], xi_out, elapsed_out)
+        return _UEObserverEnvState(env_state_out, xi_out, elapsed_out), next_obs_true, next_obs_out, rew, done, info
+
+    reset_jit = jax.jit(reset)
+    step_jit = jax.jit(step)
+    return (
+        _UEObserverEnvFns(
+            obs_dim=base_obs_dim + 5,
+            action_dim=base.action_dim,
+            reset=reset_jit,
+            step=step_jit,
+            reset_batched=jax.jit(jax.vmap(reset_jit, in_axes=0)),
+            step_batched=jax.jit(jax.vmap(step_jit, in_axes=(0, 0, 0))),
+        ),
+        base_obs_dim,
+    )
+
+
+def _ue_network_obs_fn(base_obs_dim: int):
+    return lambda obs: obs[..., :base_obs_dim]
+
+
+def _ue_projection_obs_fn(base_obs_dim: int):
+    def projection_obs(obs):
+        # [physical x(10), d_hat(3), e_bar, elapsed]
+        return jnp.concatenate([obs[..., :10], obs[..., base_obs_dim : base_obs_dim + 5]], axis=-1)
+
+    return projection_obs
+
+
+def _make_ue_projection_ops(
+    cbf_cfg: QuadrotorBCBFConfig,
+    ue_cfg: ExperimentalUEConfig,
+    *,
+    observer_warmup_sec: float,
+    vanilla_projector: QuadrotorBackupCBFProjector,
+) -> BCBFProjectionOps:
+    """Training-facing projector with vanilla observer warmup then full UE."""
+
+    ue_projector = QuadrotorExperimentalUEProjector(cbf_cfg, ue_cfg=ue_cfg, runtime=vanilla_projector.runtime)
+    warmup = jnp.asarray(float(observer_warmup_sec), dtype=jnp.float32)
+
+    def _compact_ue(info):
+        inputs_finite = info["inputs_finite"]
+        return {
+            "q_mat_finite": inputs_finite,
+            "q_vec_finite": inputs_finite,
+            "g_finite": inputs_finite,
+            "h_finite": inputs_finite,
+            "inputs_finite": inputs_finite,
+            "z_finite": info["z_finite"],
+            "q_saturated": jnp.asarray(False),
+            "max_abs_q": jnp.asarray(0.0, dtype=info["max_abs_b"].dtype),
+            "max_abs_b": info["max_abs_b"],
+            "delta_min_u_ref": info["delta_min_u_ref"],
+        }
+
+    def _compact_vanilla(info):
+        # The production projector already reports these diagnostics.  The
+        # fallbacks make the wrapper tolerant to older checkpoints/code.
+        z_finite = info["z_finite"]
+        inputs_finite = info["inputs_finite"] if "inputs_finite" in info else z_finite
+        zero = jnp.asarray(0.0, dtype=jnp.float32)
+        return {
+            "q_mat_finite": info["q_mat_finite"] if "q_mat_finite" in info else inputs_finite,
+            "q_vec_finite": info["q_vec_finite"] if "q_vec_finite" in info else inputs_finite,
+            "g_finite": info["g_finite"] if "g_finite" in info else inputs_finite,
+            "h_finite": info["h_finite"] if "h_finite" in info else inputs_finite,
+            "inputs_finite": inputs_finite,
+            "z_finite": z_finite,
+            "q_saturated": info["q_saturated"] if "q_saturated" in info else jnp.asarray(False),
+            "max_abs_q": info["max_abs_q"] if "max_abs_q" in info else zero,
+            "max_abs_b": info["max_abs_b"] if "max_abs_b" in info else zero,
+            "delta_min_u_ref": info["delta_min_u_ref"] if "delta_min_u_ref" in info else zero,
+        }
+
+    def solve_single(context, u_ref):
+        x = context[:10]
+        d_hat = context[10:13]
+        e_bar = context[13]
+        elapsed = context[14]
+
+        def do_ue(_):
+            u, slack, use_solver, info = ue_projector._solve_single_with_info(x, u_ref, d_hat, e_bar)
+            return u, slack, use_solver, _compact_ue(info)
+
+        def do_vanilla(_):
+            u, slack, use_solver, info = vanilla_projector.solve_single_with_info(x, u_ref)
+            return u, slack, use_solver, _compact_vanilla(info)
+
+        return jax.lax.cond(elapsed >= warmup.astype(elapsed.dtype), do_ue, do_vanilla, operand=None)
+
+    solve_batch = jax.jit(jax.vmap(solve_single, in_axes=(0, 0)))
+
+    def project_with_info(context, u_ref):
+        return solve_batch(context, u_ref)
+
+    def project(context, u_ref):
+        u, slack, _, _ = solve_batch(context, u_ref)
+        return u, slack
+
+    def backup_policy(context):
+        return jax.vmap(vanilla_projector.runtime.backup_policy_fn)(context[..., :10])
+
+    return BCBFProjectionOps(
+        project_with_info=project_with_info,
+        project=project,
+        backup_policy=backup_policy,
+    )
 
 
 def _action_bounds_from_cbf_cfg(cbf_cfg: QuadrotorBCBFConfig) -> Tuple[jax.Array, jax.Array]:
@@ -347,9 +538,10 @@ def _evaluate_policy(
     actor_params,
     seed: int,
     episodes: int,
+    env_fns_override=None,
 ) -> Dict[str, Any]:
     """Roll out eval episodes on the JAX env and aggregate tracking metrics."""
-    env_fns = build_quadrotor_env(env_cfg)
+    env_fns = build_quadrotor_env(env_cfg) if env_fns_override is None else env_fns_override
     base_key = make_prng_key(seed + 777)
     returns = []
     pos_errors = []
@@ -686,6 +878,8 @@ def _run_training_jax(
     cbf_cfg: QuadrotorBCBFConfig,
     output_dir: str | None = None,
     metric_logger: Callable[[int, Dict[str, float]], None] | None = None,
+    ue_cfg: ExperimentalUEConfig | None = None,
+    ue_observer_warmup_sec: float = 0.2,
 ) -> Dict[str, Any]:
     """Train safe SAC using pure-JAX batched environment stepping."""
     if int(sac_cfg.num_envs) <= 0:
@@ -699,7 +893,15 @@ def _run_training_jax(
     total_vec_steps = (total_steps + num_envs - 1) // num_envs
 
     jax_key = make_prng_key(sac_cfg.seed)
-    env_fns = build_quadrotor_env(env_cfg)
+    if ue_cfg is None:
+        env_fns = build_quadrotor_env(env_cfg)
+        base_obs_dim = int(env_fns.obs_dim)
+        network_obs_fn = None
+        projection_obs_fn = None
+    else:
+        env_fns, base_obs_dim = _build_ue_observer_env(env_cfg, ue_cfg)
+        network_obs_fn = _ue_network_obs_fn(base_obs_dim)
+        projection_obs_fn = _ue_projection_obs_fn(base_obs_dim)
 
     action_scale_np = np.array(
         [cbf_cfg.a_cmd_max, cbf_cfg.omega_max, cbf_cfg.omega_max, cbf_cfg.omega_max],
@@ -724,12 +926,12 @@ def _run_training_jax(
     )
 
     actor_cfg = ActorConfig(
-        obs_dim=env_fns.obs_dim,
+        obs_dim=base_obs_dim,
         action_dim=env_fns.action_dim,
         hidden_sizes=(sac_cfg.hidden_size, sac_cfg.hidden_size),
     )
     critic_cfg = CriticConfig(
-        obs_dim=env_fns.obs_dim,
+        obs_dim=base_obs_dim,
         act_dim=env_fns.action_dim,
         hidden_sizes=(sac_cfg.hidden_size, sac_cfg.hidden_size),
     )
@@ -739,23 +941,68 @@ def _run_training_jax(
     replay = ps2_replay_init(sac_cfg.replay_size, env_fns.obs_dim, env_fns.action_dim)
     projector = QuadrotorBackupCBFProjector(cbf_cfg)
     backup_runtime = projector.runtime
-    proj_ops = _make_projection_ops(cbf_cfg, backup_runtime)
-
-    update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime=backup_runtime)
-    sample_action_batch_fn, action_low, action_high = _build_batched_action_fn(
-        sac_cfg,
-        actor_cfg,
-        cbf_cfg,
-        action_scale,
-        backup_runtime=backup_runtime,
-    )
-    _, eval_action_fn = _build_action_fns(
-        sac_cfg,
-        actor_cfg,
-        cbf_cfg,
-        action_scale,
-        backup_runtime=backup_runtime,
-    )
+    if ue_cfg is None:
+        proj_ops = _make_projection_ops(cbf_cfg, backup_runtime)
+        update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime=backup_runtime)
+        sample_action_batch_fn, action_low, action_high = _build_batched_action_fn(
+            sac_cfg,
+            actor_cfg,
+            cbf_cfg,
+            action_scale,
+            backup_runtime=backup_runtime,
+        )
+        _, eval_action_fn = _build_action_fns(
+            sac_cfg,
+            actor_cfg,
+            cbf_cfg,
+            action_scale,
+            backup_runtime=backup_runtime,
+        )
+    else:
+        proj_ops = _make_ue_projection_ops(
+            cbf_cfg,
+            ue_cfg,
+            observer_warmup_sec=ue_observer_warmup_sec,
+            vanilla_projector=projector,
+        )
+        action_low, action_high = _action_bounds_from_cbf_cfg(cbf_cfg)
+        update_fn = build_ps2_update_fn(
+            sac_cfg,
+            actor_cfg,
+            action_scale,
+            action_low,
+            action_high,
+            proj_ops,
+            phys_dim=_PHYS_DIM,
+            disable_backup_fallback=_disable_backup_fallback(sac_cfg),
+            extended_qp_diagnostics=True,
+            network_obs_fn=network_obs_fn,
+            projection_obs_fn=projection_obs_fn,
+        )
+        sample_action_batch_fn = build_ps2_batched_action_fn(
+            sac_cfg,
+            actor_cfg,
+            action_scale,
+            action_low,
+            action_high,
+            proj_ops,
+            phys_dim=_PHYS_DIM,
+            disable_backup_fallback=_disable_backup_fallback(sac_cfg),
+            network_obs_fn=network_obs_fn,
+            projection_obs_fn=projection_obs_fn,
+        )
+        _, eval_action_fn = build_ps2_action_fns(
+            sac_cfg,
+            actor_cfg,
+            action_scale,
+            action_low,
+            action_high,
+            proj_ops,
+            phys_dim=_PHYS_DIM,
+            disable_backup_fallback=_disable_backup_fallback(sac_cfg),
+            network_obs_fn=network_obs_fn,
+            projection_obs_fn=projection_obs_fn,
+        )
 
     env_keys = jax.random.split(key_env, num_envs)
     env_state, obs = env_fns.reset_batched(env_keys)
@@ -786,6 +1033,7 @@ def _run_training_jax(
         update_metric_pairs=_UPDATE_METRIC_PAIRS,
         episode_fields_fn=_episode_fields,
         episode_field_names=_EPISODE_FIELD_NAMES,
+        projection_obs_fn=projection_obs_fn,
     )
     get_chunk_fn = make_ps2_chunk_fn_getter(one_vec_step)
 
@@ -821,6 +1069,7 @@ def _run_training_jax(
         "actor_g_finite_rate": [],
         "actor_h_finite_rate": [],
         "actor_z_finite_rate": [],
+        "eval_step": [],
         "eval_return_mean": [],
         "eval_safe_rate": [],
         "eval_violation_free_episode_rate": [],
@@ -846,9 +1095,54 @@ def _run_training_jax(
     latest_episode_metrics: Dict[str, float] | None = None
     latest_eval_metrics: Dict[str, float] | None = None
     best_eval_stats_return: Dict[str, float] | None = None
+    best_eval_full_return: Dict[str, Any] | None = None
     best_eval_step_return = 0
     best_eval_key_return: Tuple[float, ...] | None = None
     best_state_return: Dict[str, Any] | None = None
+
+    if ue_cfg is not None:
+        # Warm-start UE fine-tuning evaluates step 0 before any updates. This
+        # preserves the source checkpoint as a valid best-policy candidate and
+        # gives the UE plots a true before/after reference. The nominal path
+        # retains its original evaluation/checkpoint schedule.
+        initial_eval_stats = _evaluate_policy(
+            env_cfg,
+            eval_action_fn,
+            loop_state.state["actor_params"],
+            sac_cfg.seed,
+            sac_cfg.eval_episodes,
+            env_fns_override=env_fns,
+        )
+        history["eval_step"].append(0.0)
+        history["eval_return_mean"].append(initial_eval_stats["return_mean"])
+        history["eval_safe_rate"].append(initial_eval_stats["safe_rate"])
+        history["eval_violation_free_episode_rate"].append(initial_eval_stats["violation_free_episode_rate"])
+        history["eval_pos_error_norm_mean"].append(initial_eval_stats["pos_error_norm_mean"])
+        history["eval_vel_error_norm_mean"].append(initial_eval_stats["vel_error_norm_mean"])
+        history["eval_att_error_norm_mean"].append(initial_eval_stats["att_error_norm_mean"])
+        history["eval_omega_ref_error_norm_mean"].append(initial_eval_stats["omega_ref_error_norm_mean"])
+        history["eval_hard_deck_margin_min"].append(initial_eval_stats["hard_deck_margin_min"])
+        history["eval_tracking_score_mean"].append(initial_eval_stats["tracking_score_mean"])
+        history["eval_tracking_score_p95"].append(initial_eval_stats["tracking_score_p95"])
+        history["eval_x_rmse_mean"].append(initial_eval_stats["x_rmse_mean"])
+        history["eval_pos_xz_rmse_mean"].append(initial_eval_stats["pos_xz_rmse_mean"])
+        history["eval_z_rmse_mean"].append(initial_eval_stats["z_rmse_mean"])
+        history["eval_pos_xyz_rmse_mean"].append(initial_eval_stats["pos_xyz_rmse_mean"])
+        history["eval_vel_xz_rmse_mean"].append(initial_eval_stats["vel_xz_rmse_mean"])
+        history["eval_pitch_rmse_deg_mean"].append(initial_eval_stats["pitch_rmse_deg_mean"])
+        history["eval_y_rmse_mean"].append(initial_eval_stats["y_rmse_mean"])
+        history["eval_vy_rmse_mean"].append(initial_eval_stats["vy_rmse_mean"])
+        history["eval_p95_pos_xyz_mean"].append(initial_eval_stats["p95_pos_xyz_mean"])
+        history["eval_max_pos_xyz_mean"].append(initial_eval_stats["max_pos_xyz_mean"])
+        latest_eval_metrics = {
+            "last_step": 0.0,
+            **{k: float(v) for k, v in _compact_eval_stats(initial_eval_stats).items()},
+        }
+        best_eval_key_return = _eval_selection_key_return(initial_eval_stats)
+        best_eval_step_return = 0
+        best_eval_stats_return = _compact_eval_stats(initial_eval_stats)
+        best_eval_full_return = initial_eval_stats
+        best_state_return = _snapshot_state(loop_state.state)
 
     t0 = time.time()
     last_log_t = t0
@@ -911,7 +1205,9 @@ def _run_training_jax(
                 loop_state.state["actor_params"],
                 sac_cfg.seed + next_eval_step,
                 sac_cfg.eval_episodes,
+                env_fns_override=env_fns if ue_cfg is not None else None,
             )
+            history["eval_step"].append(float(next_eval_step))
             history["eval_return_mean"].append(eval_stats["return_mean"])
             history["eval_safe_rate"].append(eval_stats["safe_rate"])
             history["eval_violation_free_episode_rate"].append(eval_stats["violation_free_episode_rate"])
@@ -962,6 +1258,7 @@ def _run_training_jax(
                 best_eval_key_return = eval_key_return
                 best_eval_step_return = next_eval_step
                 best_eval_stats_return = _compact_eval_stats(eval_stats)
+                best_eval_full_return = eval_stats
                 best_state_return = _snapshot_state(loop_state.state)
             next_eval_step += int(sac_cfg.eval_every)
 
@@ -1079,6 +1376,7 @@ def _run_training_jax(
         loop_state.state["actor_params"],
         sac_cfg.seed + 99_999,
         sac_cfg.eval_episodes,
+        env_fns_override=env_fns if ue_cfg is not None else None,
     )
     final_eval_key_return = _eval_selection_key_return(eval_stats)
     improve_return = (best_eval_key_return is None) or (final_eval_key_return < best_eval_key_return)
@@ -1086,6 +1384,7 @@ def _run_training_jax(
         best_eval_key_return = final_eval_key_return
         best_eval_step_return = total_steps
         best_eval_stats_return = _compact_eval_stats(eval_stats)
+        best_eval_full_return = eval_stats
         best_state_return = _snapshot_state(loop_state.state)
 
     updates_final = int(jax.device_get(loop_state.updates))
@@ -1115,10 +1414,19 @@ def _run_training_jax(
         "history": history,
         "eval": eval_stats,
         "best_eval": best_eval_return,
+        "best_eval_full": best_eval_full_return if best_eval_full_return is not None else eval_stats,
         "configs": {
             "sac": asdict(sac_cfg),
             "env": asdict(env_cfg),
             "cbf": asdict(cbf_cfg),
+            **(
+                {
+                    "ue": asdict(ue_cfg),
+                    "ue_observer_warmup_sec": float(ue_observer_warmup_sec),
+                }
+                if ue_cfg is not None
+                else {}
+            ),
         },
     }
     result["final_state"] = _snapshot_state(loop_state.state)
@@ -1149,4 +1457,26 @@ def run_training(
         cbf_cfg,
         output_dir=output_dir,
         metric_logger=metric_logger,
+    )
+
+
+def run_ue_training(
+    sac_cfg: SACConfig,
+    env_cfg: QuadrotorEnvConfig,
+    cbf_cfg: QuadrotorBCBFConfig,
+    ue_cfg: ExperimentalUEConfig,
+    *,
+    observer_warmup_sec: float = 0.2,
+    output_dir: str | None = None,
+    metric_logger: Callable[[int, Dict[str, float]], None] | None = None,
+) -> Dict[str, Any]:
+    """Experimental Phase-2 fine-tuning with the full UE projector active."""
+    return _run_training_jax(
+        sac_cfg,
+        env_cfg,
+        cbf_cfg,
+        output_dir=output_dir,
+        metric_logger=metric_logger,
+        ue_cfg=ue_cfg,
+        ue_observer_warmup_sec=observer_warmup_sec,
     )
