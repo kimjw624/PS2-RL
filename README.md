@@ -132,6 +132,33 @@ The `slurm_batch/` directory holds the Slurm drivers that reproduce the reported
 
 Submit from the repository root, e.g. `sbatch slurm_batch/slurm_train_uni_phase2.sh`. The drivers target a Supercloud-style cluster (`module load anaconda/Python-ML-2025a`, partition `xeon-g6-volta`, V100 GPU, `JAX_PLATFORMS=cuda`); adapt the `#SBATCH` headers to your environment. Approximate single-GPU training times from the paper: Phase-1 safe-arrival ≈ **840 s** (unicycle) / **2400 s** (quadrotor); Phase-2 PS2 ≈ **4.6 h** (unicycle) / **13.6 h** (quadrotor).
 
+## Landing task (approach cone) — Phase I
+
+Phase I for landing replaces the ceiling with a smooth one-sided approach cone and the
+7-D hover base set with a 9-D one that also regulates horizontal position (a bounded
+cone cannot contain a horizontally unbounded base set). Defaults live in
+`ps2rl/envs/quadrotor_landing_config.py`:
+
+| | value | why |
+|---|---|---|
+| cone | r0 = 0.5 m, θ = 30°, ε = 0.05 r0 | placeholder until the landing reference fixes θ |
+| base set | z_des = 1.25 m, c_B = 12 | lowest height where cone/ground stop binding; 0.77 × c_Lyap |
+| LQR | powerloop weights, q_x = q_y = 1, yaw re-weighted (q_θz 0.5, r_ωz 0.04) | the soft powerloop yaw chain capped c at 5.4 via the quaternion chart |
+
+```bash
+# certify (c_U, chart, cone, ground, adversarial Lyapunov) and sweep z_des
+JAX_PLATFORMS=cpu python scripts/certify_landing_base_set.py --out outputs/landing_cert.json
+
+# train the safe-arrival policy: --backbone sac (default) or td3
+python scripts/train_phase1_landing.py --backbone sac --seed 0
+```
+
+Initial states come from `ps2rl/phase1_sa/landing_design_region.py`: a general region
+that is uniform per altitude slice over Ω \ B, the low-altitude cone edge with outward
+velocity, and the capture shell. The SAC backbone keeps entropy out of the critic target
+(see the module docstring of `ps2rl/phase1_sa/sa_trainer_core.py`); the TD3 path is
+unchanged and bit-identical to before.
+
 ## Citation
 
 If you use this code, please cite the paper:
