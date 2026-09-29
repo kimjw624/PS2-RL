@@ -49,3 +49,6 @@ matplotlib-cache/
 /.venv/
 **/__pycache__/
 *.py[cod]
+
+# Persistent XLA compilation cache (docker_batch/landing_env.sh)
+.jax_cache/

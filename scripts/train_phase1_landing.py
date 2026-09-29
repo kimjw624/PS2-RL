@@ -25,6 +25,7 @@ import pickle
 import sys
 import time
 
+import jax
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -72,6 +73,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--run_name", type=str, default="")
     p.add_argument("--smoke_test", action="store_true")
     p.add_argument("--skip_lyap_check", action="store_true")
+    p.add_argument("--require_gpu", action="store_true", help="Abort unless JAX runs on a GPU backend.")
     _add_dataclass_args(p, LandingSAConfig, skip=("sa_backbone",))
     _add_dataclass_args(p, QuadrotorLandingConfig)
     _add_dataclass_args(p, LandingDesignRegionConfig, prefix="region_")
@@ -114,6 +116,13 @@ def check_proposition_1(cfg: QuadrotorLandingConfig, *, lyap: bool) -> dict:
 
 def main(argv=None) -> None:
     args = parse_args(argv)
+    backend = jax.default_backend()
+    print(f"[jax] backend={backend} devices={jax.devices()}")
+    if args.require_gpu and backend != "gpu":
+        raise SystemExit(
+            "JAX is not running on the GPU (backend=%s). Inside the container, check `nvidia-smi` and that the "
+            "venv has jax[cuda12]==0.6.2 (bash docker_batch/setup_train_venv.sh)." % backend
+        )
     sa_over = _collect(args, LandingSAConfig)
     region_over = _collect(args, LandingDesignRegionConfig, prefix="region_")
     if args.smoke_test:
@@ -164,8 +173,9 @@ def main(argv=None) -> None:
     )
     s = result["summary"]
     print(
-        f"[done] untrained mu_w={s['untrained_val']['mu_weighted']:.3f} -> best mu_w={s['best_val']['mu_weighted']:.3f} "
-        f"(step {s['best_eval_step']}); outputs in {run_dir}"
+        f"[done] untrained mu_w={s['untrained_val']['mu_weighted']:.3f} -> best val mu_w={s['best_val']['mu_weighted']:.3f} "
+        f"(step {s['best_eval_step']}), test at best mu_w={s['test_at_best']['mu_weighted']:.3f}; "
+        f"{s['wall_time_sec'] / 60.0:.1f} min on {s['jax_backend']}; outputs in {run_dir}"
     )
 
 

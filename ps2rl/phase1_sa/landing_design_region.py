@@ -221,17 +221,25 @@ def build_landing_sampler(
     drawers = (draw_general, draw_edge, draw_shell)
 
     def _rejection(draw: Callable, key: jax.Array, scale: jax.Array) -> tuple[jax.Array, jax.Array]:
-        def body(_, carry):
-            found, best, k = carry
+        # while_loop (not fori_loop): stops at the first accepted candidate. Under vmap
+        # it runs until every lane has accepted, which is 1-3 iterations here instead of
+        # always ``tries``. The key sequence matches a fixed-trial loop, so the accepted
+        # sample is identical - only the wasted draws are gone (matters on GPU, where the
+        # auto-reset sample is computed for every env at every step).
+        def cond(carry):
+            i, found, _, _ = carry
+            return (~found) & (i < tries)
+
+        def body(carry):
+            i, _, best, k = carry
             k, k_draw = jax.random.split(k)
             cand = draw(k_draw, scale)
             ok = accept(cand)
-            take = (~found) & ok
-            return found | ok, jnp.where(take, cand, best), k
+            return i + 1, ok, jnp.where(ok, cand, best), k
 
         k0, k_first = jax.random.split(key)
         first = draw(k_first, scale)
-        found, x, _ = jax.lax.fori_loop(0, tries, body, (accept(first), first, k0))
+        _, found, x, _ = jax.lax.while_loop(cond, body, (jnp.int32(0), accept(first), first, k0))
         return x, found
 
     def sample_region(region_idx: jax.Array, key: jax.Array, scale: jax.Array) -> tuple[jax.Array, jax.Array]:

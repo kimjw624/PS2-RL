@@ -153,6 +153,11 @@ JAX_PLATFORMS=cpu python scripts/certify_landing_base_set.py --out outputs/landi
 python scripts/train_phase1_landing.py --backbone sac --seed 0
 ```
 
+Inside the px4sitl Docker container (GPU), `docker_batch/` wraps this: `setup_train_venv.sh`
+(Python 3.10 venv with CUDA JAX + GPU check), `smoke_landing_phase1.sh` (smoke test + ETA),
+`run_landing_phase1_compare.sh` (SAC vs TD3 over seeds, resumable) and
+`summarize_landing_phase1.py` (table + learning curves). See `docker_batch/README_landing_phase1.md`.
+
 Initial states come from `ps2rl/phase1_sa/landing_design_region.py`: a general region
 that is uniform per altitude slice over Ω \ B, the low-altitude cone edge with outward
 velocity, and the capture shell. The SAC backbone keeps entropy out of the critic target

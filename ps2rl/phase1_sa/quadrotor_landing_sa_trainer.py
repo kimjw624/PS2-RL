@@ -314,18 +314,24 @@ def run_landing_sa_training(
     res = run_sa_training_loop(ra_cfg=ra_cfg, loop_state=loop_state, one_vec_step=one_vec_step, hooks=hooks)
 
     best_eval = res.best_eval_stats if res.best_eval_stats is not None else res.val_eval
+    best_state = res.best_state if res.best_state is not None else snapshot_sa_state(res.loop_state.state)
+    # Model selection on val, reporting on test: evaluate the selected checkpoint on test.
+    test_at_best = run_eval(best_state["actor_params"], "test")
     summary = {
         "training_objective": "discounted_safe_arrival",
         "task": "approach_cone_landing",
         "sa_backbone": sa_backbone(ra_cfg),
+        "seed": int(ra_cfg.seed),
         "total_steps": int(ra_cfg.total_steps),
         "updates": int(jax.device_get(res.loop_state.updates)),
         "wall_time_sec": float(res.total_time),
+        "jax_backend": jax.default_backend(),
         "final_curriculum_scale": float(jax.device_get(res.loop_state.curriculum_scale)),
         "untrained_val": initial_eval,
         "final_val": res.val_eval,
         "best_val": best_eval,
         "best_eval_step": int(res.best_eval_step),
+        "test_at_best": test_at_best,
         "test_at_final": res.test_eval,
     }
     result = {
@@ -338,7 +344,7 @@ def run_landing_sa_training(
             "actor": asdict(actor_cfg),
         },
         "final_state": snapshot_sa_state(res.loop_state.state),
-        "best_state": res.best_state if res.best_state is not None else snapshot_sa_state(res.loop_state.state),
+        "best_state": best_state,
         "actor_cfg": actor_cfg,
     }
     if output_dir is not None:
