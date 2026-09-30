@@ -180,7 +180,7 @@ def build_landing_evaluator(
             u = BackupPolicy.select_action(x, raw, base_set)
             xn = step_plant(x, u)
             active = ~(hit_b | hit_f)
-            new_f = active & ~cone.contains(xn)
+            new_f = active & ~cone.training_contains(xn)
             new_b = active & ~new_f & base_set.contains(xn)
             return (jnp.where(active, xn, x), hit_b | new_b, hit_f | new_f), new_b
 
@@ -266,7 +266,7 @@ def run_landing_sa_training(
     )
     cone, base_set = env_fns.safe_set, env_fns.base_set
     goal_fn = batch_safe_contains(lambda x: base_set.contains(x))
-    fail_fn = batch_safe_contains(lambda x: jnp.logical_not(cone.contains(x)))
+    fail_fn = batch_safe_contains(lambda x: jnp.logical_not(cone.training_contains(x)))
 
     key = make_prng_key(ra_cfg.seed)
     key, k_state, k_env = jax.random.split(key, 3)

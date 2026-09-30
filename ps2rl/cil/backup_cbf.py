@@ -182,6 +182,10 @@ def build_discretized_backup_cbf_rows_with_info(
     """Build A u <= b from discretized backup-CBF constraints with diagnostics."""
     xs, qs, rollout_diag = rollout_backup_flow_and_sensitivity_with_info(x, cfg, system)
     f0, g0 = system.control_affine_terms_fn(x)
+    # Optional per-constraint class-K gains / relative-time flags (tuples over the safe-set
+    # rows); configs that do not define them get the uniform rows exactly as before.
+    alpha_vec = getattr(cfg, "alpha_per_constraint", None)
+    rt_vec = getattr(cfg, "relative_time_per_constraint", None)
 
     def per_node_rows(xi, qi):
         h_c, dh_c = system.safe_set_values_and_grads_fn(xi)
@@ -189,8 +193,13 @@ def build_discretized_backup_cbf_rows_with_info(
         qi_f0 = qi @ f0
         a = -(dh_c @ qi_g0)
         f_pi_i = closed_loop_backup_dynamics(xi, system)
-        flow_term = qi_f0 - f_pi_i if cfg.include_relative_time_term else qi_f0
-        b = cfg.alpha * h_c + dh_c @ flow_term
+        if rt_vec is None:
+            flow_term = qi_f0 - f_pi_i if cfg.include_relative_time_term else qi_f0
+            corr = dh_c @ flow_term
+        else:
+            corr = dh_c @ qi_f0 - jnp.asarray(rt_vec, dtype=xi.dtype) * (dh_c @ f_pi_i)
+        alpha = cfg.alpha if alpha_vec is None else jnp.asarray(alpha_vec, dtype=xi.dtype)
+        b = alpha * h_c + corr
         return a, b
 
     a_seq, b_seq = jax.vmap(per_node_rows, in_axes=(0, 0))(xs, qs)

@@ -107,19 +107,26 @@ def check_proposition_1(cfg: QuadrotorLandingConfig, *, lyap: bool) -> dict:
     bounds = {
         "c_U": float(ctrl.max_certified_level),
         "c_chart": lc.c_chart_bound(p_inv),
-        "c_cone": lc.c_cone_exact(p_inv, cone, z_des=cfg.z_des, c_hi=4.0 * c_b),
+        "c_cone": lc.c_cone_exact(p_inv, cone.cone, z_des=cfg.z_des, c_hi=4.0 * c_b),
         "c_ground": lc.c_ground_bound(p_inv, z_des=cfg.z_des, z_clear=cfg.z_clear),
     }
+    if float(cfg.recovery_rate_floor) > 0.0:
+        bounds["c_recovery_floor"] = lc.c_recovery_floor(p_inv, z_des=cfg.z_des, kappa=float(cfg.recovery_rate_floor))
+    if float(cfg.recovery_rate_cone) > 0.0:
+        bounds["c_recovery_cone"] = lc.c_recovery_cone(p_inv, cone.cone, z_des=cfg.z_des,
+                                                       kappa=float(cfg.recovery_rate_cone), c_hi=4.0 * c_b)
     if lyap:
         worst, _ = lc.lyapunov_worst_adversarial(ctrl, landing_step_fn(cfg), level=c_b, n_starts=2048, iters=200)
         bounds["lyap_ratio_at_c_B"] = worst
-    bad = [k for k in ("c_U", "c_chart", "c_cone", "c_ground") if c_b > bounds[k] + 1e-9]
+    bad = [k for k in bounds if k.startswith("c_") and c_b > bounds[k] + 1e-9]
     if lyap and bounds["lyap_ratio_at_c_B"] >= 1.0:
         bad.append("Lyapunov")
     msg = ", ".join(f"{k}={v:.3f}" for k, v in bounds.items())
     if bad:
         raise SystemExit(f"base_set_c={c_b} is not certified ({', '.join(bad)} violated): {msg}")
-    print(f"[certificate] c_B={c_b} at z_des={cfg.z_des}: {msg} -> OK")
+    print(f"[certificate] c_B={c_b} at z_des={cfg.z_des} (safe set: cone{' + floor' if cfg.floor_constraint else ''}"
+          f"{f', recovery rates cone {cfg.recovery_rate_cone:g} / floor {cfg.recovery_rate_floor:g}' if cone.recovery_enabled else ''}): "
+          f"{msg} -> OK")
     return bounds
 
 

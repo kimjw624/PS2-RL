@@ -177,7 +177,7 @@ def main() -> None:
     run = load_phase2_run(args.phase2_run, repo_root=REPO, checkpoint=args.checkpoint,
                           reference_config=args.reference_config)
     qp_dtype = args.qp_solve_dtype or ("float64" if jax.config.jax_enable_x64 else "float32")
-    tuning = parse_field_overrides(args.cbf_override, QuadrotorLandingBCBFConfig)
+    tuning = parse_field_overrides(args.cbf_override, QuadrotorLandingBCBFConfig, extra={"floor_constraint": bool})
     if args.alpha is not None:
         tuning["alpha"] = args.alpha
     overrides = {"qp_solve_dtype": qp_dtype, "backup_policy_mode": args.backup_policy_mode, **tuning}

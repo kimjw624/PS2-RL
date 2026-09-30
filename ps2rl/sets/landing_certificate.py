@@ -12,7 +12,12 @@ with sqrt(c) (note Eq. (8)). The level bounds are:
                            concave, so the minimum sits on the ellipsoid surface; we
                            evaluate it on a dense S^2 grid and bisect on c
   c_ground base set stays z_clear above the pad plane (not in the note; keeps the
-           hover ellipsoid out of ground effect)
+           hover ellipsoid out of ground effect). With the floor in the safe set this is
+           also what makes B a subset of S (any z_clear >= 0 suffices for that).
+  c_rec    (only with the Phase-I gentle-recovery envelope) B_c subset of
+           G = {grad_p h_j . v <= kappa_j h_j}: exact for the floor (linear), a sufficient
+           bound for the cone. Needed because the BCBF rows after the backup's arrival in
+           B are evaluated along pi_B inside B.
   c_Lyap   one-step decrease V(F(x, pi_B(x))) < V(x) of the *nonlinear* Euler step,
            checked on dense samples (a numerical check, not a proof - note Remark 2)
 
@@ -28,7 +33,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from ps2rl.base_controller.quadrotor_landing_dlqr import IDX_ATT, IDX_POS, IDX_Z, QuadrotorLandingDLQR
+from ps2rl.base_controller.quadrotor_landing_dlqr import IDX_ATT, IDX_POS, IDX_VEL, IDX_Z, QuadrotorLandingDLQR
 from ps2rl.sets.quadrotor_cone_sets import QuadrotorConeSafeSet
 
 
@@ -134,6 +139,40 @@ def c_cone_note(p_inv: np.ndarray, cone: QuadrotorConeSafeSet, *, z_des: float, 
     def ok(c: float) -> bool:
         rho = support_radii(p_inv, c)
         return cone.r0 + cone.tan_theta * (z_des - rho["z"]) - np.sqrt(rho["xy"] ** 2 + cone.eps**2) >= 0.0
+
+    return _bisect_largest(ok, c_hi)
+
+
+# --------------------------------------------------------- gentle recovery
+def c_recovery_floor(p_inv: np.ndarray, *, z_des: float, kappa: float) -> float:
+    """Largest c with v_z <= kappa * zeta on all of B_c (exact: a linear function on an ellipsoid).
+
+    max_{e^T P e <= c} (e_vz - kappa e_zeta) = sqrt(c w^T P^-1 w) must not exceed kappa z_des.
+    """
+    if kappa <= 0.0:
+        return float("inf")
+    w = np.zeros(p_inv.shape[0])
+    w[IDX_Z] = -kappa
+    w[IDX_VEL.start + 2] = 1.0
+    return float((kappa * z_des) ** 2 / (w @ p_inv @ w))
+
+
+def c_recovery_cone(
+    p_inv: np.ndarray, cone: QuadrotorConeSafeSet, *, z_des: float, kappa: float, c_hi: float
+) -> float:
+    """Largest c (sufficient condition) with grad_p h_cone . v <= kappa h_cone on B_c.
+
+    |grad_p h_cone| <= sqrt(1 + tan^2 theta) everywhere and |v| <= rho_v(c) on B_c, so
+    sqrt(1 + tan^2) rho_v(c) <= kappa min_{B_c} h_cone is sufficient.
+    """
+    if kappa <= 0.0:
+        return float("inf")
+    grid = _sphere_grid(180, 360)
+    gmax = float(np.sqrt(1.0 + cone.tan_theta**2))
+
+    def ok(c: float) -> bool:
+        rho_v = support_radii(p_inv, c)["v"]
+        return gmax * rho_v <= kappa * cone_min_over_base_set(p_inv, cone, z_des=z_des, c=c, grid=grid)
 
     return _bisect_largest(ok, c_hi)
 

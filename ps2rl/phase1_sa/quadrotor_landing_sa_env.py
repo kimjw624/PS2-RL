@@ -5,7 +5,9 @@ runs unchanged): each step returns the true successor ``next_obs_true`` (used fo
 replay and Bellman targets) and the collector observation ``next_obs_out`` (auto-reset
 if the episode ended). Differences from the powerloop env:
 
-* safe set = smooth approach cone, base set = 9-D hover ellipsoid above the pad
+* safe set = smooth approach cone (optionally n the pad plane), base set = 9-D hover
+  ellipsoid above the pad; with the gentle-recovery envelope enabled, leaving it counts
+  as a failure too (``QuadrotorLandingSafeSet.training_contains``)
 * initial states come from the analytic design-region sampler (no trace library)
 * collection episodes may run longer than the backup horizon N (``episode_max_steps``;
   the note recommends k_max > N). Timeouts are not terminal in the Bellman target
@@ -25,7 +27,7 @@ from ps2rl.envs.quadrotor_env import quadrotor_step_euler
 from ps2rl.envs.quadrotor_landing_config import QuadrotorLandingConfig
 from ps2rl.phase1_sa.landing_design_region import LandingDesignRegionConfig, build_landing_sampler
 from ps2rl.sets.base_sets import EllipsoidBaseSet
-from ps2rl.sets.quadrotor_cone_sets import QuadrotorConeSafeSet
+from ps2rl.sets.quadrotor_landing_safe_set import QuadrotorLandingSafeSet
 from ps2rl.utils.policy import clip_to_box
 from ps2rl.utils.quaternion import normalize_quaternion_batch
 
@@ -60,13 +62,13 @@ class LandingSAEnvFns(NamedTuple):
     step: Callable
     reset_batched: Callable
     step_batched: Callable
-    safe_set: QuadrotorConeSafeSet
+    safe_set: QuadrotorLandingSafeSet
     base_set: EllipsoidBaseSet
     sampler: dict
 
 
-def build_landing_sets(cfg: QuadrotorLandingConfig) -> tuple[QuadrotorConeSafeSet, EllipsoidBaseSet]:
-    cone = QuadrotorConeSafeSet.from_config(cfg)
+def build_landing_sets(cfg: QuadrotorLandingConfig) -> tuple[QuadrotorLandingSafeSet, EllipsoidBaseSet]:
+    cone = QuadrotorLandingSafeSet.from_config(cfg)
     ctrl = QuadrotorLandingDLQR.from_config(cfg)
     base_set = EllipsoidBaseSet(ctrl, float(cfg.base_set_c), smooth_gain=float(cfg.base_set_smooth_gain))
     return cone, base_set
@@ -115,7 +117,7 @@ def build_landing_sa_env(
         x_next = step_plant(state.x, applied)
 
         h_next = cone.value(x_next)
-        safe = h_next >= 0.0
+        safe = cone.training_contains(x_next)
         goal = base_set.contains(x_next)
         fail = ~safe
         steps = state.steps + jnp.int32(1)

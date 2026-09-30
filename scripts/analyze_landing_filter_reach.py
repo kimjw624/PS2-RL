@@ -86,7 +86,7 @@ def _cone_lines(ax, cone_r, z):
 
 def main():
     args = ARGS
-    base_over = parse_field_overrides(args.cbf_override, lbcbf.QuadrotorLandingBCBFConfig)
+    base_over = parse_field_overrides(args.cbf_override, lbcbf.QuadrotorLandingBCBFConfig, extra={"floor_constraint": bool})
     cfg = lbcbf.landing_bcbf_config_from_checkpoint(args.backup, qp_solve_dtype=args.qp_solve_dtype, **base_over)
     projector = lbcbf.QuadrotorLandingBackupCBFProjector(cfg)
     rt = projector.runtime
@@ -276,7 +276,7 @@ def main():
         sets = [("baseline", base_label, cfg, projector)]
         for v in variants:
             over = {**base_over, **parse_field_overrides([t for t in v.split(",") if t.strip()],
-                                                        lbcbf.QuadrotorLandingBCBFConfig)}
+                                                        lbcbf.QuadrotorLandingBCBFConfig, extra={"floor_constraint": bool})}
             cfg_v = lbcbf.landing_bcbf_config_from_checkpoint(args.backup, qp_solve_dtype=args.qp_solve_dtype, **over)
             sets.append((v, v, cfg_v, lbcbf.QuadrotorLandingBackupCBFProjector(cfg_v)))
         d_offsets = sorted(set([0.0, float(offsets[-1])]))

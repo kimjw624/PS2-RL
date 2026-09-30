@@ -35,6 +35,13 @@ class QuadrotorLandingConfig:
     cone_r0: float = 0.5
     cone_theta_deg: float = 30.0
     cone_eps: float = 0.025
+    # pad plane as a second safety constraint (h_floor = z - pad_z >= 0). Off by default so
+    # checkpoints trained before it existed keep their meaning (cone-only safe set).
+    floor_constraint: bool = False
+    # Phase-I gentle-recovery envelope G_j = {grad_p h_j . v <= kappa_j h_j} (0 = off); see
+    # ps2rl/sets/quadrotor_landing_safe_set.py. Training-only; not part of the safety spec.
+    recovery_rate_cone: float = 0.0
+    recovery_rate_floor: float = 0.0
 
     # base set
     z_des: float = 1.25
@@ -61,6 +68,10 @@ class QuadrotorLandingConfig:
         n = int(round(self.T / self.dt))
         if n != int(self.num_steps):
             raise ValueError(f"num_steps={self.num_steps} disagrees with T/dt={n}")
+        if float(self.recovery_rate_floor) > 0.0 and not bool(self.floor_constraint):
+            raise ValueError("recovery_rate_floor > 0 needs floor_constraint=True")
+        if bool(self.floor_constraint) and float(self.z_clear) < 0.0:
+            raise ValueError("with the floor in the safe set the base set must stay above it (z_clear >= 0)")
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

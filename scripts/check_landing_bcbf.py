@@ -57,6 +57,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--h_tol", type=float, default=-1e-3, help="min tolerated cone margin of filtered rollouts [m]")
     for name in ("alpha", "base_alpha", "slack_weight", "solver_tol"):
         p.add_argument(f"--{name}", type=float, default=None, help="QP tuning override (default: powerloop Phase-II value)")
+    p.add_argument("--cbf_override", action="append", default=[], metavar="KEY=VALUE",
+                   help="landing BCBF override (repeatable), e.g. alpha_floor=20, relative_time_floor=off, floor_constraint=on")
     p.add_argument("--qp_solve_dtype", choices=("float32", "float64"), default=None,
                    help="dtype of the qpax solve (default float64 when JAX x64 is enabled, else float32)")
     return p.parse_args(argv)
@@ -68,12 +70,18 @@ def main(argv=None) -> None:
     out.mkdir(parents=True, exist_ok=True)
     overrides = {k: getattr(args, k) for k in ("alpha", "base_alpha", "slack_weight", "solver_tol") if getattr(args, k) is not None}
     overrides["qp_solve_dtype"] = args.qp_solve_dtype or ("float64" if jax.config.jax_enable_x64 else "float32")
+    from ps2rl.evaluation.landing_phase2_run import parse_field_overrides
+
+    overrides.update(parse_field_overrides(args.cbf_override, L.QuadrotorLandingBCBFConfig, extra={"floor_constraint": bool}))
     cfg = L.landing_bcbf_config_from_checkpoint(args.backup, **overrides)
     md = L.read_checkpoint_metadata(args.backup)
     lc = cfg.landing
     print(f"[config] from {cfg.learned_backup_policy_path}")
     print(f"  cone r0={lc.cone_r0} theta={lc.cone_theta_deg} deg eps={lc.cone_eps} pad=({lc.pad_x},{lc.pad_y},{lc.pad_z}); "
           f"base set z_des={lc.z_des} c_B={lc.base_set_c}; dt={lc.dt} N={lc.num_steps}")
+    print(f"  safe set: cone{' + floor' if lc.floor_constraint else ''}; per-constraint alpha {cfg.alpha_per_constraint}, "
+          f"relative-time rows {cfg.relative_time_per_constraint or cfg.include_relative_time_term}; Phase-I recovery rates "
+          f"cone {lc.recovery_rate_cone:g} / floor {lc.recovery_rate_floor:g}")
     print(f"  QP: alpha={cfg.alpha} base_alpha={cfg.base_alpha} slack_weight={cfg.slack_weight:g} solver_tol={cfg.solver_tol:g}; "
           f"{cfg.num_qp_inequalities} inequalities; solved in {cfg.qp_solve_dtype}")
     if "certificate" in md:
@@ -84,6 +92,8 @@ def main(argv=None) -> None:
     cone, base_set = L.landing_sets(cfg)
     ctrl = base_set.controller
     recover = L.make_recoverability_fn(cfg, rt)
+    # Phase I evaluated membership with its own failure test (S n gentle-recovery envelope, if on)
+    recover_p1 = L.make_recoverability_fn(cfg, rt, training_envelope=True)
     region_cfg = LandingDesignRegionConfig.from_dict(md.get("design_region", {}))
     sampler = build_landing_sampler(region_cfg, cone, base_set)
     key = jax.random.PRNGKey(args.seed)
@@ -95,8 +105,10 @@ def main(argv=None) -> None:
     for i, reg in enumerate(REGION_NAMES):
         keys = jax.random.split(jax.random.fold_in(key, i), args.n_recoverability)
         xs, found = jax.vmap(lambda k: sampler["sample_region"](jnp.int32(i), k, jnp.float32(1.0)))(keys)
-        hb, hf, _ = recover(xs[np.asarray(found)])
+        hb, hf, _ = recover_p1(xs[np.asarray(found)])
         rec[reg] = float(np.mean(np.asarray(hb)))
+        hb_s, _, _ = recover(xs[np.asarray(found)])
+        report.setdefault("recoverability_wrt_S_only", {})[reg] = float(np.mean(np.asarray(hb_s)))
     half = float(np.sqrt(np.log(2 / 0.05) / (2 * args.n_recoverability)))
     ref = None
     summ_path = Path(cfg.learned_backup_policy_path).parent / "summary.json"
@@ -116,6 +128,12 @@ def main(argv=None) -> None:
     x0 = cand[np.asarray(hb)][: args.n_filter]
     if len(x0) < args.n_filter:
         print(f"[check 2] only {len(x0)} recoverable start states found")
+    if len(x0) == 0:
+        report["filter_stress_test"] = {"ok": False, "reason": "no recoverable start states"}
+        with open(out / "check_landing_bcbf.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"[FAIL] no recoverable start states for the stress test; wrote {out / 'check_landing_bcbf.json'}")
+        raise SystemExit(1)
     dp = x0[:, 0:2] - np.array([lc.pad_x, lc.pad_y])
     rhat = dp / np.maximum(np.linalg.norm(dp, axis=1, keepdims=True), 1e-9)
     zeta0 = x0[:, 2] - lc.pad_z
@@ -172,6 +190,28 @@ def main(argv=None) -> None:
     ok2 = (hf_.min() >= args.h_tol) and (slack_t.max() <= args.slack_tol)
     res["ok"] = bool(ok2)
     report["filter_stress_test"] = res
+
+    # ---------------------------------------------------------------- check 2b (floor)
+    if lc.floor_constraint:
+        depth = lc.cone_r0 / np.tan(np.radians(lc.cone_theta_deg))  # cone apex depth below the pad
+        tgt_f = np.tile(np.array([lc.pad_x, lc.pad_y, lc.pad_z - depth]), (len(x0), 1))
+        off_f = jnp.asarray(tgt_f - np.asarray([lc.pad_x, lc.pad_y, lc.pad_z + lc.z_des]), dtype=x0.dtype)
+        xn_f, xf_f = jnp.asarray(x0), jnp.asarray(x0)
+        zmin_n, zmin_f, slack_f = np.inf, np.inf, 0.0
+        for _ in range(steps):
+            xn_f = step_b(xn_f, nominal_b(xn_f, off_f))
+            u_nom = nominal_b(xf_f, off_f)
+            u_safe, slack, used, _ = projector.solve_batch_with_info(xf_f, u_nom)
+            xf_f = step_b(xf_f, u_safe)
+            zmin_n = min(zmin_n, float(np.min(np.asarray(xn_f)[:, 2] - lc.pad_z)))
+            zmin_f = min(zmin_f, float(np.min(np.asarray(xf_f)[:, 2] - lc.pad_z)))
+            slack_f = max(slack_f, float(np.max(np.asarray(slack))))
+        ok2b = (zmin_f >= args.h_tol) and (slack_f <= args.slack_tol)
+        report["floor_stress_test"] = {"target_depth": float(depth), "unfiltered_min_height": zmin_n,
+                                       "filtered_min_height": zmin_f, "max_slack": slack_f, "ok": bool(ok2b)}
+        print(f"[check 2b] nominal targets {depth:.2f} m below the pad: unfiltered min height {zmin_n:+.3f} m | "
+              f"filtered {zmin_f:+.4f} m, max slack {slack_f:.1e}")
+        ok2 = ok2 and ok2b
     print(f"[check 2] nominal controller targets {args.exit_distance} m outside the wall, {len(x0)} recoverable starts, {steps} steps")
     print(f"  unfiltered: {100 * viol_nom:.0f}% leave the cone | filtered: {100 * viol_f:.1f}% leave, min h_cone {hf_.min():+.4f} m")
     fb_frac = float(fallback_t.mean())

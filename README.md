@@ -180,6 +180,15 @@ tracking error, and renders figures and a 3D GIF with the cone. The backup must 
 config, and `train_phase1_landing.py --config_json` trains it. `docker_batch/run_landing_phase2_filter_eval.sh`
 chains import → config → training → evaluation; see `docker_batch/README_landing_phase2_filter.md`.
 
+### Landing: reaching the floor
+
+These settings are all opt-in.
+- `floor_constraint=True` adds the pad plane to the safe set, in Phase I (failure, certificate) and in the CIL (a floor row per backup node).
+- `alpha_floor` / `relative_time_floor` tune the floor rows.
+- The Phase-I option `recovery_rate_cone/floor` trains a backup that never pulls away from a boundary faster than κ·h. With the paper's relative-time rows, that makes holding still feasible anywhere in C_N, so the filtered vehicle can get arbitrarily close to the floor.
+
+`docker_batch/run_landing_floor_overnight.sh` trains the variants, certifies and self-checks them, runs the reach tests (`scripts/test_landing_floor_reach.py`), and writes a report. See `docker_batch/README_landing_floor.md`.
+
 ## Citation
 
 If you use this code, please cite the paper:

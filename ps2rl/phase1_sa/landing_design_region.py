@@ -38,6 +38,7 @@ import numpy as np
 from ps2rl.base_controller.quadrotor_landing_dlqr import QuadrotorLandingDLQR
 from ps2rl.sets.base_sets import EllipsoidBaseSet
 from ps2rl.sets.quadrotor_cone_sets import QuadrotorConeSafeSet
+from ps2rl.sets.quadrotor_landing_safe_set import QuadrotorLandingSafeSet
 from ps2rl.utils.quaternion import normalize_quaternion_batch, quaternion_multiply_batch
 
 REGION_NAMES = ("general", "edge", "shell")
@@ -54,6 +55,10 @@ class LandingDesignRegionConfig:
     edge_margin: float = 0.25
     edge_zeta_low: float = 1.0
     edge_outward_prob: float = 0.7
+    # with the floor in the safe set: fraction of edge draws taken from the floor band
+    # (zeta <= zeta_min + edge_margin, anywhere over the cone cross-section, velocity
+    # pointing down with prob. edge_outward_prob). 0 keeps the cone-wall-only edge region.
+    edge_floor_prob: float = 0.0
 
     shell_kappa: float = 1.8
 
@@ -138,7 +143,7 @@ def yaw_of(q: jax.Array) -> jax.Array:
 
 def build_landing_sampler(
     region_cfg: LandingDesignRegionConfig,
-    cone: QuadrotorConeSafeSet,
+    cone: QuadrotorConeSafeSet | QuadrotorLandingSafeSet,
     base_set: EllipsoidBaseSet,
     *,
     dtype=jnp.float32,
@@ -159,6 +164,7 @@ def build_landing_sampler(
     edge_margin = float(region_cfg.edge_margin)
     edge_zeta_low = float(region_cfg.edge_zeta_low)
     p_out = float(region_cfg.edge_outward_prob)
+    p_floor = float(region_cfg.edge_floor_prob) if bool(getattr(cone, "floor", False)) else 0.0
     gmin = float(region_cfg.general_scale_min)
     tries = int(max(1, region_cfg.max_resample_tries))
     pad = jnp.asarray([cone.pad_x, cone.pad_y, cone.pad_z], dtype=dtype)
@@ -208,7 +214,17 @@ def build_landing_sampler(
         v_xy = jnp.where(flip & (v_r < 0.0), v[0:2] - 2.0 * v_r * radial, v[0:2])
         v = jnp.concatenate([v_xy, v[2:3]])
         q = _tilt_yaw_quaternion(k_q, tilt_max, yaw_max, dtype)
-        return _assemble(dp, zeta, v, q)
+        x_wall = _assemble(dp, zeta, v, q)
+        if p_floor <= 0.0:
+            return x_wall
+        # floor band (separate key stream, so the wall draws are unchanged)
+        k_sel, k_fz, k_fr, k_fo = jax.random.split(jax.random.fold_in(key, 101), 4)
+        zf = jax.random.uniform(k_fz, (), dtype=dtype, minval=zeta_min, maxval=min(zeta_min + edge_margin, zeta_max))
+        dpf = cone.radius_at(zf) * jnp.sqrt(jax.random.uniform(k_fr, (), dtype=dtype)) * radial
+        down = jax.random.uniform(k_fo, (), dtype=dtype) < p_out
+        vf = v.at[2].set(jnp.where(down, -jnp.abs(v[2]), v[2]))
+        x_floor = _assemble(dpf, zf, vf, q)
+        return jnp.where(jax.random.uniform(k_sel, (), dtype=dtype) < p_floor, x_floor, x_wall)
 
     def draw_shell(key: jax.Array, _scale: jax.Array) -> jax.Array:
         k_l, k_u = jax.random.split(key)

@@ -159,6 +159,102 @@ def binding_rows(cfg, runtime, x: np.ndarray, u: np.ndarray, slack: np.ndarray, 
             "n_active": np.concatenate(na).reshape(shape), "n_rows": n_rows}
 
 
+def hover_action(cfg) -> np.ndarray:
+    """u* = (g, 0, 0, 0)."""
+    return np.array([cfg.landing.gravity, 0.0, 0.0, 0.0])
+
+
+def row_residuals_max(cfg, runtime, x: np.ndarray, u: np.ndarray, *, chunk: int = 256) -> np.ndarray:
+    """max_j (A_j u - b_j) with the QP's row normalisation, per state (no slack). <= 0: u satisfies every row."""
+    from ps2rl.cil.backup_cbf import build_discretized_backup_cbf_rows_with_info
+
+    floor = float(cfg.constraint_row_scale_floor) if cfg.constraint_row_normalize else None
+
+    def one(xi, ui):
+        a, b, _ = build_discretized_backup_cbf_rows_with_info(xi, cfg, runtime)
+        r = a @ ui - b
+        if floor is not None:
+            r = r / jnp.maximum(floor, jnp.maximum(jnp.max(jnp.abs(a), axis=1), 1.0))
+        return jnp.max(r)
+
+    fn = jax.jit(jax.vmap(one))
+    flat_x = np.asarray(x).reshape(-1, x.shape[-1])
+    flat_u = np.broadcast_to(np.asarray(u), flat_x.shape[:1] + (np.asarray(u).shape[-1],))
+    out = [np.asarray(fn(jnp.asarray(flat_x[i:i + chunk]), jnp.asarray(flat_u[i:i + chunk])))
+           for i in range(0, len(flat_x), chunk)]
+    return np.concatenate(out).reshape(np.asarray(x).shape[:-1])
+
+
+def hover_feasibility(cfg, runtime, positions: np.ndarray, *, tol: float = 1e-3, chunk: int = 256) -> dict[str, np.ndarray]:
+    """Is holding still (level, v = 0, u = u*) allowed by every BCBF row at these positions?"""
+    shape = positions.shape[:-1]
+    n = int(np.prod(shape))
+    x = np.concatenate([positions.reshape(-1, 3), np.zeros((n, 3)), level_quaternion(n)], axis=1)
+    res = row_residuals_max(cfg, runtime, x, hover_action(cfg), chunk=chunk)
+    return {"residual": res.reshape(shape), "feasible": (res <= tol).reshape(shape)}
+
+
+def tracking_lqr(cfg) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
+    """u = u_ref - K (e(x) - e(x_ref)): the hover LQR gain around a moving reference, with feedforward."""
+    _, base = lbcbf.landing_sets(cfg)
+    ctrl = base.controller
+    k = jnp.asarray(ctrl.k_matrix_f64(), dtype=jnp.float32)
+    low = jnp.asarray(cfg.action_low, dtype=jnp.float32)
+    high = jnp.asarray(cfg.action_high, dtype=jnp.float32)
+
+    def act(x, x_ref, u_ref):
+        de = ctrl.error_state(x) - ctrl.error_state(x_ref)
+        return jnp.clip(u_ref - (k @ de).astype(u_ref.dtype), low, high)
+
+    return act
+
+
+def rollout_nominal(cfg, projector, x0: np.ndarray, nominal: Callable[[jax.Array, int], jax.Array], steps: int,
+                    *, filtered: bool) -> dict[str, np.ndarray]:
+    """Closed loop x_{k+1} = F(x_k, u_k) with u_k = nominal(x_k, k), optionally through the filter."""
+    step_b = jax.jit(jax.vmap(lambda x, u: lbcbf.landing_step(x, u, cfg)))
+    xs = [jnp.asarray(x0, dtype=jnp.float32)]
+    u_ref_t, u_t, slack_t, used_t = [], [], [], []
+    for k in range(steps):
+        x = xs[-1]
+        u_ref = nominal(x, k)
+        if filtered:
+            u, slack, used, _ = projector.solve_batch_with_info(x, u_ref)
+        else:
+            u, slack, used = u_ref, jnp.zeros((x.shape[0],)), jnp.ones((x.shape[0],), dtype=bool)
+        u_ref_t.append(np.asarray(u_ref))
+        u_t.append(np.asarray(u))
+        slack_t.append(np.asarray(slack))
+        used_t.append(np.asarray(used))
+        xs.append(step_b(x, jnp.asarray(u, dtype=jnp.float32)))
+    traj = np.stack([np.asarray(x) for x in xs], 1)
+    return {"traj": traj, "u_ref": np.stack(u_ref_t, 1), "u": np.stack(u_t, 1),
+            "slack": np.stack(slack_t, 1), "qp_used": np.stack(used_t, 1)}
+
+
+def touchdown_metrics(cfg, traj: np.ndarray, *, zeta_touch: float, v_touch: float) -> dict[str, np.ndarray]:
+    """Per trajectory: touchdown = first state with height <= zeta_touch over the pad disk (radius r0)
+    and speed <= v_touch. Also min cone margin, min height, final position."""
+    lc = cfg.landing
+    pad = np.array([lc.pad_x, lc.pad_y, lc.pad_z])
+    rel = traj[..., 0:3] - pad
+    radial = np.linalg.norm(rel[..., 0:2], axis=-1)
+    speed = np.linalg.norm(traj[..., 3:6], axis=-1)
+    td = (rel[..., 2] <= zeta_touch) & (radial <= lc.cone_r0) & (speed <= v_touch)
+    first = np.where(td.any(axis=1), td.argmax(axis=1), -1)
+    h_cone = np.asarray(lbcbf.cone_value(jnp.asarray(traj), cfg))
+    return {
+        "touchdown": first >= 0,
+        "touchdown_time": np.where(first >= 0, first * lc.dt, np.nan),
+        "min_h_cone": h_cone.min(axis=1),
+        "min_height": rel[..., 2].min(axis=1),
+        "final_height": rel[:, -1, 2],
+        "final_radial": radial[:, -1],
+        "final_speed": speed[:, -1],
+        "h_cone": h_cone,
+    }
+
+
 def vertical_accel(u: np.ndarray, q: np.ndarray, gravity: float) -> np.ndarray:
     """World-frame vertical acceleration a_cmd * (R e3)_z - g."""
     q = q / np.linalg.norm(q, axis=-1, keepdims=True)
@@ -167,6 +263,12 @@ def vertical_accel(u: np.ndarray, q: np.ndarray, gravity: float) -> np.ndarray:
 
 
 __all__ = [
+    "hover_action",
+    "hover_feasibility",
+    "rollout_nominal",
+    "row_residuals_max",
+    "touchdown_metrics",
+    "tracking_lqr",
     "base_set_value",
     "binding_rows",
     "cn_slice",

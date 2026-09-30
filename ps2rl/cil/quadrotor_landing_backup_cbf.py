@@ -58,6 +58,7 @@ from ps2rl.envs.quadrotor_env import (
 from ps2rl.envs.quadrotor_landing_config import QuadrotorLandingConfig
 from ps2rl.sets.base_sets import EllipsoidBaseSet
 from ps2rl.sets.quadrotor_cone_sets import QuadrotorConeSafeSet
+from ps2rl.sets.quadrotor_landing_safe_set import QuadrotorLandingSafeSet
 from ps2rl.utils.paths import load_pickle_payload
 from ps2rl.utils.quaternion import normalize_quaternion
 
@@ -96,6 +97,12 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
     # few percent of the landing QPs; the engine then applies the backup action, which is
     # safe but not minimally invasive and carries no gradient to the policy.
     qp_solve_dtype: str = "float32"
+    # Floor rows (only if the checkpoint's landing config has floor_constraint=True).
+    # None -> same as ``alpha`` / ``include_relative_time_term``. The relative-time form
+    # keeps pi_b a feasible point of every row (the paper's guarantee); the fixed-tau form
+    # allows holding still right at the floor but drops that feasibility argument.
+    alpha_floor: float | None = None
+    relative_time_floor: bool | None = None
 
     def __post_init__(self) -> None:
         mode = str(self.backup_policy_mode).strip().lower()
@@ -124,6 +131,18 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
             v = float(getattr(self, name))
             if not isfinite(v) or v <= 0.0:
                 raise ValueError(f"{name} must be positive and finite, got {v}")
+        if self.alpha_floor is not None:
+            v = float(self.alpha_floor)
+            if not isfinite(v) or v <= 0.0:
+                raise ValueError(f"alpha_floor must be positive and finite, got {v}")
+            object.__setattr__(self, "alpha_floor", v)
+        if self.relative_time_floor is not None:
+            object.__setattr__(self, "relative_time_floor", bool(self.relative_time_floor))
+        # Sampled-data validity of the class-K condition: h_{k+1} >= (1 - alpha dt) h_k
+        # only makes sense for alpha dt < 1.
+        for name, a in (("alpha", self.alpha), ("alpha_floor", self.alpha_floor), ("base_alpha", self.base_alpha)):
+            if a is not None and float(a) * float(lc.dt) >= 1.0:
+                raise ValueError(f"{name}={a} gives {name}*dt={float(a) * lc.dt:.2f} >= 1 (dt={lc.dt}); use {name} < {1.0 / lc.dt:g}")
 
     # --- quantities the Phase-II trainer reads off the powerloop config ------------
     @property
@@ -156,7 +175,21 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
 
     @property
     def num_safe_constraints(self) -> int:
-        return 1
+        return 2 if bool(self.landing.floor_constraint) else 1
+
+    # --- per-constraint rows (read by the shared engine; None = uniform) ------------
+    @property
+    def alpha_per_constraint(self) -> tuple[float, ...] | None:
+        if not bool(self.landing.floor_constraint):
+            return None
+        return (float(self.alpha), float(self.alpha if self.alpha_floor is None else self.alpha_floor))
+
+    @property
+    def relative_time_per_constraint(self) -> tuple[bool, ...] | None:
+        if not bool(self.landing.floor_constraint):
+            return None
+        rt_floor = self.include_relative_time_term if self.relative_time_floor is None else self.relative_time_floor
+        return (bool(self.include_relative_time_term), bool(rt_floor))
 
     @property
     def num_base_set_constraints(self) -> int:
@@ -189,21 +222,45 @@ def landing_config_from_checkpoint(path: str | Path) -> QuadrotorLandingConfig:
     return QuadrotorLandingConfig.from_dict(read_checkpoint_metadata(path)["landing_config"])
 
 
+# Safe-set changes the runtime may make relative to the checkpoint: only tightenings
+# (a smaller S keeps every rollout-based statement valid as long as B stays inside it).
+SAFE_SET_TIGHTENINGS = ("floor_constraint",)
+
+
+def _floor_tightening_ok(lc: QuadrotorLandingConfig) -> None:
+    """Adding the floor to S at run time needs B above the pad plane (Prop. 1 with z_clear = 0)."""
+    from ps2rl.sets.landing_certificate import c_ground_bound
+
+    p_inv = np.linalg.inv(QuadrotorLandingDLQR.from_config(lc).p_matrix_f64())
+    c_floor = c_ground_bound(p_inv, z_des=float(lc.z_des), z_clear=0.0)
+    if float(lc.base_set_c) > c_floor + 1e-9:
+        raise ValueError(f"cannot add the floor: base set B (c_B={lc.base_set_c}) reaches below the pad (c_floor={c_floor:.3f})")
+
+
 def landing_bcbf_config_from_checkpoint(path: str | Path, **overrides: Any) -> QuadrotorLandingBCBFConfig:
     """Phase-II BCBF config whose geometry, base set and backup all come from ``path``.
 
-    ``overrides`` may set QP tuning fields (alpha, base_alpha, slack_weight, solver_tol,
-    control_weight, ...) or ``backup_policy_mode='base_controller'`` for a baseline.
-    Overriding ``landing`` is refused: re-run Phase I for a different geometry.
+    ``overrides`` may set QP tuning fields (alpha, alpha_floor, relative_time_floor, base_alpha,
+    slack_weight, solver_tol, control_weight, ...), ``backup_policy_mode='base_controller'`` for
+    a baseline, or ``floor_constraint=True`` to add the floor to a cone-only checkpoint's safe
+    set (a tightening: C_N is re-evaluated by rollouts against the smaller S, and B is checked
+    to lie above the pad). Overriding ``landing`` is refused: re-run Phase I for a different geometry.
     """
     if "landing" in overrides:
         raise ValueError("the landing geometry comes from the checkpoint; re-run Phase I to change it")
     p = Path(path)
     ckpt = p / "landing_backup_policy_actor.pkl" if p.is_dir() else p
+    lc = landing_config_from_checkpoint(ckpt)
+    floor = overrides.pop("floor_constraint", None)
+    if floor is not None and bool(floor) != bool(lc.floor_constraint):
+        if not bool(floor):
+            raise ValueError("the checkpoint was trained with the floor in S; removing it is not supported")
+        lc = lc.replace(floor_constraint=True)
+        _floor_tightening_ok(lc)
     return QuadrotorLandingBCBFConfig(
         backup_policy_mode=overrides.pop("backup_policy_mode", "learned"),
         learned_backup_policy_path=str(ckpt),
-        landing=landing_config_from_checkpoint(ckpt),
+        landing=lc,
         **overrides,
     )
 
@@ -211,7 +268,8 @@ def landing_bcbf_config_from_checkpoint(path: str | Path, **overrides: Any) -> Q
 def _check_against_checkpoint(cfg: QuadrotorLandingBCBFConfig, metadata: dict[str, Any]) -> None:
     trained = QuadrotorLandingConfig.from_dict(metadata["landing_config"]).as_dict()
     runtime = cfg.landing.as_dict()
-    bad = [k for k in CERTIFIED_FIELDS if not np.isclose(float(trained[k]), float(runtime[k]), rtol=1e-9, atol=1e-12)]
+    bad = [k for k in CERTIFIED_FIELDS if not np.isclose(float(trained[k]), float(runtime[k]), rtol=1e-9, atol=1e-12)
+           and not (k in SAFE_SET_TIGHTENINGS and not trained[k] and runtime[k])]
     if bad:
         detail = ", ".join(f"{k}: checkpoint {trained[k]} vs config {runtime[k]}" for k in bad)
         raise ValueError(f"landing config does not match the safe-arrival checkpoint ({detail}). "
@@ -219,9 +277,11 @@ def _check_against_checkpoint(cfg: QuadrotorLandingBCBFConfig, metadata: dict[st
 
 
 # ------------------------------------------------------------------------ runtime
-def landing_sets(cfg: QuadrotorLandingBCBFConfig) -> tuple[QuadrotorConeSafeSet, EllipsoidBaseSet]:
+def landing_sets(cfg: QuadrotorLandingBCBFConfig) -> tuple[QuadrotorLandingSafeSet, EllipsoidBaseSet]:
+    """(safe set S, base set B). S is the cone (n the floor if the checkpoint has it); its
+    values/contains ignore the Phase-I gentle-recovery envelope, which is not a safety spec."""
     lc = cfg.landing
-    cone = QuadrotorConeSafeSet.from_config(lc)
+    cone = QuadrotorLandingSafeSet.from_config(lc)
     ctrl = QuadrotorLandingDLQR.from_config(lc)
     return cone, EllipsoidBaseSet(ctrl, float(lc.base_set_c), smooth_gain=float(lc.base_set_smooth_gain))
 
@@ -272,6 +332,7 @@ _RUNTIME_CACHE: dict[tuple, BCBFSystem] = {}
 
 def _runtime_cache_key(cfg: QuadrotorLandingBCBFConfig) -> tuple:
     return (cfg.backup_policy_mode, cfg.learned_backup_policy_path, cfg.landing, cfg.qp_solve_dtype)
+    # (alpha / relative-time settings live in cfg and are read by the row builder, not the runtime)
 
 
 _facades = make_backup_cbf_facades(make_landing_backup_runtime, _runtime_cache_key, _RUNTIME_CACHE)
@@ -313,8 +374,18 @@ def cone_value(x: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
     return QuadrotorConeSafeSet.from_config(cfg.landing).value(x)
 
 
+def floor_value(x: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
+    """Height above the pad plane (the floor barrier when floor_constraint=True); batched."""
+    return jnp.asarray(x)[..., 2] - float(cfg.landing.pad_z)
+
+
+def safe_value(x: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
+    """min over the safe set's barriers (cone, and floor if enabled); batched."""
+    return QuadrotorLandingSafeSet.from_config(cfg.landing).value(x)
+
+
 def is_safe_state(x: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
-    return cone_value(x, cfg) >= 0.0
+    return safe_value(x, cfg) >= 0.0
 
 
 def to_pad_frame(x: jax.Array, pad_world: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
@@ -324,8 +395,9 @@ def to_pad_frame(x: jax.Array, pad_world: jax.Array, cfg: QuadrotorLandingBCBFCo
     return jnp.asarray(x).at[..., 0:3].add(-shift)
 
 
-def make_recoverability_fn(cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem | None = None):
-    """Batched first-hit test x0 in C_N(pi_b): reaches B within N steps without leaving the cone.
+def make_recoverability_fn(cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem | None = None, *,
+                           training_envelope: bool = False):
+    """Batched first-hit test x0 in C_N(pi_b): reaches B within N steps without leaving S (cone, floor).
 
     Returns a jitted ``fn(x_batch) -> (recoverable, crashed, arrival_step)``. Phase-II
     episodes should start from recoverable states; outside C_N the QP can need slack.
@@ -333,13 +405,16 @@ def make_recoverability_fn(cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem 
     rt = _resolve_runtime(cfg, runtime)
     cone, base_set = landing_sets(cfg)
     n = int(cfg.num_steps)
+    # training_envelope=True reproduces Phase I's failure test (S n gentle-recovery envelope);
+    # the default is membership w.r.t. the safety specification S only.
+    ok_fn = cone.training_contains if training_envelope else cone.contains
 
     def one(x0):
         def body(c, k):
             x, hb, hf, tb = c
             xn = landing_step(x, rt.backup_policy_fn(x), cfg)
             act = ~(hb | hf)
-            nf = act & ~cone.contains(xn)
+            nf = act & ~ok_fn(xn)
             nb = act & ~nf & base_set.contains(xn)
             return (jnp.where(act, xn, x), hb | nb, hf | nf, jnp.where(nb, k + 1, tb)), None
 
@@ -351,6 +426,8 @@ def make_recoverability_fn(cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem 
 
 
 __all__ = [
+    "floor_value",
+    "safe_value",
     "BACKUP_MODES",
     "CERTIFIED_FIELDS",
     "QuadrotorLandingBCBFConfig",
