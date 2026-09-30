@@ -9,6 +9,13 @@
     # CPU smoke test
     JAX_PLATFORMS=cpu python scripts/train_phase1_landing.py --smoke_test
 
+    # backup for a Phase-II landing run (cone, pad, plant and design region from that run)
+    python scripts/landing_phase1_config_from_phase2.py --phase2_run RUN --out cfg.json
+    python scripts/train_phase1_landing.py --config_json cfg.json --backbone td3
+
+``--config_json`` takes {"landing": {...}, "region": {...}, "sa": {...}} overrides; explicit
+command-line flags win over it.
+
 Before training, the base-set level is checked against Proposition 1 of the landing
 note (input feasibility, chart, cone and ground containment, and - unless
 ``--skip_lyap_check`` - the adversarial one-step Lyapunov decrease). Training aborts if
@@ -74,6 +81,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--smoke_test", action="store_true")
     p.add_argument("--skip_lyap_check", action="store_true")
     p.add_argument("--require_gpu", action="store_true", help="Abort unless JAX runs on a GPU backend.")
+    p.add_argument("--config_json", type=str, default="",
+                   help="JSON with 'landing'/'region'/'sa' override blocks (see landing_phase1_config_from_phase2.py)")
     _add_dataclass_args(p, LandingSAConfig, skip=("sa_backbone",))
     _add_dataclass_args(p, QuadrotorLandingConfig)
     _add_dataclass_args(p, LandingDesignRegionConfig, prefix="region_")
@@ -123,13 +132,17 @@ def main(argv=None) -> None:
             "JAX is not running on the GPU (backend=%s). Inside the container, check `nvidia-smi` and that the "
             "venv has jax[cuda12]==0.6.2 (bash docker_batch/setup_train_venv.sh)." % backend
         )
-    sa_over = _collect(args, LandingSAConfig)
-    region_over = _collect(args, LandingDesignRegionConfig, prefix="region_")
+    file_cfg = json.loads(Path(args.config_json).read_text(encoding="utf-8")) if args.config_json else {}
+    unknown = set(file_cfg) - {"landing", "region", "sa", "provenance"}
+    if unknown:
+        raise SystemExit(f"{args.config_json}: unknown blocks {sorted(unknown)}")
+    sa_over = {**file_cfg.get("sa", {}), **_collect(args, LandingSAConfig)}
+    region_over = {**file_cfg.get("region", {}), **_collect(args, LandingDesignRegionConfig, prefix="region_")}
     if args.smoke_test:
         sa_over = {**_SMOKE, **sa_over}
         region_over = {**_SMOKE_REGION, **region_over}
     ra_cfg = LandingSAConfig.from_dict({**sa_over, "sa_backbone": args.backbone})
-    cfg = QuadrotorLandingConfig().replace(**_collect(args, QuadrotorLandingConfig))
+    cfg = QuadrotorLandingConfig().replace(**{**file_cfg.get("landing", {}), **_collect(args, QuadrotorLandingConfig)})
     region_cfg = LandingDesignRegionConfig.from_dict(region_over)
 
     bounds = check_proposition_1(cfg, lyap=not (args.skip_lyap_check or args.smoke_test))
@@ -169,6 +182,8 @@ def main(argv=None) -> None:
             "design_region": region_cfg.as_dict(),
             "certificate": bounds,
             "best_eval_step": int(result["summary"]["best_eval_step"]),
+            "config_json": str(args.config_json) if args.config_json else None,
+            "config_provenance": file_cfg.get("provenance"),
         },
     )
     s = result["summary"]

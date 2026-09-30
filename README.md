@@ -171,6 +171,15 @@ It takes the cone safe set, the 9-D base set and the learned backup, all read fr
 (`checkpoints/landing_phase1/td3_seed0/`). `ps2rl/phase2_ps2/landing_ps2_binding.py` is the matching trainer binding.
 Start with `LANDING_HANDOFF.md` and verify with `scripts/check_landing_bcbf.py`.
 
+### Landing Phase II: filtering an already-trained landing policy
+
+`scripts/evaluate_landing_phase2_filter.py` runs a Phase-II landing policy (trained without projection) twice from
+the same starts: once as trained, once through the landing CIL. It reports cone exits, interventions, slack and
+tracking error, and renders figures and a 3D GIF with the cone. The backup must match the task's cone. To get one,
+`scripts/landing_phase1_config_from_phase2.py` derives the Phase-I config from the Phase-II run and its reference
+config, and `train_phase1_landing.py --config_json` trains it. `docker_batch/run_landing_phase2_filter_eval.sh`
+chains import → config → training → evaluation; see `docker_batch/README_landing_phase2_filter.md`.
+
 ## Citation
 
 If you use this code, please cite the paper:
