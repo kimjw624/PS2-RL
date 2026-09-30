@@ -24,6 +24,8 @@ fi
 source "${PS2RL_VENV}/bin/activate"
 export PYTHONPATH="${PS2RL_ROOT}"
 export PYTHONNOUSERSITE=1
+# stream python output into the per-stage log files (otherwise it arrives in 8 KB blocks)
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
