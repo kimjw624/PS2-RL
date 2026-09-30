@@ -164,6 +164,13 @@ velocity, and the capture shell. The SAC backbone keeps entropy out of the criti
 (see the module docstring of `ps2rl/phase1_sa/sa_trainer_core.py`); the TD3 path is
 unchanged and bit-identical to before.
 
+### Landing Phase II: using the safe-arrival backup in the CIL
+
+`ps2rl/cil/quadrotor_landing_backup_cbf.py` is the landing counterpart of `quadrotor_backup_cbf`.
+It takes the cone safe set, the 9-D base set and the learned backup, all read from the Phase I checkpoint
+(`checkpoints/landing_phase1/td3_seed0/`). `ps2rl/phase2_ps2/landing_ps2_binding.py` is the matching trainer binding.
+Start with `LANDING_HANDOFF.md` and verify with `scripts/check_landing_bcbf.py`.
+
 ## Citation
 
 If you use this code, please cite the paper:

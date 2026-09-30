@@ -43,6 +43,10 @@ class BCBFSystem:
     base_set_values_fn: Callable[[jax.Array], jax.Array] | None = None
     use_analytic_jacobian: bool = False
     analytic_closed_loop_and_jacobian_fn: Callable[[jax.Array], Tuple[jax.Array, jax.Array]] | None = None
+    #: Optional dtype for the qpax solve only (rows are still built in the state dtype).
+    #: ``None`` keeps the historical behaviour. ``jnp.float64`` needs ``jax_enable_x64``;
+    #: it removes float32 interior-point failures (non-finite solutions -> backup fallback).
+    qp_solve_dtype: Any = None
 
 
 @dataclass(frozen=True)
@@ -345,16 +349,29 @@ def solve_backup_cbf_qp_single_with_info(
         inputs_finite = q_mat_finite & q_vec_finite & g_finite & h_finite
 
         def _solve_qp(_: None) -> jax.Array:
-            return qpax.solve_qp_primal(
-                q_mat,
-                q_vec,
-                a_eq,
-                b_eq,
-                g,
-                h,
+            if system.qp_solve_dtype is None:
+                return qpax.solve_qp_primal(
+                    q_mat,
+                    q_vec,
+                    a_eq,
+                    b_eq,
+                    g,
+                    h,
+                    solver_tol=cfg.solver_tol,
+                    target_kappa=cfg.target_kappa,
+                )
+            qd = system.qp_solve_dtype
+            z = qpax.solve_qp_primal(
+                q_mat.astype(qd),
+                q_vec.astype(qd),
+                a_eq.astype(qd),
+                b_eq.astype(qd),
+                g.astype(qd),
+                h.astype(qd),
                 solver_tol=cfg.solver_tol,
                 target_kappa=cfg.target_kappa,
             )
+            return z.astype(x.dtype)
 
         z_candidate = jax.lax.cond(inputs_finite, _solve_qp, lambda _: fallback_z, operand=None)
         z_finite = inputs_finite & jnp.all(jnp.isfinite(z_candidate))
