@@ -76,6 +76,20 @@ source docker_batch/landing_env.sh
 python docker_batch/summarize_landing_phase1.py --root outputs/landing_phase1_compare
 ```
 
+## 4. Formal report (method, tables, trajectory and actuator plots)
+
+```bash
+source docker_batch/landing_env.sh
+JAX_PLATFORMS=cpu python docker_batch/report_landing_phase1.py --root outputs/landing_phase1_compare
+```
+
+- Takes about 4 min on CPU.
+- Writes `outputs/landing_phase1_report/`: `figures/` (vector PDFs), `tables/`, `numbers.tex` and `landing_phase1_report.tex`.
+- It compiles the PDF when `latexmk` is installed. The px4sitl image has no LaTeX, so compile on the host with `cd outputs/landing_phase1_report && latexmk -pdf landing_phase1_report.tex`, or use Overleaf.
+- By default it picks the best-validation run and the best run of the other backbone. Override with `--run` and `--compare_run`.
+- Simulation results are cached in `data.pkl`; `--recompute` forces a rerun.
+- Every number, table and figure is regenerated. The prose was written for the reported runs.
+
 ## Outputs
 
 ```

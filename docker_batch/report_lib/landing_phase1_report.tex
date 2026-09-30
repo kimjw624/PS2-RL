@@ -1,0 +1,856 @@
+\documentclass[11pt,a4paper]{article}
+% Latin Modern (T1) when installed; otherwise vector Computer Modern (OT1), which matches the figures.
+\IfFileExists{lmodern.sty}{\usepackage[T1]{fontenc}\usepackage{lmodern}}{}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+\captionsetup{font=small,labelfont=bf,margin=0.5em}
+\setlist{itemsep=2pt,topsep=3pt}
+\graphicspath{{figures/}}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\X}{\mathcal{X}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\Sset}{\mathcal{S}}
+\newcommand{\Fset}{\mathcal{F}}
+\newcommand{\hc}{h_{\mathrm{cone}}}
+\newcommand{\zd}{z_{\mathrm{des}}}
+\newcommand{\tabfit}[1]{\begin{adjustbox}{max width=\linewidth}\input{tables/#1}\end{adjustbox}}
+
+\input{numbers.tex}
+
+\title{\textbf{PS2-RL Phase I for Approach-Cone Landing}\\[4pt]
+\large Base-set certification, safe-arrival policy training,\\ and closed-loop verification of trajectories and actuator commands}
+\author{Jungwon Kim\\ \small Seoul National University}
+\date{30 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This report documents Phase~I of PS2-RL for the approach-cone landing task: the construction and
+certification of a base set and base controller inside a smooth approach cone, and the training and
+verification of a safe-arrival policy that steers the quadrotor into that base set. The base set is a
+9-D LQR ellipsoid about a hover point $\zd=\zDes$\,m above the pad, at level $c_{\B}=\cB$. Among
+the level bounds, the numerically certified one-step Lyapunov decrease ($c_{\mathrm{Lyap}}=\cLyap$) binds;
+input feasibility gives $c_{\U}=\cU$ and cone containment $\cConeZ$. Six safe-arrival policies (TD3 and SAC,
+three seeds each, 5M steps) raise the weighted recoverability of held-out initial states from
+$\muUntrained$ (untrained) and $\muLQR$ (base controller used everywhere) to \muTDthree{} (TD3) and
+\muSAC{} (SAC). The selected policy (\runChosen) reaches $\hat\mu_w=\muChosen$, which is \fracOfCeil\% of a
+viability ceiling of $\muCeil$ estimated by trajectory optimisation: almost every remaining failure is a
+state from which no admissible input sequence can stay inside the cone. Closed-loop case studies confirm
+the intended behaviour (climb-and-turn-in recoveries, hand-off to the base controller, forward invariance
+afterwards) and expose two issues that matter for deployment: the model has no ground plane, and the
+policy banks hard (median peak tilt $\approx\tiltMedGen^\circ$, 95th percentile up to $\tiltPninetyfiveGen^\circ$).
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%======================================================================
+\section{Scope and summary}
+%======================================================================
+
+PS2-RL \cite{ps2rl} trains a task policy through a differentiable control-invariant layer (CIL) whose
+safety certificate is a backup control barrier function. The backup policy $\pi_b$ combines a
+certified base controller $\pi_{\B}$ on a small base set $\B$ with a learned \emph{safe-arrival}
+policy $\pi_{\mathrm{SA}}$ outside it. Phase~I trains $\pi_{\mathrm{SA}}$; Phase~II trains the task
+policy through the CIL. Moving from the paper's powerloop task to landing changes the safe set from a
+ceiling to an approach cone. Because a cone is bounded horizontally, the base set must also regulate
+horizontal position, which in turn changes the base controller, its certificate and the Phase~I design region.
+The treatment follows the Phase~I reformulation note for the landing task \cite{landingnote}.
+
+\paragraph{Summary of findings.}
+\begin{itemize}
+\item \textbf{Certified base set.} The yaw chain of the powerloop LQR weights limits the admissible level to
+$c\le\cChartpl$ via the quaternion chart. Re-weighting only the (decoupled) yaw chain lifts every bound
+above $15$; the binding one is the Lyapunov decrease, $c_{\mathrm{Lyap}}=\cLyap$. We use $c_{\B}=\cB$
+($\cBratio\,c_{\mathrm{Lyap}}$), and $\zd=\zDes$\,m is the lowest hover height at which neither the cone
+nor the ground clearance binds.
+\item \textbf{Training.} Both TD3 and SAC converge in every seed; runs take $\approx\wallMin$\,min each on a
+laptop GPU. At the full budget TD3 is marginally but consistently better (\muTDthree{} vs.\ \muSAC{}); SAC
+reaches its plateau with fewer samples.
+\item \textbf{The learned policy works, up to the physics.} On held-out test states the selected policy
+arrives safely from $\mGenChosen$ of the general region, $\mEdgeChosen$ of the low-altitude cone edge and
+all of the capture shell, against $\mGenLQR$ / $\mEdgeLQR$ / 1 for the base controller alone. There are no
+timeouts: every failure is a crash. Of the \edgeFailChosen{} edge failures, \edgeShared{} are shared by all six
+policies, and trajectory optimisation finds no safe input sequence for \edgeNonviable{} of those.
+\item \textbf{Open issues.} Some successful recoveries (0.2--0.8\%) dip a few centimetres below the pad
+plane because the model has no ground. The policy also uses large attitudes, which the SITL rate loop may not
+reproduce (\cref{sec:limitations}).
+\end{itemize}
+
+%======================================================================
+\section{System model}
+%======================================================================
+
+\subsection{Continuous-time dynamics}
+The state is $x=(p,v,q)\in\R^3\times\R^3\times\mathbb{S}^3$ (position, inertial velocity, unit quaternion
+$q=(q_w,q_x,q_y,q_z)$, body-to-world) and the input is $u=(a,\omega)$, a mass-normalised collective thrust and
+body rates:
+\begin{equation}
+\dot p = v,\qquad \dot v = -g e_3 + a\,R(q)e_3,\qquad \dot q = \tfrac12\,\Xi(q)\,\omega,\qquad
+\Xi(q)=\begin{bmatrix}-q_x&-q_y&-q_z\\ q_w&-q_z&q_y\\ q_z&q_w&-q_x\\ -q_y&q_x&q_w\end{bmatrix}.
+\label{eq:dyn}
+\end{equation}
+Body rates are commanded directly and tracked instantaneously; the inner rate loop is not modelled.
+The input set is the box $\U=[0,a_{\max}]\times[-\bar\omega,\bar\omega]^3$ with $a_{\max}=4g$ and
+$\bar\omega=18$\,rad/s (\cref{tab:params}). Pad-relative coordinates are
+$\Delta p=p_{xy}-p_{\mathrm{pad},xy}$ and $\zeta=z-z_{\mathrm{pad}}$.
+
+\subsection{Discretisation}
+Training, evaluation, certification and the CIL all use the same sampled model: an explicit Euler step
+followed by quaternion re-normalisation,
+\begin{equation}
+F(x,u)=\mathcal{N}\big(x+\Delta\,f(x,\mathrm{sat}_{\U}(u))\big),\qquad \Delta=0.02\,\mathrm{s},
+\label{eq:euler}
+\end{equation}
+where $f$ is the right-hand side of \eqref{eq:dyn} and $\mathcal{N}$ normalises the quaternion block. The
+backup horizon is $N=T/\Delta=100$ steps ($T=2$\,s). For a policy $\pi$ we write
+$\Phi^{\pi}_{k+1}(x)=F(\Phi^{\pi}_k(x),\pi(\Phi^{\pi}_k(x)))$, $\Phi^\pi_0(x)=x$. All statements below concern
+this sampled system.
+
+\begin{table}[t]
+\centering\small
+\caption{Model and task parameters.}
+\label{tab:params}
+\input{tables/params}
+\end{table}
+
+%======================================================================
+\section{Safe set: a smooth one-sided cone}
+%======================================================================
+
+The safe set is the approach cone
+\begin{equation}
+\hc(x)=r_0+\tan\theta\,\zeta-\sqrt{\|\Delta p\|^2+\varepsilon^2},\qquad
+\Sset=\{x:\hc(x)\ge 0\},\qquad \Fset=\X\setminus\Sset,
+\label{eq:cone}
+\end{equation}
+with $r_0=0.5$\,m, $\theta=30^\circ$ and $\varepsilon=0.05\,r_0$. Three properties are used throughout:
+\begin{enumerate}
+\item $\hc\in C^\infty$ with $\nabla_p\hc=(-\Delta p/\sqrt{\|\Delta p\|^2+\varepsilon^2},\ \tan\theta)$. The
+$\varepsilon$-smoothing is not cosmetic: the unsmoothed cone is non-differentiable on its axis, which is
+exactly where the base-set equilibrium lies, and the CIL differentiates $\hc$ along backup rollouts.
+\item $\hc$ is globally Lipschitz with constant $\sec\theta$, and concave in position (affine minus a
+convex function). The concavity is used to certify cone containment exactly (\cref{sec:levels}).
+\item The square-root form is one-sided: $\hc\ge0\Rightarrow\zeta\ge-(r_0-\varepsilon)/\tan\theta$. The
+squared form $(r_0+\tan\theta\,\zeta)^2-\|\Delta p\|^2$ would describe a double cone with a spurious safe
+region below the apex.
+\end{enumerate}
+The cross-section at altitude $\zeta$ is the disk $\|\Delta p\|\le R_\varepsilon(\zeta)=\sqrt{(r_0+\tan\theta\,\zeta)^2-\varepsilon^2}$.
+There is no ground constraint; the consequences are discussed in \cref{sec:limitations}.
+
+%======================================================================
+\section{Base set and base controller}
+%======================================================================
+
+\subsection{Equilibrium and error coordinates}
+A set that is unbounded in $(x,y)$ cannot lie inside the bounded cross-sections of the cone, so the
+powerloop's 7-D hover error, which omits horizontal position, is not admissible. We take hover above the
+pad as the equilibrium,
+\begin{equation}
+x^\star=(p_{\mathrm{pad}}+\zd e_3,\ 0,\ q_I),\qquad u^\star=(g,0,0,0),
+\end{equation}
+which lies in the interior of $\Sset$ ($\hc(x^\star)=r_0+\tan\theta\,\zd-\varepsilon>0$) and of $\U$
+($0<g<a_{\max}$). On $\{q_w\neq0\}$ the 9-D error coordinates are
+\begin{equation}
+e(x)=\big(\Delta p_x,\ \Delta p_y,\ \zeta-\zd,\ v_x,\ v_y,\ v_z,\ \phi\big)\in\R^9,\qquad
+\phi=2\,\mathrm{sgn}(\bar q_w)\,\bar q_{xyz},\ \ \bar q=q^{-1},
+\label{eq:err}
+\end{equation}
+so $\phi\approx-\vartheta$ at small angles, where $\vartheta$ is the rotation vector of $q$.
+
+\subsection{Linearisation and controllability}
+At small angles $R(q)e_3\approx e_3+\vartheta\times e_3=(-\phi_y,\ \phi_x,\ 1)^\top$, and the body rates
+coincide with $\dot\vartheta=-\dot\phi$. With $\delta a=a-g$, the linearisation of \eqref{eq:dyn} about
+$(x^\star,u^\star)$ in the coordinates \eqref{eq:err} is
+\begin{equation}
+\dot e = A e + B\,\delta u,\qquad
+A=\begin{bmatrix}0_3 & I_3 & 0_3\\ 0_3 & 0_3 & G\\ 0_3 & 0_3 & 0_3\end{bmatrix},\quad
+G=\begin{bmatrix}0&-g&0\\ g&0&0\\ 0&0&0\end{bmatrix},\quad
+B=\begin{bmatrix}0_{3\times1} & 0_3\\ e_3 & 0_3\\ 0_{3\times1} & -I_3\end{bmatrix},
+\label{eq:lin}
+\end{equation}
+with $\delta u=(\delta a,\omega)$. The state splits into four integrator chains, each ending in a distinct input:
+\[
+\Delta p_x\to v_x\to\phi_y\leftarrow\omega_y,\qquad \Delta p_y\to v_y\to\phi_x\leftarrow\omega_x,\qquad
+\zeta\to v_z\leftarrow\delta a,\qquad \phi_z\leftarrow\omega_z,
+\]
+of lengths $3+3+2+1=9$. The pair $(A,B)$ is therefore in Brunovsky form and controllable; the discrete
+controllability matrix has full rank 9 numerically as well (\cref{tab:extents}).
+
+\subsection{Discretisation of the linear model and LQR design}
+The linear model is discretised with the same explicit Euler rule as the plant,
+\begin{equation}
+A_d=I_9+\Delta A,\qquad B_d=\Delta B .
+\end{equation}
+This is not an approximation of convenience: because \eqref{eq:euler} is an Euler step, its Jacobian at
+$(x^\star,u^\star)$ in the coordinates \eqref{eq:err} is exactly $(A_d,B_d)$. The re-normalisation
+$\mathcal{N}$ only acts at second order, since $\dot q$ is tangent to $\mathbb{S}^3$ at $q_I$. The LQR
+therefore stabilises the true linearisation of the sampled plant, with no zero-order-hold mismatch.
+With diagonal weights $Q\succ0$ and $R\succ0$, $P\succ0$ solves the discrete algebraic Riccati equation
+\begin{equation}
+P=A_d^\top PA_d-A_d^\top PB_d\,(R+B_d^\top PB_d)^{-1}B_d^\top PA_d+Q,\qquad
+K=(R+B_d^\top PB_d)^{-1}B_d^\top PA_d,
+\end{equation}
+and $A_d-B_dK$ is Schur, with spectral radius $\rho=\rhoCL$. The base controller and base set are
+\begin{equation}
+\begin{gathered}
+\pi_{\B}(x)=\mathrm{sat}_{\U}\big(u^\star-Ke(x)\big),\qquad V(x)=e(x)^\top Pe(x),\\
+\B_c=\{x:V(x)\le c\},\qquad h_{\B}(x)=c-V(x).
+\end{gathered}
+\label{eq:base}
+\end{equation}
+The gain is listed in \cref{tab:gain} (Appendix).
+
+\paragraph{Choice of weights.}
+The position and velocity rows reuse the powerloop weights, with $q_x=q_y=q_\zeta=1$
+(\cref{tab:lqrw}). The four chains decouple in $P$: numerically $|P_{xy}|,|P_{x\zeta}|<10^{-13}$. The yaw
+chain can therefore be tuned without touching the others. With the powerloop yaw weights
+($q_{\phi_z}=0.16$, $r_{\omega_z}=0.004$), the ellipsoid admits yaw errors beyond what the quaternion chart
+can represent: $c_{\mathrm{chart}}=\cChartpl$, and the one-step Lyapunov decrease fails near $c\approx6.7$.
+Raising the yaw cost to $q_{\phi_z}=0.5$ and $r_{\omega_z}=0.04$ (a slightly gentler yaw correction) moves
+both bounds above 15 and leaves every other row of $K$ unchanged.
+
+\begin{table}[t]
+\centering\small
+\begin{minipage}[t]{0.44\linewidth}\centering
+\caption{LQR weights. $^\dagger$\,changed.}
+\label{tab:lqrw}
+\input{tables/lqr_weights}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.52\linewidth}\centering
+\caption{Base set at $c_{\B}=\cB$ and closed-loop facts.}
+\label{tab:extents}
+\input{tables/extents}
+\end{minipage}
+\end{table}
+
+\subsection{Certifying the level \texorpdfstring{$c$}{c}}\label{sec:levels}
+For an ellipsoid $\{e^\top Pe\le c\}$, a vector $w$ and a matrix $E$,
+\begin{equation}
+\sup_{e^\top Pe\le c} w^\top e=\sqrt{c\,w^\top P^{-1}w},\qquad
+\sup_{e^\top Pe\le c}\|Ee\|=\sqrt{c\,\lambda_{\max}(EP^{-1}E^\top)} .
+\label{eq:support}
+\end{equation}
+Every support value scales with $\sqrt c$, so each bound below is the largest level satisfying a
+monotone condition.
+\begin{itemize}
+\item \textbf{Input feasibility.} $c_{\U}=\min_i \bar u_i^2/(K_iP^{-1}K_i^\top)$ with
+$\bar u_i=\min(u^\star_i-u_{\min,i},\,u_{\max,i}-u^\star_i)$. For $c\le c_{\U}$ the saturation in
+\eqref{eq:base} is inactive on $\B_c$, so $\pi_{\B}$ is smooth there.
+\item \textbf{Chart validity.} $c_{\mathrm{chart}}=4/\lambda_{\max}(E_\phi P^{-1}E_\phi^\top)$ keeps
+$\|\phi\|<2$, so $q_w\neq0$ and \eqref{eq:err} remains a valid chart.
+\item \textbf{Cone containment (exact).} Because $\hc$ is concave in position, its minimum over the
+(convex) position projection of $\B_c$ lies on the boundary. We parametrise that boundary as
+$e_p=\sqrt c\,Lu$ with $LL^\top=E_pP^{-1}E_p^\top$ and $u\in\mathbb{S}^2$, evaluate $\hc$ on a
+$360\times720$ grid, and bisect on $c$. The corner bound of the note, which takes the radial and altitude
+extremes simultaneously, is valid but conservative ($15.20$ vs.\ $\cConeZ$ at $\zd=\zDes$\,m;
+\cref{tab:zsweep}).
+\item \textbf{Ground clearance.} $c_{\mathrm{ground}}=(\zd-z_{\mathrm{clear}})^2/(P^{-1})_{33}$ keeps $\B_c$
+at least $z_{\mathrm{clear}}=0.5$\,m above the pad. This bound is not in the note; it keeps the hover set
+out of ground effect.
+\item \textbf{Lyapunov decrease.} $c_{\mathrm{Lyap}}$ is the largest $c$ such that
+$V(F(x,\pi_{\B}(x)))<V(x)$ on every level set $\{V=c'\}$, $c'\le c$, for the \emph{nonlinear} step
+\eqref{eq:euler}. Existence follows from the Schur property (discrete Lyapunov indirect method); its
+value is estimated numerically. Random directions in 9-D miss the worst case (large tilt combined with
+falling), so we run projected gradient ascent of $V(x^+)/V(x)$ over each level set from 4096 random
+starts and bisect on $c$ (\cref{fig:bounds}b). This is a numerical check, not a proof.
+\end{itemize}
+
+\begin{proposition}[Base-pair certificate, landing note Prop.~1]
+Let
+\[\bar c=\min\{c_{\U},\,c_{\mathrm{chart}},\,c_{\mathrm{cone}},\,c_{\mathrm{ground}},\,c_{\mathrm{Lyap}}\}.\]
+For every $c\le\bar c$:
+\begin{enumerate}[label=(\roman*),nosep]
+\item $\B_c\subseteq\Sset$;
+\item $\pi_{\B}(\B_c)\subseteq\U$, without saturation;
+\item $\B_c$ is forward invariant under $x\mapsto F(x,\pi_{\B}(x))$.
+\end{enumerate}
+\end{proposition}
+
+\begin{table}[t]
+\centering\small
+\caption{Level bounds at $\zd=\zDes$\,m, for the landing weights and, for comparison, with the powerloop yaw
+weights. The Lyapunov value for the powerloop yaw weights comes from a random-direction sweep.}
+\label{tab:bounds}
+\tabfit{bounds}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_level_bounds.pdf}
+\caption{\textbf{Choosing $\zd$ and $c_{\B}$.} (a)~Only the cone and ground bounds depend on the hover
+height. They rise with $\zd$ and stop binding at $\zd\approx\zSweet$\,m, above which
+$\bar c=c_{\mathrm{Lyap}}$. The corner bound (dashed) would have suggested a higher hover point.
+(b)~Worst one-step ratio $V(x^+)/V(x)$ found by adversarial search on each level set. It crosses 1 at
+$c_{\mathrm{Lyap}}=\cLyap$; the chosen $c_{\B}=\cB$ keeps a margin of $\approx3\%$ in the ratio.}
+\label{fig:bounds}
+\end{figure}
+
+\paragraph{Choice of $\zd$.} The hover linearisation is translation-invariant, so $P$, $K$, $c_{\U}$,
+$c_{\mathrm{chart}}$ and $c_{\mathrm{Lyap}}$ do not depend on $\zd$; only $c_{\mathrm{cone}}(\zd)$ and
+$c_{\mathrm{ground}}(\zd)$ do, and both increase with $\zd$ (\cref{fig:bounds}a, \cref{tab:zsweep}). The
+admissible level $\bar c(\zd)$ therefore grows until the $\zd$-independent bound takes over, at
+$\zd\approx\zSweet$\,m. Beyond that point a higher hover set is no larger; it only lengthens the climb from
+the low-altitude states that decide recoverability. We use $\zd=\zDes$\,m, just above the knee. Ground
+clearance binds before the cone does for any cone at least as wide as $r_0=0.5$\,m, $\theta=20^\circ$.
+
+\paragraph{Choice of $c_{\B}$.} $c_{\B}=\cB=\cBratio\,c_{\mathrm{Lyap}}$ leaves margin for the numerical
+nature of $c_{\mathrm{Lyap}}$; the paper's powerloop used $8/12.38=0.65$ of its bound. At this level the base
+set reaches $\pm\extXY$\,m horizontally, $\pm\extZ$\,m vertically and $\pm\extV$\,m/s in horizontal velocity,
+and its lowest point is $\lowestB$\,m above the pad (\cref{tab:extents}). The large roll/pitch extent
+($\max|\phi_x|=1.44$) is attained only jointly with position and velocity errors along the ellipsoid's
+principal directions.
+
+\paragraph{Numerical verification.} $2\times10^5$ states sampled uniformly in $\B$ all satisfy
+$\hc\ge\containMinH$\,m. $4096$ rollouts of $\pi_{\B}$ for $500$ steps from the boundary $\{V=c_{\B}\}$, including
+the adversarial worst direction, never exceed $V=\invMaxV<c_{\B}$ and keep $\hc\ge\invMinH$\,m.
+
+%======================================================================
+\section{The Phase I problem}
+%======================================================================
+
+\subsection{Composite backup and the backup-induced set}
+The backup policy and the set it certifies are
+\begin{equation}
+\pi_b(x)=\begin{cases}\pi_{\B}(x),&x\in\B\\ \pi_{\mathrm{SA}}(x),&x\notin\B\end{cases},\qquad
+\mathcal{C}_N(\pi_b)=\{x:\Phi^{\pi_b}_k(x)\in\Sset\ (0\le k\le N),\ \Phi^{\pi_b}_N(x)\in\B\}.
+\label{eq:CN}
+\end{equation}
+With first hitting times $\tau_{\B}$ and $\tau_{\Fset}$, and $(\B,\pi_{\B})$ certified,
+$\mathcal{C}_N(\pi_b)=\{x:\tau_{\B}(x)\le N,\ \tau_{\B}(x)<\tau_{\Fset}(x)\}$ (landing note, Lemma~4). Once
+the trajectory reaches $\B$ it stays there and inside $\Sset$. Membership in $\mathcal{C}_N$ is thus a
+first-hit event, which is what the value function below measures and what all evaluations in this report
+count. Phase~I solves
+\begin{equation}
+\max_{\pi_{\mathrm{SA}}}\ \mu\big(\mathcal{C}_N(\pi_b)\cap(\Omega\setminus\B)\big),
+\label{eq:sp2}
+\end{equation}
+where $\Omega$ is a design region and $\mu$ a reference measure on it (\cref{sec:design}).
+
+\subsection{Safe-arrival value function}
+With indicators $b=\mathbf{1}_{\B}$, $f=\mathbf{1}\{\hc<0\}$ and $c=1-b-f$, the safe-arrival Q-function and its
+Bellman equation are
+\begin{equation}
+Q^\pi_\beta(x,u)=\sum_{k\ge0}\beta^k\Big(\prod_{i<k}c(x_i)\Big)b(x_k),\qquad
+Q^\pi_\beta(x,u)=b(x)+\beta\,c(x)\,Q^\pi_\beta\big(F(x,u),\pi(F(x,u))\big).
+\label{eq:value}
+\end{equation}
+The optimal value is $V^\star_\beta(x)=\beta^{d(x)}$, where $d(x)$ is the minimum number of steps to
+reach $\B$ safely. A discount-optimal policy decreases $d$ by one per step, so it maximises
+\eqref{eq:sp2} simultaneously for every horizon $N$ (landing note, Prop.~3). The critic is trained on the target
+\begin{equation}
+y=\beta\Big(b(x')+c(x')\min_{i=1,2}Q'_i\big(x',\mu'(x')\big)\Big),\qquad x'=F(x,u),
+\label{eq:target}
+\end{equation}
+with twin target critics $Q'_i$ and the target actor's mean action $\mu'$. The critic outputs a sigmoid, so
+values stay in $[0,1]$.
+
+\paragraph{Discount factor.} States that can arrive within the horizon ($d\le N$) should keep a value of at
+least $v_{\min}$ above failure: $\beta^N\ge v_{\min}\iff\beta\ge v_{\min}^{1/N}$. With $N=100$ and
+$v_{\min}=0.3$ this requires $\beta\ge0.988$. We use $\beta=0.99$ ($\beta^{100}=0.366$). The unicycle value
+$\beta=0.92$ would give $\beta^{100}\approx2\times10^{-4}$, and the critic could not tell a late arrival
+from a crash.
+
+\subsection{Design region, reference measure and sampling}\label{sec:design}
+The design region is
+$\Omega=\{x\in\Sset:\ 0\le\zeta\le\bar\zeta,\ \|v\|\le\bar v,\ \mathrm{tilt}(q)\le\bar\vartheta,\ |\mathrm{yaw}|\le45^\circ\}$
+(\cref{tab:region}). It is covered by three analytically sampled regions (\cref{fig:geometry}); every
+sample is rejection-sampled to $\Omega\setminus\B$.
+\begin{itemize}
+\item \textbf{General (altitude-uniform).} $\zeta\sim\mathcal{U}[0,\bar\zeta]$; then $\Delta p$ uniform by
+area on the cross-section disk of radius $R_\varepsilon(\zeta)$; velocity uniform in the ball; body
+$z$-axis uniform on the tilt cap; yaw uniform. Sampling uniformly in \emph{volume} would put most samples
+high up, where the cone is wide and arrival is easy. Uniform per altitude slice gives each altitude equal mass.
+\item \textbf{Edge band.} $0\le\hc\le\eta$, $\zeta\le\zeta_{\mathrm{low}}$, with the radial velocity turned
+outward with probability $0.7$. These low-altitude states near the wall are the ones that decide
+landing safety (the analogue of the powerloop's near-ceiling states).
+\item \textbf{Capture shell.} $c_{\B}<V\le\kappa c_{\B}$: level uniform, direction uniform in the $P$-metric.
+\end{itemize}
+Training draws from a curriculum mixture that shifts weight from general and shell towards the edge band as
+the curriculum scale $s$ grows. The scale increases by 0.1 whenever the arrival rate within $N$ over the
+last 200 episodes exceeds 0.8. The general region stays in the mixture at every scale, since optimality is
+needed on all of $\mathcal{X}\setminus(\B\cup\Fset)$ and rollouts leave $\Omega$. The reference measure
+$\mu=\sum_r w_r\mu_r$ uses weights $1/3/0.5$ (general/edge/shell).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{fig_geometry.pdf}
+\caption{\textbf{Geometry of the landing Phase I problem}, as a vertical slice through the cone axis.
+Held-out test states of the three regions are shown at their signed radial distance. The base set $\B$
+is drawn as its position projection; actual membership also depends on velocity and attitude.}
+\label{fig:geometry}
+\end{figure}
+
+\begin{table}[t]
+\centering\small
+\caption{Design region, curriculum mixture and reference measure.}
+\label{tab:region}
+\input{tables/region}
+\end{table}
+
+\subsection{Learners}
+Both learners share the critic of \eqref{eq:target}: twin networks with sigmoid output, a Huber loss and
+delayed actor and target updates. Outside $\B$ the actor output is used as is. Inside $\B$ the base controller
+acts, so actor-loss terms from states in $\B$ are masked (hand-off masking). Actions are squashed into
+$\U$ with $a=u_{\mathrm{mid}}+u_{\mathrm{half}}\odot\tanh(\cdot)$. A small action-magnitude penalty
+($0.05\,\|\tilde u\|^2$ on the normalised action $\tilde u$) regularises the actor. The actor uses ELU
+activations, so that $\pi_b$ is $C^1$ where the CIL integrates its sensitivity.
+
+\paragraph{TD3.} Deterministic actor $\mu_\psi$, trained by maximising $\min_iQ_i(x,\mu_\psi(x))$, with
+Gaussian exploration noise of fixed scale during collection.
+
+\paragraph{SAC variant.} A tanh-Gaussian actor is trained with
+$L_\pi=\mathbb{E}\big[\alpha\log\pi(\tilde a\,|\,x)-\min_iQ_i(x,a)\big]$, with $\alpha$ auto-tuned towards a
+target entropy of $-4$ on the normalised action. The entropy term appears \emph{only} in the actor loss;
+the critic keeps the hard backup \eqref{eq:target} on the deterministic mean. A soft backup would add
+$-\alpha\log\pi$ as a per-step reward and move the fixed point away from $\beta^{d(x)}$. With positive
+entropy, a state that never arrives accrues $\approx\alpha\mathcal{H}/(1-\beta)$ and can outrank a late
+arrival. With negative entropy, failure (value 0, episode over) can outrank a long arrival. Either way the
+ordering ``arrive sooner $>$ arrive later $>$ never arrive'' that \eqref{eq:sp2} relies on is lost. Keeping
+the backup on the mean also makes $Q$ estimate the value of exactly the policy that $\pi_b$ deploys. What
+SAC changes is exploration, which becomes state-dependent.
+
+\begin{table}[t]
+\centering\small
+\caption{Training hyperparameters (shared by both learners unless stated).}
+\label{tab:hparams}
+\tabfit{hparams}
+\end{table}
+
+\subsection{Evaluation protocol}
+Two fixed, i.i.d.\ held-out sets are drawn from the three regions at full curriculum scale (validation
+and test; 1024/1024/512 states per region). For each region, the recoverability
+\begin{equation}
+\hat m_r=\frac1{M_r}\sum_{i=1}^{M_r}\mathbf{1}\big[x^{(i)}\in\mathcal{C}_N(\pi_b)\big],\qquad
+\hat\mu_w=\frac{\sum_r w_r\hat m_r}{\sum_r w_r},
+\end{equation}
+is computed by rolling out the deterministic backup policy with first-hit semantics. By Hoeffding's
+inequality $|\hat m_r-m_r|\le\sqrt{\ln(2/\delta)/(2M_r)}$ with probability $1-\delta$; this is $\pm\hwEdge$
+for $M_r=1024$ at $\delta=0.05$. Checkpoints are selected on validation every 50k steps; all numbers
+reported below are on the test split at the selected checkpoint.
+
+%======================================================================
+\section{Results}
+%======================================================================
+
+\subsection{Training}
+\Cref{fig:training} shows the validation recoverability over training. Every run converges.
+\begin{itemize}
+\item \textbf{SAC} climbs faster: $\hat\mu_w>0.8$ within $\approx0.5$M steps, while TD3 oscillates until
+$\approx1.3$M steps.
+\item \textbf{Plateau.} Both are flat from $\approx1.5$M steps, so a 2.5M-step budget would suffice.
+\item \textbf{Late regression.} SAC regresses slightly late in training (best minus final validation
+$\hat\mu_w\approx0.010$, vs.\ $0.004$ for TD3). Its temperature settles near $2\times10^{-4}$
+(\cref{fig:trainingdiag}c).
+\item \textbf{Curriculum.} The curriculum reaches $s=1$ in every run (\cref{fig:training}f); the crash
+rate and the training-time arrival rate plateau together (\cref{fig:trainingdiag}a).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_training.pdf}
+\caption{\textbf{Validation recoverability during training.} Line: mean over three seeds; band:
+min--max across seeds. Step 0 is the untrained actor. End labels give the final mean.}
+\label{fig:training}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_training_diag.pdf}
+\caption{\textbf{Training diagnostics}, per run and moving-averaged. (a)~Arrival rate within $N$ of
+training episodes, drawn from the curriculum distribution with exploration. (b)~Critic loss. (c)~SAC
+temperature.}
+\label{fig:trainingdiag}
+\end{figure}
+
+\subsection{Recoverability}
+\Cref{tab:runs} lists every run and \cref{tab:summary} compares them with baselines.
+\begin{itemize}
+\item \textbf{Backbones.} Every TD3 seed beats every SAC seed, but only by $0.004$ in $\hat\mu_w$, which
+is smaller than the per-region confidence half-width.
+\item \textbf{Base-controller baseline.} Using $\pi_{\B}$ everywhere, i.e.\ no safe-arrival policy, is a
+strong baseline ($\hat\mu_w=\muLQR$). The learned policy adds most in the edge band, raising it from
+$\mEdgeLQR$ to $\mEdgeChosen$.
+\item \textbf{Checkpoint choice.} We select \runChosen, which has the highest validation score (0.901).
+Its detailed results are in \cref{tab:chosen}. Arrival is fast (mean $\tMeanGen$\,s general,
+$\tMeanEdge$\,s edge), so the 2\,s horizon is not what limits recoverability: there are no timeouts.
+\end{itemize}
+
+\begin{table}[H]
+\centering\small
+\caption{Per-run results on the test split at the validation-selected checkpoint. ``best step'' is the
+selected checkpoint; ``min'' is the wall time of the 5M-step run on an RTX~4050 laptop GPU (two runs in
+parallel).}
+\label{tab:runs}
+\tabfit{runs}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Recoverability of backup policies (test split unless noted; mean $\pm$ std over seeds). The
+oracle takes, for each state, the best of the six learned policies. The ceiling counts as unrecoverable only
+the shared failures for which trajectory optimisation finds no safe input sequence
+(\cref{sec:failures}).}
+\label{tab:summary}
+\tabfit{summary}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Selected policy (\runChosen), test split. $\tau_{\B}$: arrival time into $\B$ of successful
+states. Last column: successful arrivals whose path dips below the pad plane $\zeta=0$.}
+\label{tab:chosen}
+\tabfit{chosen}
+\end{table}
+
+\paragraph{Slices of $\mathcal{C}_N$.} \Cref{fig:slices} evaluates the backup on dense grids over the
+$(\|\Delta p\|,\zeta)$ half-plane at level attitude, for three velocity conditions.
+\begin{itemize}
+\item \textbf{At rest.} The learned and base-controller backups are nearly identical (\sliceRest\% vs.\
+\sliceRestLQR\% saved).
+\item \textbf{With outward velocity.} The base controller loses a wide band along the cone wall that
+widens with altitude (\sliceOutLQR\% and \sliceOutDownLQR\%). The learned policy shrinks the lost region to
+a sliver next to the wall (\sliceOut\% and \sliceOutDown\%).
+\item \textbf{Arrival time} grows smoothly with distance from $\B$; nowhere does it approach the 2\,s horizon.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_slices.pdf}
+\caption{\textbf{Slices of the backup-induced set $\mathcal{C}_N(\pi_b)$.} Level attitude, yaw 0, radial
+velocity as titled. Blue shades: arrival time into $\B$; red: the backup leaves the cone; grey: the initial
+state is already in $\B$. Top: learned backup (\runChosen); bottom: base controller alone.}
+\label{fig:slices}
+\end{figure}
+
+\subsection{Where the failures come from}\label{sec:failures}
+The failures are almost identical across policies (\cref{tab:failures}): \edgeShared{} of the
+\edgeFailChosen{} edge failures of the selected policy are also failures of all five other policies. To test
+whether any controller could save these states, we solve, for each shared failure, an open-loop trajectory
+optimisation over the full input box: maximise $\min_k\hc(x_k)$ over the 2\,s horizon, using 9 initialisations
+$\times$ 600 Adam steps on a tanh-parametrised input sequence. Only \edgeSharedViable{} of the \edgeShared{} shared edge
+failures (and \genSharedViable{} of \genShared{} general ones) can even be kept inside the cone. As a control, the same
+procedure succeeds for \ctrlViable{} edge states that all policies save.
+
+The non-viable states share a signature (\cref{fig:viability}): a few centimetres from the wall with an
+outward radial velocity. The wall is crossed within $\tfMedian$\,s in the median case (at most $\tfMax$\,s),
+faster than thrust and attitude can redirect the vehicle. Counting only these as unrecoverable gives the
+ceiling in \cref{tab:summary}. The selected policy reaches \fracOfCeil\% of it, and the per-state oracle over
+six policies closes only half of the remaining gap. The ceiling is an estimate, not a bound: the
+optimiser could miss a solution, and it only checks staying in the cone, not reaching $\B$. The true
+ceiling for $\mathcal{C}_N$ can therefore only be lower.
+
+\begin{table}[H]
+\centering\small
+\caption{Failure overlap and viability of the shared failures (test split).}
+\label{tab:failures}
+\tabfit{failures}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_viability.pdf}
+\caption{\textbf{Edge test states by fate under \runChosen.} Crashes with no safe trajectory (red) cluster at
+small margin and outward speed, at every altitude and vertical speed. The few crashed-but-viable states (amber)
+are where the policy could still improve.}
+\label{fig:viability}
+\end{figure}
+
+\subsection{Actuator commands and smoothness}
+\Cref{tab:actuators,fig:actuators} summarise the commands issued while $\pi_{\mathrm{SA}}$ is active
+(before the hand-off).
+\begin{itemize}
+\item \textbf{Saturation} occurs almost only at the first step. The initial thrust command saturates for
+\tdThrSatZero\% of test states under TD3 and \sacThrSatZero\% under SAC. Along the trajectory, thrust is at
+its maximum for \tdThrMax\% of steps and near zero for \tdThrZero\%, and body rates saturate for \tdRateSat\%.
+\item \textbf{Magnitudes.} Commands respect the box by construction. Peak roll/pitch rates reach 16--17\,rad/s at
+the 95th percentile, close to $\bar\omega$ but below the SITL rate limit (1100\,deg/s $=19.2$\,rad/s).
+\item \textbf{Attitude.} The policy tilts far more than the base controller (\cref{tab:envelope}): median
+peak tilt $\tiltMedGen^\circ$ (general) and $\tiltMedEdge^\circ$ (edge), with 95th percentiles of
+$\tiltPninetyfiveGen^\circ$ and $\tiltPninetyfiveEdge^\circ$, against $\tiltPninetyfiveGenLQR^\circ$ and
+$\tiltPninetyfiveEdgeLQR^\circ$ for $\pi_{\B}$ alone. Large tilts are how it reverses outward velocity
+quickly, but they matter for deployment (\cref{sec:limitations}).
+\end{itemize}
+
+TD3's actor is steeper than SAC's: its 95th-percentile Jacobian of the normalised action is about 9 vs.\
+about 5 (\cref{tab:sens}). What the CIL integrates, however, is the closed-loop sensitivity
+$\Phi_t=\partial x_t/\partial x_0$ along the backup rollout, and its constraint rows are
+$\nabla\hc(x_t)\Phi_t$. Their peak values over the horizon are similar for all six policies, and the
+row magnitudes are slightly smaller for TD3. \texttt{SAC, seed 0} has an outlier state with
+$\max_t\|\Phi_t\|=230$. On this evidence the steeper TD3 actor is not a disadvantage for Phase~II.
+
+\begin{table}[H]
+\centering\small
+\caption{Actuator statistics while $\pi_{\mathrm{SA}}$ is active (all test regions). Saturation means within
+2\% of a bound in normalised units. $\|\Delta\tilde u\|$: step-to-step change of the normalised command.}
+\label{tab:actuators}
+\tabfit{actuators}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_actuators.pdf}
+\caption{\textbf{Distribution of commands} while $\pi_{\mathrm{SA}}$ is active, over all test states (log
+density). The learned policies use the full thrust range; the base controller stays near hover thrust.}
+\label{fig:actuators}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\caption{Trajectory envelope of successful arrivals, up to the hand-off.}
+\label{tab:envelope}
+\tabfit{envelope}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Actor smoothness and closed-loop sensitivity. The Jacobian is taken at the 2048 general and edge
+test states; $\Phi_t$ at every 8th of them (256 states).}
+\label{tab:sens}
+\tabfit{sensitivity}
+\end{table}
+
+%======================================================================
+\section{Closed-loop case studies}\label{sec:cases}
+%======================================================================
+
+\Cref{fig:fan} gives an overview: 120 random test states, each rolled out until it enters $\B$ (blue) or
+leaves the cone (red). General-region states descend or glide inward to $\B$. Edge states climb and turn
+inward within a few tenths of a second. The crashes are the non-viable states on the wall.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_fan.pdf}
+\caption{\textbf{Overview of closed-loop behaviour} of the learned backup on 120 random test states,
+drawn in the radial plane.}
+\label{fig:fan}
+\end{figure}
+
+The following cases were selected by rule from the test set to cover distinct situations
+(\cref{tab:cases}). Each figure shows, for 3\,s (the 2\,s horizon plus 1\,s of base-controller hold):
+\begin{itemize}
+\item \textbf{(a)} the path in the radial plane, with the cone and the position projection of $\B$;
+\item \textbf{(b)} the top view, with the cone cross-section at the initial altitude;
+\item \textbf{(c)} the safety margin $\hc$;
+\item \textbf{(d)} the thrust command and \textbf{(e)} the body-rate commands, with their limits;
+\item \textbf{(f)} the base-set level $V/c_{\B}$ on a log scale, where entry into $\B$ is the crossing of 1.
+\end{itemize}
+The grey shading marks the base-controller phase after the hand-off.
+
+\begin{table}[H]
+\centering\small
+\caption{Case studies: initial condition (altitude, radius, margin, outward and vertical speed, tilt) and
+closed-loop outcome under \runChosen{} ($t$: arrival or crash time; minima and maxima over the
+safe-arrival segment). Units: m, m/s, degrees, s, m/s$^2$, rad/s.}
+\label{tab:cases}
+\tabfit{cases}
+\end{table}
+
+\subsection*{Case A: high, off-axis start descending toward the wall}
+The vehicle starts $\caseAfzeta$\,m above the pad at $\caseAfr$\,m from the axis, $\caseAfh$\,m from the wall,
+descending at $\caseAfvzabs$\,m/s. The policy first lets it glide down along the wall: the margin dips to
+$\caseAhmin$\,m while it builds inward velocity, with thrust between $\caseAamin$ and 14\,m/s$^2$ and a tilt
+of up to $\caseAtilt^\circ$. It then brakes with a thrust pulse of $\caseAamax$\,m/s$^2$ just before
+entering $\B$ at $t=\caseAt$\,s, about 1\,m above the pad. After the hand-off, thrust settles at $g$, the
+rates at zero, and $V$ decays exponentially: the base set is invariant, as certified.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_A.pdf}
+\caption{\textbf{Case A} (general region): long descent along the wall, braking pulse, hand-off.}
+\label{fig:caseA}
+\end{figure}
+
+\subsection*{Case B: low-altitude edge state moving outward and down}
+The vehicle starts $\caseBfh$\,m from the wall at $\caseBfzeta$\,m altitude, moving outward at $\caseBfvout$\,m/s
+and down at $\caseBfvzabs$\,m/s. The policy commands near-full thrust ($\caseBamax$\,m/s$^2$) for about
+0.1\,s while tilting the thrust vector inward (peak tilt $\caseBtilt^\circ$). Because the cone widens with
+altitude, climbing increases the margin as effectively as moving inward: after a minimum of $\caseBhmin$\,m
+the margin rises steeply. The vehicle enters $\B$ at $t=\caseBt$\,s, and thrust drops to $\caseBamin$\,m/s$^2$
+to shed the climb rate just before the hand-off. This climb-and-turn-in manoeuvre is the characteristic
+recovery for edge states (\cref{fig:fan}b).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_B.pdf}
+\caption{\textbf{Case B} (edge band): full-thrust climb and inward roll from 4\,cm off the wall.}
+\label{fig:caseB}
+\end{figure}
+
+\subsection*{Case C: large tilt, descending close to the pad}
+The vehicle starts at $\caseCfzeta$\,m with $\caseCftilt^\circ$ tilt and $\caseCfspeed$\,m/s speed, moving
+outward ($\caseCfvout$\,m/s) and down ($\caseCfvzabs$\,m/s). This is the most demanding of the successful
+cases. Thrust saturates at $\caseCamax$\,m/s$^2$, the pitch rate reaches $\caseCwmax$\,rad/s, and the vehicle
+tilts to $\caseCtilt^\circ$ to stop the outward motion. The margin bottoms out at $\caseChmin$\,m;
+arrival is at $t=\caseCt$\,s.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_C.pdf}
+\caption{\textbf{Case C} (general region): thrust saturation and a hard roll to stop outward motion near the pad.}
+\label{fig:caseC}
+\end{figure}
+
+\subsection*{Case D: capture shell and base-controller hold}
+Starting just outside $\B$ ($V\approx c_{\B}$) at $\caseDfspeed$\,m/s, the safe-arrival policy acts for only
+$\caseDt$\,s before the state enters $\B$. The remaining 2.96\,s show the certified base pair at work:
+modest commands ($\le\caseDamax$\,m/s$^2$, $\le\caseDwmax$\,rad/s), a margin that never drops below
+$\caseDhmin$\,m, and $V$ decreasing by four orders of magnitude.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_D.pdf}
+\caption{\textbf{Case D} (capture shell): immediate hand-off, then forward invariance and convergence under $\pi_{\B}$.}
+\label{fig:caseD}
+\end{figure}
+
+\subsection*{Case E: a non-viable state}
+The vehicle starts $\caseEfh$\,m from the wall at $\caseEfzeta$\,m altitude, moving outward at $\caseEfvout$\,m/s
+and down at $\caseEfvzabs$\,m/s. Descending also shrinks the margin, because the cone narrows downward.
+The policy responds correctly and at the limits: thrust $\approx\caseEamax$\,m/s$^2$ (within 3\% of
+$a_{\max}$) and roll rate $\caseEwmax$\,rad/s from the first steps. It still leaves the cone at
+$t=\caseEt$\,s, by $\caseEhminabs$\,m. The best trajectory-optimisation result (orange) issues almost the same
+commands and also exits (by $\caseEopthminabs$\,m). This is the longest-surviving of the \edgeNonviable{}
+non-viable edge states; most fail within $\tfMedian$\,s. It illustrates what the ceiling in
+\cref{tab:summary} means: no admissible input could have kept this state safe.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_E.pdf}
+\caption{\textbf{Case E} (edge band, non-viable): the learned policy and the trajectory optimiser both
+saturate and both leave the cone within 0.1\,s. The time axis is zoomed.}
+\label{fig:caseE}
+\end{figure}
+
+\subsection*{Case F: a successful recovery that touches the ground}
+The vehicle starts only $\caseFfzeta$\,m above the pad, near the axis, descending at $\caseFfvzabs$\,m/s with
+$\caseFftilt^\circ$ tilt. Braking needs at least $v^2/(2\cdot3g)\approx2.3$\,cm even with the thrust vector
+already vertical, and the attitude must first be corrected. The path therefore dips to
+$\zeta=\caseFzmin$\,m, below the pad plane, before climbing into $\B$ at $t=\caseFt$\,s. The trajectory
+never approaches the cone wall ($\min\hc=\caseFhmin$\,m), so in the model this is a safe arrival. In reality
+it is a ground contact. This happens in \belowPadGen\% (general) and \belowPadEdge\% (edge) of successful
+arrivals; see \cref{sec:limitations}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_F.pdf}
+\caption{\textbf{Case F} (general region): recovery that dips 3\,cm below the pad plane; the model has no ground.}
+\label{fig:caseF}
+\end{figure}
+
+\subsection*{Case G: the same edge state under TD3 and SAC}
+From an edge state moving outward at $\caseGfvout$\,m/s, both backbones arrive at the same time
+($\caseGt$\,s and $\caseGct$\,s) with similar paths. Their commands differ in detail: TD3 peaks at
+$\caseGamax$\,m/s$^2$ and $\caseGwmax$\,rad/s, SAC at $\caseGcamax$\,m/s$^2$ and $\caseGcwmax$\,rad/s.
+This is consistent with the aggregate statistics: the two learners converge to closely related policies.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_G.pdf}
+\caption{\textbf{Case G} (edge band): TD3 (orange) and SAC (blue) from the same initial state. Dashed body
+rates in (e) are SAC's.}
+\label{fig:caseG}
+\end{figure}
+
+\subsection*{Case H: where the learned policy matters}
+An edge state $\caseHfh$\,m from the wall at $\caseHfzeta$\,m altitude, moving outward at $\caseHfvout$\,m/s.
+The base controller alone (orange) crashes at $t=\caseHct$\,s: in its linear design, lateral braking must
+go through attitude, and it commands at most $\caseHcamax$\,m/s$^2$ of thrust. The learned policy commands
+$\caseHamax$\,m/s$^2$ immediately and rolls hard (peak tilt $\caseHtilt^\circ$). The large thrust vector
+reverses the outward velocity within a few steps, and the vehicle arrives in $\B$ at $t=\caseHt$\,s. States
+of this kind account for the gap between the two rows of \cref{fig:slices}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{fig_case_H.pdf}
+\caption{\textbf{Case H} (edge band): the base controller alone leaves the cone; the learned policy recovers.
+Dashed body rates in (e) are the base controller's.}
+\label{fig:caseH}
+\end{figure}
+
+%======================================================================
+\section{Limitations and next steps}\label{sec:limitations}
+%======================================================================
+
+\begin{enumerate}
+\item \textbf{No ground plane.} The cone continues below the pad to its apex, so recoveries may pass below
+$\zeta=0$ (\cref{fig:caseF}). The design region also contains states a few centimetres above the pad that
+descend at up to 2\,m/s and cannot avoid contact. Remedies: add $h_{\mathrm{ground}}=\zeta\ge0$ as a second
+safety row (both in Phase~I and in the CIL), or restrict $\Omega$ near the pad.
+\item \textbf{Aggressive attitudes and the rate-loop assumption.} Body rates are assumed to be tracked
+instantly, and the policy exploits this with tilts of $60$--$80^\circ$ at the 95th percentile. The SITL
+notes already identify rate-loop lag as the main sim-to-SITL gap for the powerloop. Before deployment:
+penalise or constrain tilt in Phase~I, lower $\bar\omega$, or add first-order rate dynamics to the model.
+\item \textbf{Numerical certificate.} $c_{\mathrm{Lyap}}$ comes from an adversarial search, and invariance
+and containment are verified by sampling and simulation (cone containment is exact up to the boundary grid).
+The margin $c_{\B}=\cBratio\,c_{\mathrm{Lyap}}$ accounts for this, but it is not a proof. A certified
+bound would need a Taylor-remainder argument for $F$ in the chart.
+\item \textbf{Cone geometry is a placeholder.} $r_0$ and $\theta$ should come from the landing reference,
+which also enables the reference-tube region $R_{\mathrm{tube}}$ of the note.
+\path{scripts/certify_landing_base_set.py} recomputes $\zd$ and $c_{\B}$ for new geometry.
+\item \textbf{Non-viable mass in $\Omega$.} About 12\% of the edge band cannot be saved by any input. This
+costs nothing in the objective, which just gets a constant offset, but it hides progress: recoverability relative
+to the viability ceiling (\fracOfCeil\% for the selected policy) is the more informative number.
+\item \textbf{Phase~II for landing} is not yet implemented. It needs cone rows and the 9-D base set in
+the backup-CBF layer, a landing reference trajectory, and a Phase~II environment.
+\end{enumerate}
+
+\paragraph{Recommended checkpoint.} The actor of \runChosen,
+\begin{center}\small\path{outputs/landing_phase1_compare/td3_seed0/landing_backup_policy_actor.pkl},\end{center}
+has the highest validation score, a test $\hat\mu_w=\muChosen$ and no sensitivity outliers.
+
+%======================================================================
+\appendix
+\section{Supplementary tables}
+%======================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{LQR gain $K$ ($\delta u=-Ke$). Entries below $5\times10^{-3}$ in magnitude are shown as 0; the
+block structure mirrors the four integrator chains.}
+\label{tab:gain}
+\tabfit{gain}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Level bounds versus hover height ($z$-independent bounds: $c_{\U}=\cU$, $c_{\mathrm{chart}}=\cChart$,
+$c_{\mathrm{Lyap}}=\cLyap$).}
+\label{tab:zsweep}
+\input{tables/zsweep}
+\end{table}
+
+\section{Reproduction}
+All numbers, tables and figures in this report are generated from the training outputs by
+\begin{verbatim}
+python docker_batch/report_landing_phase1.py \
+    --root outputs/landing_phase1_compare --run td3_seed0
+\end{verbatim}
+which writes \texttt{figures/}, \texttt{tables/}, \texttt{numbers.tex} and this document, and compiles it
+when \texttt{latexmk} is available. The prose was written for the runs reported here.
+
+\begin{thebibliography}{9}
+\bibitem{ps2rl} K.~S.~Yun, Z.~Li and N.~Azizan. \emph{Provably Safe, yet Scalable Reinforcement Learning.}
+arXiv:2606.14536, 2026.
+\bibitem{landingnote} \emph{Reformulating PS2-RL Phase I for the Approach-Cone Landing Task.} Internal note,
+28 September 2026.
+\end{thebibliography}
+
+\end{document}

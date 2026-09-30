@@ -135,21 +135,24 @@ def plot(runs: list[dict], path: Path) -> None:
     for ax, (key, title) in zip(axes, panels):
         ax.set_facecolor(SURFACE)
         data = curves(runs, key)
+        ends = []
         for bb, (x, v) in data.items():
             c = COLORS.get(bb, TEXT_2)
             mean = v.mean(axis=0)
             if v.shape[0] > 1:
                 ax.fill_between(x / 1e6, v.min(axis=0), v.max(axis=0), color=c, alpha=0.14, linewidth=0)
             ax.plot(x / 1e6, mean, color=c, linewidth=2.0, label=f"{bb.upper()} (n={v.shape[0]})")
-            ax.annotate(
-                f"{bb.upper()} {mean[-1]:.2f}",
-                (x[-1] / 1e6, mean[-1]),
-                xytext=(6, 0),
-                textcoords="offset points",
-                va="center",
-                fontsize=9,
-                color=TEXT,
-            )
+            ends.append((mean[-1], bb, x[-1] / 1e6))
+        # End labels, nudged apart when the curves finish close together.
+        placed: list[float] = []
+        for y, bb, x_end in sorted(ends):
+            yy = y
+            for q in placed:
+                if abs(yy - q) < 0.06:
+                    yy = q + 0.06
+            placed.append(yy)
+            ax.annotate(f"{bb.upper()} {y:.3f}", (x_end, y), xytext=(x_end + 0.1, yy), textcoords="data", va="center",
+                        fontsize=9, color=TEXT, annotation_clip=False)
         ax.set_title(title, fontsize=11, color=TEXT, loc="left")
         ax.set_xlabel("environment steps (millions)", fontsize=9, color=TEXT_2)
         ax.set_ylim(0.0, 1.0)

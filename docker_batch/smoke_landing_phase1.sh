@@ -28,7 +28,13 @@ python scripts/train_phase1_landing.py ${PS2RL_GPU_FLAG} --skip_lyap_check --bac
     --total_steps "${PROBE_STEPS}" --eval_every 0 --log_every 25000 \
     --output_dir "${OUT}" --run_name probe_sac 2>&1 | tee "${OUT}/probe_sac.log" | grep -E "^\[(jax|done)\]|^step="
 
-rate="$(grep -oE 'eps/sec=[0-9.]+' "${OUT}/probe_sac.log" | tail -1 | cut -d= -f2)"
+# Median of the logged rates, excluding the first and last: both include a JIT compile
+# (the last chunk is shorter than steps_per_jit and gets its own compile).
+rate="$(grep -oE 'eps/sec=[0-9.]+' "${OUT}/probe_sac.log" | cut -d= -f2 | python -c "
+import sys, statistics
+r = [float(x) for x in sys.stdin.read().split()]
+r = r[1:-1] if len(r) > 2 else r
+print(statistics.median(r) if r else '')")"
 if [ -n "${rate}" ]; then
     python - "${rate}" "${FULL_STEPS}" <<'PY'
 import sys
