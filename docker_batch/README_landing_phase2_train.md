@@ -24,7 +24,7 @@ The earlier `skid`, `nearside` and `cornercut` references are still in `ps2rl/en
 | stage | what | output |
 |---|---|---|
 | B | **tracker** per reference: SAC without the filter, 8M steps. These are the colleague's landing-tracker settings (`outputs/landing/land_v2_*`): landing reward v2, 32 envs, start perturbation ±0.3 m / ±0.5 m/s / ±10°. | `outputs/landing_phase2/<ref>_tracker/` |
-| C | **PS2** per reference: SAC through the landing CIL, warm-started from the tracker. Uses the paper's PS2 settings: no random warm-up, actor lr 5e-5, projected critic targets. Stops at 1.5M steps or after `PS2_HOURS` (3 h), whichever comes first. | `outputs/landing_phase2/<ref>_ps2/` |
+| C | **PS2** per reference: SAC through the landing CIL, warm-started from the tracker. Uses the paper's PS2 settings (no random warm-up, actor lr 5e-5, projected critic targets), batched for the GPU: 256 envs, an update of 512 samples every 64 env steps. The SAC updates project with the QP only; executed actions and evaluation use QP + safeguard. Stops at 3M steps or after `PS2_HOURS` (3 h), whichever comes first. | `outputs/landing_phase2/<ref>_ps2/` |
 | D | **evaluation** from the same 32 starts (the reference start plus reset-library starts): tracker alone, tracker + filter at deployment, PS2 | `outputs/landing_phase2/eval_<ref>/` |
 | E | report | `outputs/landing_phase2/REPORT.md` |
 
@@ -41,6 +41,11 @@ docker exec -it px4sitl bash -c "tail -F ~/ws_shared/PS2-RL/outputs/landing_phas
 ```
 
 The log streams every run's lines with a `[run]` prefix. Each progress line shows steps/s, elapsed time and the ETA. The batch is resumable: re-running it skips finished runs and evaluations.
+
+**Why the PS2 preset is batched.** The first GPU run used the paper's 32 envs and ran at about 20 steps/s per run, no faster than a CPU. The projection is latency-bound: each QP call runs sequential 100-step backup rollouts and QP iterations on tiny batches, so the GPU sits idle between small kernels.
+- The `ps2` preset keeps the number of QP calls per vector step and the samples-per-env-step ratio (8). It collects 8× the env steps per vector step, so the speed-up should be several-fold.
+- It also drops the safeguard from the update projections, saving 5 extra rollouts per call. On the 2-core CPU it already runs at 30 instead of 17 steps/s.
+- The old setting is still available as `--preset ps2_paper`.
 
 **Duration.**
 - Six references, with three runs on the GPU at once.

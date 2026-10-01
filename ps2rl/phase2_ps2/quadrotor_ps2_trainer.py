@@ -695,6 +695,7 @@ def _run_training_jax(
     binding: PS2SystemBinding | None = None,
     make_projector: Callable[[Any], Any] | None = None,
     validate_learned_backup: bool = True,
+    update_cbf_cfg: Any | None = None,
 ) -> Dict[str, Any]:
     """Train safe SAC using pure-JAX batched environment stepping.
 
@@ -702,6 +703,8 @@ def _run_training_jax(
     interface (default: the powerloop one); e.g. the landing CIL passes ``LANDING_BINDING``
     and ``QuadrotorLandingBackupCBFProjector``. ``validate_learned_backup`` runs the powerloop
     learned-backup compatibility check (other layers validate their own checkpoint).
+    ``update_cbf_cfg`` (same layer, other settings) is used for the projections inside the SAC
+    update only; collection and evaluation always use ``cbf_cfg``.
     """
     binding = _BINDING if binding is None else binding
     make_projector = QuadrotorBackupCBFProjector if make_projector is None else make_projector
@@ -759,7 +762,8 @@ def _run_training_jax(
     backup_runtime = projector.runtime
     proj_ops = _make_projection_ops(cbf_cfg, backup_runtime, binding)
 
-    update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime=backup_runtime, binding=binding)
+    update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg if update_cbf_cfg is None else update_cbf_cfg, action_scale,
+                                 backup_runtime=backup_runtime, binding=binding)
     sample_action_batch_fn, action_low, action_high = _build_batched_action_fn(
         sac_cfg,
         actor_cfg,

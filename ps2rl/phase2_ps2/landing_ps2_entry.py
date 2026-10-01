@@ -28,7 +28,7 @@ where the CIL guarantee applies.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 import math
 from pathlib import Path
@@ -39,9 +39,15 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# SAC presets. "tracker" = the settings of the landing trackers in outputs/landing/land_v2_*;
-# "ps2" = the paper's quadrotor PS2 settings (warm start, no random warm-up, smaller learning
-# rates, projected critic targets). Every value can be overridden on the command line.
+# SAC presets (every value can be overridden on the command line):
+#   "tracker"   the settings of the landing trackers in outputs/landing/land_v2_*;
+#   "ps2_paper" the paper's quadrotor PS2 settings (warm start, no random warm-up, smaller learning
+#               rates, projected critic targets), 32 envs, an update of 64 samples every 8 env steps;
+#   "ps2"       the same, batched for a GPU: 256 envs, an update of 512 samples every 64 env steps.
+#               Same samples-per-env-step ratio (8) and the same number of QP calls per vector step,
+#               so each vector step costs about as long while it collects 8x the env steps. The
+#               projection is latency-bound on a GPU (sequential 100-step backup rollouts and QP
+#               iterations on tiny batches), which is why the 32-env setting ran at ~20 steps/s.
 PRESETS: dict[str, dict[str, Any]] = {
     "tracker": dict(total_steps=8_000_000, start_steps=4_000, update_after=2_000, update_every=8, gradient_steps=1,
                     batch_size=64, replay_size=300_000, gamma=0.99, tau=0.005, actor_lr=1e-4, critic_lr=1e-4,
@@ -54,6 +60,10 @@ PRESETS: dict[str, dict[str, Any]] = {
                 q_clip_abs=1e4, hidden_size=256, eval_every=25_000, eval_episodes=3, log_every=2_000,
                 best_weights_save_period=50_000, num_envs=32, steps_per_jit=16, project_target_actions=True),
 }
+PRESETS["ps2_paper"] = PRESETS.pop("ps2")
+PRESETS["ps2"] = dict(PRESETS["ps2_paper"], total_steps=3_000_000, update_after=4_096, update_every=64, batch_size=512,
+                      replay_size=500_000, num_envs=256, steps_per_jit=4, log_every=8_192, eval_every=65_536,
+                      best_weights_save_period=131_072)
 DEFAULT_FILTER = "alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1"
 REFERENCE_GEOMETRY = {"pad_x": "pad_x", "pad_y": "pad_y", "z_pad": "pad_z", "r0": "cone_r0",
                       "theta_deg": "cone_theta_deg", "eps": "cone_eps"}
@@ -78,6 +88,10 @@ def parse_args(argv=None):
     p.add_argument("--preset", choices=tuple(PRESETS), default=None, help="SAC preset (default: ps2 if projection on)")
     p.add_argument("--warm_start_weights", default="", help="checkpoint to initialise actor/critics from")
     p.add_argument("--wall_time_budget_hours", type=float, default=0.0, help="stop training after this long (0 = off)")
+    p.add_argument("--safeguard_in_updates", type=_bool, default=False,
+                   help="also apply the discrete-time safeguard inside the SAC update's projections (actor/critic "
+                        "targets). Off: updates use the QP projection only; executed actions and evaluation always "
+                        "use QP + safeguard, so safety is unchanged and each update skips 5 extra backup rollouts.")
     for k, v in PRESETS["tracker"].items():
         if isinstance(v, bool):
             p.add_argument(f"--{k}", type=_bool, default=None)
@@ -241,12 +255,14 @@ def main(argv=None):
     meta = {
         "mode": "ps2" if args.projection else "tracker", "reference": str(reference), "backup": str(backup),
         "filter": filt, "qp_solve_dtype": args.qp_solve_dtype, "init_library": lib_info,
+        "safeguard_in_updates": bool(args.safeguard_in_updates),
         "preset": args.preset or ("ps2" if args.projection else "tracker"), "warm_start_weights": sac_cfg.warm_start_weights,
         "command": "python scripts/train_phase2_landing.py " + " ".join(argv or __import__("sys").argv[1:]),
     }
     (run_dir / "landing_meta.json").write_text(json.dumps(meta, indent=2, default=str))
 
     metrics_path = run_dir / "metrics.jsonl"
+    metrics_path.write_text("")  # a restarted run starts a fresh log
     t_start = time.time()
 
     def logger(step: int, metrics: dict[str, float]) -> None:
@@ -269,8 +285,10 @@ def main(argv=None):
           f"{sac_cfg.total_steps:,} steps, {sac_cfg.num_envs} envs | projection={sac_cfg.use_projection} "
           f"(targets {sac_cfg.project_target_actions}) | warm start {sac_cfg.warm_start_weights or 'none'} | "
           f"episode {env_cfg.max_steps} steps | out {run_dir}", flush=True)
+    update_cfg = cbf_cfg if args.safeguard_in_updates else replace(cbf_cfg, discrete_safeguard=False)
     result = run_training(sac_cfg, env_cfg, cbf_cfg, output_dir=str(run_dir), metric_logger=logger,
-                          binding=LANDING_BINDING, make_projector=lambda c: projector, validate_learned_backup=False)
+                          binding=LANDING_BINDING, make_projector=lambda c: projector, validate_learned_backup=False,
+                          update_cbf_cfg=update_cfg)
 
     np.savez(run_dir / "history.npz", **{k: np.asarray(v, dtype=np.float64) for k, v in result["history"].items()})
     np.savez(run_dir / "eval_trajectory.npz", **{k: np.asarray(v) for k, v in result["eval"]["trajectory"].items()})
