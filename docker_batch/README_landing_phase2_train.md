@@ -1,20 +1,30 @@
-# Phase-II landing training: tracker and PS2 for two references
+# Phase-II landing training: tracker and PS2 for each landing reference
 
 ## References
 
-Both come from the colleague's generator (`ps2rl/envs/assets/generate_quadrotor_landing_reference.py`, 45° cone, r0 = 0.3 m) and start inside the cone at (−2, 0, 2) m with h = +0.30 m.
+The default set is six candidates from `scripts/landing_reference_candidates.py`: `B2_-30`, `B2_-20`, `B2_-10`, `B3_-30`, `B3_-20`, `B3_-10`. The candidate grids are in `outputs/landing_ref_candidates/`; regenerate them with `python scripts/landing_reference_candidates.py`.
 
-| name | file | generator flags | what it does |
-|---|---|---|---|
-| `skid` | `quadrotor_landing_skid_reference.npz` | `--offset 0.5 --offset_dir_deg 30` | crosses the cone, skids out at t = 1.54 s (0.11 m up), lands 0.5 m from the centre on the far side |
-| `nearside` | `quadrotor_landing_nearside_reference.npz` | `--offset 0.45 --offset_dir_deg 180 --vx0 -0.5` | the hand-drawn one: drops almost straight down, leaves through the near wall at t = 0.66 s (1.66 m up), stays outside it (min h −0.15 m) and lands 0.15 m beyond the near edge of the platform |
+- **Common to all six:** each hovers at 2 m inside the cone (45°, r0 = 0.3 m) and descends for 4 s to a soft touchdown beyond the platform rim. The descent is near-vertical first; the horizontal motion follows s(t)², so it drifts toward the pad axis late. Peak speed is about 1.1–1.3 m/s and tilt ≤ 5°.
+- **The ID:** the digit is where it lands (2 = 20 cm, 3 = 30 cm beyond the rim). The suffix is the angle of the start→touchdown line from vertical (−30, −20, −10°, toward the axis).
+- **Saved as:** `ps2rl/envs/assets/quadrotor_landing_<id>_reference.{npz,png,_config.json}`, with `<id>` = `b2_m30`, …
+
+| id | start h [m] | leaves the cone at z [m] | outside [s] | min h [m] |
+|---|---|---|---|---|
+| b2_m30 | +0.65 | 1.13 | 2.1 | −0.22 |
+| b2_m20 | +1.07 | 0.52 | 1.6 | −0.20 |
+| b2_m10 | +1.45 | 0.29 | 1.3 | −0.20 |
+| b3_m30 | +0.55 | 1.32 | 2.3 | −0.32 |
+| b3_m20 | +0.97 | 0.72 | 1.8 | −0.30 |
+| b3_m10 | +1.35 | 0.43 | 1.5 | −0.30 |
+
+The earlier `skid`, `nearside` and `cornercut` references are still in `ps2rl/envs/assets`. To train on them, pass `REFS="name:path ..."`.
 
 ## What runs (`docker_batch/run_landing_phase2_train.sh`)
 
 | stage | what | output |
 |---|---|---|
 | B | **tracker** per reference: SAC without the filter, 8M steps. These are the colleague's landing-tracker settings (`outputs/landing/land_v2_*`): landing reward v2, 32 envs, start perturbation ±0.3 m / ±0.5 m/s / ±10°. | `outputs/landing_phase2/<ref>_tracker/` |
-| C | **PS2** per reference: SAC through the landing CIL, warm-started from the tracker. Uses the paper's PS2 settings: no random warm-up, actor lr 5e-5, projected critic targets. Stops at 1.5M steps or after `PS2_HOURS`, whichever comes first. | `outputs/landing_phase2/<ref>_ps2/` |
+| C | **PS2** per reference: SAC through the landing CIL, warm-started from the tracker. Uses the paper's PS2 settings: no random warm-up, actor lr 5e-5, projected critic targets. Stops at 1.5M steps or after `PS2_HOURS` (3 h), whichever comes first. | `outputs/landing_phase2/<ref>_ps2/` |
 | D | **evaluation** from the same 32 starts (the reference start plus reset-library starts): tracker alone, tracker + filter at deployment, PS2 | `outputs/landing_phase2/eval_<ref>/` |
 | E | report | `outputs/landing_phase2/REPORT.md` |
 
@@ -33,20 +43,21 @@ docker exec -it px4sitl bash -c "tail -F ~/ws_shared/PS2-RL/outputs/landing_phas
 The log streams every run's lines with a `[run]` prefix. Each progress line shows steps/s, elapsed time and the ETA. The batch is resumable: re-running it skips finished runs and evaluations.
 
 **Duration.**
-- The trackers took the colleague about 21 min for 8M steps on his GPU.
-- PS2 is much slower per step: every env step and every update solves the filter QP, with a 100-step backup rollout per sample. I measured about 17 steps/s on this 2-core CPU but could not time the RTX 4050.
-- `PS2_HOURS=4` therefore caps each PS2 run. Two run in parallel, so the whole batch takes at most about 5 h.
-- Check the first PS2 progress lines (steps/s, ETA). If the GPU is fast, raise `PS2_STEPS`; if it is slow, the budget still ends the run cleanly, with a final evaluation and checkpoints.
+- Six references, with three runs on the GPU at once.
+- **Trackers:** 8M steps each. The colleague's took about 21 min alone on his GPU; expect roughly 1–1.5 h for both waves.
+- **PS2:** much slower per step, because every env step and every update solves the filter QP with a 100-step backup rollout per sample. I measured about 17 steps/s on a 2-core CPU but could not time the RTX 4050. `PS2_HOURS=3` caps each run, so two waves take about 6 h.
+- **Total:** about 7–7.5 h.
+- **Adjusting:** check the first PS2 progress lines (steps/s, ETA). Raise `PS2_STEPS` if the GPU is fast. Shorten with `PS2_HOURS=2` or fewer references (`REFS=...`). If three parallel runs are slower in total than two (watch steps/s), set `MAX_PARALLEL=2`.
 
 Knobs:
 
 | variable | default |
 |---|---|
-| `REFS` | `"skid:… nearside:…"` |
+| `REFS` | the six `b*` references |
 | `TRACKER_STEPS` | 8000000 |
 | `PS2_STEPS` | 1500000 |
-| `PS2_HOURS` | 4 |
-| `MAX_PARALLEL` | 2 |
+| `PS2_HOURS` | 3 |
+| `MAX_PARALLEL` | 3 |
 | `FILTER` | `alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1` |
 | `SEED` | 0 |
 | `STAGES` | `"B C D E"` (e.g. `"D E"` to re-evaluate) |
@@ -59,7 +70,7 @@ cd ~/ws_shared/PS2-RL/outputs && zip -r landing_phase2_results.zip landing_phase
     -x "landing_phase2/*/final_weights.pkl"
 ```
 
-If the zip is over 30 MB, also add `-x "*.gif"` and send the two `eval_*/landing_*.gif` files separately.
+If the zip is over 30 MB, also add `-x "*.gif"` and send the `eval_*/landing_*.gif` files separately (in a second zip if needed).
 
 ## Single runs
 

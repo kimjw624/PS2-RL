@@ -1,0 +1,32 @@
+{
+  "landing_config": {
+    "generator": "scripts/landing_reference_candidates.py",
+    "candidate": "B3_-30",
+    "shape": "vertical",
+    "angle_deg": -30.0,
+    "offset_beyond_rim": 0.3,
+    "z0": 2.0,
+    "duration": 4.0,
+    "dt": 0.02,
+    "miss_dir_deg": 0.0,
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "z_pad": 0.0,
+    "r0": 0.3,
+    "theta_deg": 45.0,
+    "eps": 0.015,
+    "out": "ps2rl/envs/assets/quadrotor_landing_b3_m30_reference.npz"
+  },
+  "landing_trajectory_stats": {
+    "num_points": 201,
+    "total_duration": 4.0,
+    "h_start": 0.5452353492879922,
+    "min_h": -0.3208507692925867,
+    "exit_time": 1.7,
+    "exit_height": 1.3208413215332033,
+    "peak_speed": 1.2968948100439963,
+    "peak_tilt_deg": 4.835435555257978,
+    "max_a_cmd": 10.779379314359046,
+    "max_abs_omega": 0.19716697048912832
+  }
+}

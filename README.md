@@ -191,7 +191,7 @@ These settings are all opt-in.
 
 ### Landing Phase II: training the tracker and the PS2 policy
 
-`scripts/train_phase2_landing.py` trains a landing tracker, either without the filter (`--projection off`) or end-to-end through the landing CIL (`--projection on`, the PS2 policy). It uses the repo's Phase-II trainer with the landing binding. `scripts/evaluate_landing_phase2_runs.py` compares, from the same starts, the tracker alone, the tracker through the filter, and the PS2 policy. `docker_batch/run_landing_phase2_train.sh` runs both on the GPU for the skid and near-side references; see `docker_batch/README_landing_phase2_train.md`.
+`scripts/train_phase2_landing.py` trains a landing tracker, either without the filter (`--projection off`) or end-to-end through the landing CIL (`--projection on`, the PS2 policy). It uses the repo's Phase-II trainer with the landing binding. `scripts/evaluate_landing_phase2_runs.py` compares, from the same starts, the tracker alone, the tracker through the filter, and the PS2 policy. `docker_batch/run_landing_phase2_train.sh` runs both on the GPU for a set of references (by default six slow near-vertical descents from `scripts/landing_reference_candidates.py`); see `docker_batch/README_landing_phase2_train.md`.
 
 `scripts/demo_landing_skid.py` shows the filter landing a tracker whose reference skids out of the cone toward a spot beside the platform. It compares trackers and filter QP metrics (`control_weights`) and renders a GIF of the selected pair. Docker wrapper: `docker_batch/run_landing_skid_demo.sh`.
 

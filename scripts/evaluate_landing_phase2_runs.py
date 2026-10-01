@@ -11,7 +11,8 @@ library (plus the reference start as episode 0), and each episode lasts the trai
 (reference + hold) plus ``--extra_hold``.
 
 Ground contact as in ``scripts/demo_landing_skid.py``: landed at the first step with height
-<= --zeta_touch and speed <= --v_touch; inside the cone there means on the platform. Safety and
+<= --zeta_touch and speed <= --v_touch; on the platform if the horizontal distance from the pad
+centre is then <= r0. Safety and
 intervention statistics cover the flight up to touchdown.
 
     python scripts/evaluate_landing_phase2_runs.py --tracker_run outputs/landing_phase2/skid_tracker \\
@@ -199,9 +200,8 @@ def main():
         res = rollout(pol, env.observe, cfg, projector, x0, steps)
         traj = res["traj"]
         h_raw = np.asarray(L.safe_value(jnp.asarray(traj), cfg))
-        h_cone = np.asarray(L.cone_value(jnp.asarray(traj), cfg))
         c = R.contact_index(traj, pad[2], args.zeta_touch, args.v_touch)
-        on_pf = np.array([ci >= 0 and h_cone[e, ci] >= 0 for e, ci in enumerate(c)])
+        on_pf = np.array([ci >= 0 and np.hypot(*(traj[e, ci, 0:2] - pad[:2])) <= lc.cone_r0 for e, ci in enumerate(c)])
         c_eval = np.full_like(c, -1) if args.no_land_latch else c
         fly_x = R.flight_mask(c_eval, steps + 1) | (np.arange(steps + 1)[None, :] == np.where(c_eval >= 0, c_eval, 0)[:, None])
         fly_u = R.flight_mask(c_eval, steps)

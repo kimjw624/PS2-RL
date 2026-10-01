@@ -41,7 +41,7 @@ def main(argv=None):
            "|---|---|---|---|---|---|---|---|---|---|---|"] + rows + ["", *notes, "",
            "Policies: `tracker` = trained without the filter, run alone; `tracker+filter` = the same tracker through the "
            "landing filter at deployment; `ps2` = trained through the filter (warm-started from the tracker), run with it. "
-           "Touchdown = height ≤ ζ at speed ≤ v_touch; inside the cone there = on the platform. Safety/intervention "
+           "Touchdown = height ≤ ζ at speed ≤ v_touch; on the platform = within r0 of the pad centre. Safety/intervention "
            "statistics cover the flight up to touchdown."]
     (root / "REPORT.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))

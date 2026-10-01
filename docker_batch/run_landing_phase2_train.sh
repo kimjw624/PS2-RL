@@ -12,14 +12,14 @@
 # Resumable: a run with a summary.json is skipped; an evaluation with a summary.md is skipped.
 # Knobs (environment variables):
 #   OUT            output root                                   (outputs/landing_phase2)
-#   REFS           "name:path name:path"                         (skid + nearside references)
+#   REFS           "name:path name:path"                         (the six chosen descent references, see below)
 #   BACKUP         Phase-I checkpoint                            (checkpoints/landing_phase1/floor_rec10_td3_seed0)
 #   FILTER         landing CIL settings                          (alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1)
 #   SEED           training seed                                 (0)
 #   TRACKER_STEPS  tracker training steps                        (8000000)
 #   PS2_STEPS      PS2 training steps (upper bound)              (1500000)
-#   PS2_HOURS      wall-time budget per PS2 run, 0 = none        (4)
-#   MAX_PARALLEL   runs at once on the GPU                       (2)
+#   PS2_HOURS      wall-time budget per PS2 run, 0 = none        (3)
+#   MAX_PARALLEL   runs at once on the GPU                       (3)
 #   STAGES         subset of "B C D E"                           (all)
 #   TRACKER_ARGS / PS2_ARGS / EVAL_ARGS   extra arguments for the trainer / evaluator
 set -uo pipefail
@@ -29,14 +29,18 @@ source "${here}/landing_env.sh" || exit 1
 cd "${PS2RL_ROOT}"
 
 OUT="${OUT:-outputs/landing_phase2}"
-REFS="${REFS:-skid:ps2rl/envs/assets/quadrotor_landing_skid_reference.npz nearside:ps2rl/envs/assets/quadrotor_landing_nearside_reference.npz}"
+# Default references: candidates B2_-30, B2_-20, B2_-10, B3_-30, B3_-20, B3_-10 of
+# scripts/landing_reference_candidates.py (hover at 2 m, near-vertical descent drifting toward the axis late,
+# touchdown 20 / 30 cm beyond the platform rim, 4 s). Older ones: skid / nearside / cornercut in ps2rl/envs/assets.
+_A=ps2rl/envs/assets
+REFS="${REFS:-b2_m30:${_A}/quadrotor_landing_b2_m30_reference.npz b2_m20:${_A}/quadrotor_landing_b2_m20_reference.npz b2_m10:${_A}/quadrotor_landing_b2_m10_reference.npz b3_m30:${_A}/quadrotor_landing_b3_m30_reference.npz b3_m20:${_A}/quadrotor_landing_b3_m20_reference.npz b3_m10:${_A}/quadrotor_landing_b3_m10_reference.npz}"
 BACKUP="${BACKUP:-checkpoints/landing_phase1/floor_rec10_td3_seed0}"
 FILTER="${FILTER:-alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1}"
 SEED="${SEED:-0}"
 TRACKER_STEPS="${TRACKER_STEPS:-8000000}"
 PS2_STEPS="${PS2_STEPS:-1500000}"
-PS2_HOURS="${PS2_HOURS:-4}"
-MAX_PARALLEL="${MAX_PARALLEL:-2}"
+PS2_HOURS="${PS2_HOURS:-3}"
+MAX_PARALLEL="${MAX_PARALLEL:-3}"
 STAGES="${STAGES:-B C D E}"
 mkdir -p "${OUT}/logs"
 

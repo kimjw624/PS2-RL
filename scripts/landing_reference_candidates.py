@@ -161,7 +161,11 @@ def main():
                                             "peak_tilt_deg": c["peak_tilt"], "max_a_cmd": float(c["a_cmd"].max()),
                                             "max_abs_omega": c["peak_omega"]}}
         path.with_name(path.stem + "_config.json").write_text(json.dumps(cfg, indent=2))
-        print(f"saved {args.save} -> {path} (+ _config.json)")
+        from types import SimpleNamespace
+
+        gen.plot(b, SimpleNamespace(z0=args.z0, r0=args.r0, theta_deg=args.theta_deg, eps=args.eps, pad_x=pad[0], z_pad=pad[2]),
+                 path.with_suffix(".png"))
+        print(f"saved {args.save} -> {path} (+ _config.json, .png)")
         return
 
     # start recoverability under the Phase-I backup (hover start)

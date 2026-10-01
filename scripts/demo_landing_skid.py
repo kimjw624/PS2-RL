@@ -12,8 +12,8 @@ feedforward, possibly re-weighted) is run
     touch down on the platform.
 
 Ground contact: the pad plane extends beyond the platform. A vehicle is landed at the first step
-with height <= --zeta_touch and speed <= --v_touch. Inside the cone at that height means on the
-platform. From then on it rests there with motors off, the way a land detector disarms a real
+with height <= --zeta_touch and speed <= --v_touch; it is on the platform if its horizontal distance
+from the pad centre is then <= r0 (the cone footprint). From then on it rests there with motors off, the way a land detector disarms a real
 vehicle. Safety and intervention statistics cover the flight up to that step;
 ``--no_land_latch`` keeps flying instead.
 
@@ -193,7 +193,7 @@ def main():
         res_u = R.rollout_nominal(cfg0, projs[settings[0][0]][1], x0, nominal, steps, filtered=False)
         c_u = contact_index(res_u["traj"], pad[2], args.zeta_touch, args.v_touch)
         h_u_raw = np.asarray(L.cone_value(jnp.asarray(res_u["traj"]), cfg0))
-        on_pf_u = np.array([c >= 0 and h_u_raw[e, c] >= 0 for e, c in enumerate(c_u)])
+        on_pf_u = np.array([c >= 0 and np.hypot(*(res_u["traj"][e, c, 0:2] - pad[:2])) <= lc.cone_r0 for e, c in enumerate(c_u)])
         rad_u = np.array([np.hypot(*(res_u["traj"][e, c, 0:2] - pad[:2])) if c >= 0 else np.nan for e, c in enumerate(c_u)])
         err_u = np.linalg.norm(res_u["traj"][:, :, 0:3] - ref_x[k_ref][None, :, 0:3], axis=-1)
         rec_u = {"traj": res_u["traj"], "u": res_u["u"]}
@@ -219,7 +219,7 @@ def main():
             res_f = R.rollout_nominal(cfg, proj, x0, nominal, steps, filtered=True)
             h_raw = np.asarray(L.cone_value(jnp.asarray(res_f["traj"]), cfg))
             c_f = contact_index(res_f["traj"], pad[2], args.zeta_touch, args.v_touch)
-            on_pf = np.array([c >= 0 and h_raw[e, c] >= 0 for e, c in enumerate(c_f)])
+            on_pf = np.array([c >= 0 and np.hypot(*(res_f["traj"][e, c, 0:2] - pad[:2])) <= lc.cone_r0 for e, c in enumerate(c_f)])
             c_eval = np.full_like(c_f, -1) if args.no_land_latch else c_f
             fly_x = flight_mask(c_eval, steps + 1)          # states up to and including touchdown
             fly_x |= np.arange(steps + 1)[None, :] == np.where(c_eval >= 0, c_eval, 0)[:, None]
