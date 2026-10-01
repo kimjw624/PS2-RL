@@ -19,8 +19,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib import animation  # noqa: E402
 import numpy as np  # noqa: E402
 
-COLORS = {"unfiltered": "tab:red", "filtered": "tab:blue", "reference": "k", "cone": "tab:green"}
-LABELS = {"unfiltered": "policy only", "filtered": "policy + BCBF filter"}
+COLORS = {"unfiltered": "tab:red", "filtered": "tab:blue", "ps2": "tab:purple", "reference": "k", "cone": "tab:green"}
+LABELS = {"unfiltered": "policy only", "filtered": "policy + BCBF filter", "ps2": "PS2 policy (trained with the filter)"}
 ACTION_NAMES = ("a_cmd [m/s²]", "ω_x [rad/s]", "ω_y [rad/s]", "ω_z [rad/s]")
 
 
@@ -317,7 +317,7 @@ def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, 
     """
     lab = {**LABELS, **(labels or {})}
     touchdown = touchdown or {}
-    wlab = max(len(v) for v in lab.values()) + 1
+    wlab = max(len(lab[v]) for v in recs) + 1
     trajs = {v: recs[v]["traj"][ep] for v in recs}
     du = recs["filtered"]["du_norm"][ep]
     n = next(iter(trajs.values())).shape[0]

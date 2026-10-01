@@ -124,34 +124,9 @@ def _f(v, fmt=".3f"):
     return "–" if v is None else format(v, fmt)
 
 
-def contact_index(traj, pad_z, zeta_touch, v_touch):
-    """First step with height <= zeta_touch and speed <= v_touch (-1: never)."""
-    c = (traj[..., 2] - pad_z <= zeta_touch) & (np.linalg.norm(traj[..., 3:6], axis=-1) <= v_touch)
-    return np.where(c.any(axis=-1), c.argmax(axis=-1), -1)
-
-
-def latch(rec: dict, idx: np.ndarray) -> dict:
-    """After touchdown the vehicle rests where it touched down, motors off (u = NaN in the plots)."""
-    out = {k: np.array(v, copy=True) for k, v in rec.items()}
-    for e, k in enumerate(idx):
-        if k < 0:
-            continue
-        out["traj"][e, k + 1:] = out["traj"][e, k]
-        out["traj"][e, k + 1:, 3:6] = 0.0
-        for key in ("u", "u_raw"):
-            if key in out:
-                out[key][e, k:] = np.nan
-        for key in ("du_norm", "slack"):
-            if key in out:
-                out[key][e, k:] = 0.0
-    return out
-
-
-def flight_mask(idx: np.ndarray, steps: int) -> np.ndarray:
-    """(episodes, steps) True for the steps flown before touchdown (all steps if none)."""
-    k = np.arange(steps)[None, :]
-    end = np.where(idx >= 0, idx, steps)[:, None]
-    return k < end
+contact_index = R.contact_index
+latch = R.latch_after_touchdown
+flight_mask = R.flight_mask
 
 
 def main():

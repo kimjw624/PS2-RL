@@ -269,6 +269,39 @@ def touchdown_metrics(cfg, traj: np.ndarray, *, zeta_touch: float, v_touch: floa
     }
 
 
+def contact_index(traj: np.ndarray, pad_z: float, zeta_touch: float, v_touch: float) -> np.ndarray:
+    """First step with height <= zeta_touch and speed <= v_touch, per episode (-1: never)."""
+    c = (traj[..., 2] - pad_z <= zeta_touch) & (np.linalg.norm(traj[..., 3:6], axis=-1) <= v_touch)
+    return np.where(c.any(axis=-1), c.argmax(axis=-1), -1)
+
+
+def latch_after_touchdown(rec: dict, idx: np.ndarray) -> dict:
+    """After touchdown the vehicle rests where it touched down with motors off.
+
+    ``rec`` holds (episodes, T+1, 10) ``traj`` and optional (episodes, T, ...) per-step arrays;
+    actions become NaN (not drawn), intervention and slack 0, from the touchdown step on.
+    """
+    out = {k: np.array(v, copy=True) for k, v in rec.items()}
+    for e, k in enumerate(idx):
+        if k < 0:
+            continue
+        out["traj"][e, k + 1:] = out["traj"][e, k]
+        out["traj"][e, k + 1:, 3:6] = 0.0
+        for key in ("u", "u_raw"):
+            if key in out:
+                out[key][e, k:] = np.nan
+        for key in ("du_norm", "slack"):
+            if key in out:
+                out[key][e, k:] = 0.0
+    return out
+
+
+def flight_mask(idx: np.ndarray, steps: int) -> np.ndarray:
+    """(episodes, steps) True for the steps before touchdown (all steps if it never touches down)."""
+    end = np.where(idx >= 0, idx, steps)[:, None]
+    return np.arange(steps)[None, :] < end
+
+
 def vertical_accel(u: np.ndarray, q: np.ndarray, gravity: float) -> np.ndarray:
     """World-frame vertical acceleration a_cmd * (R e3)_z - g."""
     q = q / np.linalg.norm(q, axis=-1, keepdims=True)
@@ -277,6 +310,9 @@ def vertical_accel(u: np.ndarray, q: np.ndarray, gravity: float) -> np.ndarray:
 
 
 __all__ = [
+    "contact_index",
+    "flight_mask",
+    "latch_after_touchdown",
     "hover_action",
     "hover_feasibility",
     "rollout_nominal",

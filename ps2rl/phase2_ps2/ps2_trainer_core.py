@@ -69,6 +69,9 @@ class SACConfig:
     steps_per_jit: int = 128
     warm_start: bool = False
     warm_start_weights: str = ""
+    # Stop collecting after this many seconds of training (0 = no limit); the run then finishes
+    # normally (final evaluation, checkpoints) at the step it reached.
+    wall_time_budget_sec: float = 0.0
 
 
 def ps2_replay_init(capacity: int, obs_dim: int, act_dim: int) -> JaxReplayState:
@@ -801,7 +804,9 @@ def build_ps2_one_vec_step(
         key_i, key_action, key_random = jax.random.split(key_i, 3)
         rand01 = jax.random.uniform(key_random, shape=(num_envs, env_fns.action_dim), dtype=jnp.float32)
         random_raw = action_low + rand01 * (action_high - action_low)
-        if sac_cfg.use_projection:
+        # With start_steps <= 0 the random actions are never used; skip their projection (it
+        # would otherwise run every step, doubling the collector's QP cost).
+        if sac_cfg.use_projection and int(sac_cfg.start_steps) > 0:
             random_safe, _, _, _ = proj.project_with_info(obs_i[..., :phys_dim], random_raw)
         else:
             random_safe = random_raw

@@ -80,8 +80,10 @@ _BINDING = PS2SystemBinding(
 )
 
 
-def _make_projection_ops(cbf_cfg: QuadrotorBCBFConfig, backup_runtime: BCBFSystem | None) -> BCBFProjectionOps:
-    return _BINDING.projection_ops(cbf_cfg, backup_runtime)
+def _make_projection_ops(
+    cbf_cfg: QuadrotorBCBFConfig, backup_runtime: BCBFSystem | None, binding: PS2SystemBinding = _BINDING
+) -> BCBFProjectionOps:
+    return binding.projection_ops(cbf_cfg, backup_runtime)
 
 
 def _validate_learned_backup_policy_compatibility(
@@ -232,9 +234,10 @@ def _build_update_fn(
     cbf_cfg: QuadrotorBCBFConfig,
     action_scale: jax.Array,
     backup_runtime: BCBFSystem | None = None,
+    binding: PS2SystemBinding = _BINDING,
 ):
     """Create one JITed SAC update step."""
-    return build_ps2_update_fn_for(_BINDING, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime)
+    return build_ps2_update_fn_for(binding, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime)
 
 
 def _build_action_fns(
@@ -244,10 +247,11 @@ def _build_action_fns(
     action_scale: jax.Array,
     backup_runtime: BCBFSystem | None = None,
     return_solver_info: bool = False,
+    binding: PS2SystemBinding = _BINDING,
 ):
     """Build jitted training/eval policy calls."""
     return build_ps2_action_fns_for(
-        _BINDING, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime, return_solver_info=return_solver_info
+        binding, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime, return_solver_info=return_solver_info
     )
 
 
@@ -257,8 +261,9 @@ def _build_batched_action_fn(
     cbf_cfg: QuadrotorBCBFConfig,
     action_scale: jax.Array,
     backup_runtime: BCBFSystem | None = None,
+    binding: PS2SystemBinding = _BINDING,
 ):
-    return build_ps2_batched_action_fn_for(_BINDING, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime)
+    return build_ps2_batched_action_fn_for(binding, sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime)
 
 
 _TRACKING_SCORE_TERMS: Dict[str, Tuple[float, float]] = {
@@ -686,8 +691,20 @@ def _run_training_jax(
     cbf_cfg: QuadrotorBCBFConfig,
     output_dir: str | None = None,
     metric_logger: Callable[[int, Dict[str, float]], None] | None = None,
+    *,
+    binding: PS2SystemBinding | None = None,
+    make_projector: Callable[[Any], Any] | None = None,
+    validate_learned_backup: bool = True,
 ) -> Dict[str, Any]:
-    """Train safe SAC using pure-JAX batched environment stepping."""
+    """Train safe SAC using pure-JAX batched environment stepping.
+
+    ``binding`` / ``make_projector`` swap in another control-invariant layer with the same
+    interface (default: the powerloop one); e.g. the landing CIL passes ``LANDING_BINDING``
+    and ``QuadrotorLandingBackupCBFProjector``. ``validate_learned_backup`` runs the powerloop
+    learned-backup compatibility check (other layers validate their own checkpoint).
+    """
+    binding = _BINDING if binding is None else binding
+    make_projector = QuadrotorBackupCBFProjector if make_projector is None else make_projector
     if int(sac_cfg.num_envs) <= 0:
         raise ValueError(f"num_envs must be positive, got {sac_cfg.num_envs}")
     if int(sac_cfg.steps_per_jit) <= 0:
@@ -716,12 +733,13 @@ def _run_training_jax(
     )
     expected_action_scale = np.asarray(jax.device_get(cbf_cfg.action_scale), dtype=np.float64)
     _validate_action_scale("jax_env.action_scale", action_scale_np, expected_action_scale)
-    _validate_learned_backup_policy_compatibility(
-        cbf_cfg,
-        expected_action_scale=expected_action_scale,
-        expected_action_low=action_low_np,
-        expected_action_high=action_high_np,
-    )
+    if validate_learned_backup:
+        _validate_learned_backup_policy_compatibility(
+            cbf_cfg,
+            expected_action_scale=expected_action_scale,
+            expected_action_low=action_low_np,
+            expected_action_high=action_high_np,
+        )
 
     actor_cfg = ActorConfig(
         obs_dim=env_fns.obs_dim,
@@ -737,17 +755,18 @@ def _run_training_jax(
     jax_key, key_state, key_env = jax.random.split(jax_key, 3)
     state = _init_state(key_state, actor_cfg, critic_cfg, sac_cfg)
     replay = ps2_replay_init(sac_cfg.replay_size, env_fns.obs_dim, env_fns.action_dim)
-    projector = QuadrotorBackupCBFProjector(cbf_cfg)
+    projector = make_projector(cbf_cfg)
     backup_runtime = projector.runtime
-    proj_ops = _make_projection_ops(cbf_cfg, backup_runtime)
+    proj_ops = _make_projection_ops(cbf_cfg, backup_runtime, binding)
 
-    update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime=backup_runtime)
+    update_fn = _build_update_fn(sac_cfg, actor_cfg, cbf_cfg, action_scale, backup_runtime=backup_runtime, binding=binding)
     sample_action_batch_fn, action_low, action_high = _build_batched_action_fn(
         sac_cfg,
         actor_cfg,
         cbf_cfg,
         action_scale,
         backup_runtime=backup_runtime,
+        binding=binding,
     )
     _, eval_action_fn = _build_action_fns(
         sac_cfg,
@@ -755,6 +774,7 @@ def _run_training_jax(
         cbf_cfg,
         action_scale,
         backup_runtime=backup_runtime,
+        binding=binding,
     )
 
     env_keys = jax.random.split(key_env, num_envs)
@@ -779,7 +799,7 @@ def _run_training_jax(
         action_low=action_low,
         action_high=action_high,
         proj=proj_ops,
-        phys_dim=_PHYS_DIM,
+        phys_dim=binding.phys_dim,
         # The quad collector does NOT backup-filter random warm-up actions
         # (GT behavior; the uni collector differs).
         sanitize_random_actions=False,
@@ -857,7 +877,13 @@ def _run_training_jax(
     next_best_weights_save_step = int(sac_cfg.best_weights_save_period)
 
     vec_done = 0
+    wall_budget = float(getattr(sac_cfg, "wall_time_budget_sec", 0.0) or 0.0)
+    stopped_by_wall_budget = False
     while vec_done < total_vec_steps:
+        if wall_budget > 0.0 and time.time() - t0 >= wall_budget:
+            stopped_by_wall_budget = True
+            print(f"Wall-time budget of {wall_budget:.0f} s reached at step {vec_done * num_envs}; finishing the run.")
+            break
         this_vec = min(steps_per_jit, total_vec_steps - vec_done)
         loop_state, chunk = get_chunk_fn(this_vec)(loop_state)
         vec_done += this_vec
@@ -1073,6 +1099,8 @@ def _run_training_jax(
             next_log_step += int(sac_cfg.log_every)
 
     total_time = time.time() - t0
+    if stopped_by_wall_budget:
+        total_steps = int(min(total_steps, vec_done * num_envs))
     eval_stats = _evaluate_policy(
         env_cfg,
         eval_action_fn,
@@ -1103,6 +1131,7 @@ def _run_training_jax(
         "backup_policy_mode": cbf_cfg.backup_policy_mode,
         "num_envs": num_envs,
         "steps_per_jit": steps_per_jit,
+        "stopped_by_wall_budget": bool(stopped_by_wall_budget),
     }
     final_compact_eval = _compact_eval_stats(eval_stats)
     best_eval_return = best_eval_stats_return if best_eval_stats_return is not None else final_compact_eval
@@ -1142,6 +1171,7 @@ def run_training(
     cbf_cfg: QuadrotorBCBFConfig,
     output_dir: str | None = None,
     metric_logger: Callable[[int, Dict[str, float]], None] | None = None,
+    **layer_kwargs: Any,
 ) -> Dict[str, Any]:
     return _run_training_jax(
         sac_cfg,
@@ -1149,4 +1179,5 @@ def run_training(
         cbf_cfg,
         output_dir=output_dir,
         metric_logger=metric_logger,
+        **layer_kwargs,
     )

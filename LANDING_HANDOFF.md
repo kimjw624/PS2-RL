@@ -20,6 +20,10 @@
 > the rows and C_N are unchanged. In `scripts/demo_landing_skid.py` a tracker heading 0.2 m beyond
 > the platform rim lands on the platform from every start with this setting, and never with
 > equal weights.
+>
+> **Training through the layer** is wired up: `scripts/train_phase2_landing.py` (`--projection on`) runs the
+> repo's Phase-II trainer with `LANDING_BINDING`, the landing reward and cone-safety metrics, and a
+> reset library of recoverable starts. See `docker_batch/README_landing_phase2_train.md`.
 
 This package gives Phase II everything it needs to train (or filter) a landing policy
 through the control-invariant layer (CIL) with the **approach-cone safe set** and the
