@@ -20,6 +20,7 @@
 #
 # Knobs (environment variables):
 #   OUT=outputs/landing_floor
+#   PHASE1_DIR=$OUT/phase1                             where Phase-I runs live (reuse trained runs with a new OUT)
 #   BASE_CFG=checkpoints/landing_phase1/land_v2_miss_td3_seed0/phase1_config.json   Phase-I config the variants extend
 #   BASE_BACKUP=checkpoints/landing_phase1/land_v2_miss_td3_seed0                    stage-A backup
 #   PHASE2_RUN=outputs/landing/land_v2_miss_s1        colleague run (reference start; stage E). Skipped if absent.
@@ -58,8 +59,9 @@ TEST_ARGS="${TEST_ARGS:-}"
 CHECK_ARGS="${CHECK_ARGS:-}"
 EVAL_EPISODES="${EVAL_EPISODES:-64}"
 STAGES="${STAGES:-A B C D E F}"
+PHASE1_DIR="${PHASE1_DIR:-${OUT}/phase1}"
 LOGS="${OUT}/logs"
-mkdir -p "${LOGS}" "${OUT}/phase1" "${OUT}/checks" "${OUT}/tests" "${OUT}/phase2_eval"
+mkdir -p "${LOGS}" "${PHASE1_DIR}" "${OUT}/checks" "${OUT}/tests" "${OUT}/phase2_eval"
 
 # floor_constraint=on in every setting (a no-op for checkpoints trained with the floor)
 FLOOR_SETTINGS="$(python - "${SETTINGS}" <<'PY'
@@ -104,15 +106,15 @@ if has_stage B; then
     running=0
     for r in "${RUNS[@]}"; do
         IFS='|' read -r name flags seed <<< "${r}"
-        if [ -f "${OUT}/phase1/${name}/landing_backup_policy_actor.pkl" ]; then
+        if [ -f "${PHASE1_DIR}/${name}/landing_backup_policy_actor.pkl" ]; then
             echo "[$(stamp)] [B] ${name}: done, skipping"
             continue
         fi
-        rm -rf "${OUT:?}/phase1/${name}"
+        rm -rf "${PHASE1_DIR:?}/${name}"
         echo "[$(stamp)] [B] start ${name}: ${flags}"
         # shellcheck disable=SC2086
         python scripts/train_phase1_landing.py --config_json "${BASE_CFG}" --backbone "${BACKBONE}" --seed "${seed}" \
-            --total_steps "${TOTAL_STEPS}" --output_dir "${OUT}/phase1" --run_name "${name}" ${flags} \
+            --total_steps "${TOTAL_STEPS}" --output_dir "${PHASE1_DIR}" --run_name "${name}" ${flags} \
             ${PS2RL_GPU_FLAG} ${P1_EXTRA_ARGS} > "${LOGS}/B_${name}.log" 2>&1 &
         running=$((running + 1))
         if [ "${running}" -ge "${MAX_PARALLEL}" ]; then
@@ -123,7 +125,7 @@ if has_stage B; then
     wait || true
     for r in "${RUNS[@]}"; do
         name="${r%%|*}"
-        if [ -f "${OUT}/phase1/${name}/landing_backup_policy_actor.pkl" ]; then
+        if [ -f "${PHASE1_DIR}/${name}/landing_backup_policy_actor.pkl" ]; then
             echo "[$(stamp)] [B] ${name}: $(grep '^\[done\]' "${LOGS}/B_${name}.log" | tail -n1)"
         else
             echo "[$(stamp)] [B] ${name}: FAILED or aborted by the certificate, see ${LOGS}/B_${name}.log"
@@ -135,7 +137,7 @@ fi
 TRAINED=()
 for r in "${RUNS[@]}"; do
     name="${r%%|*}"
-    [ -f "${OUT}/phase1/${name}/landing_backup_policy_actor.pkl" ] && TRAINED+=("${name}")
+    [ -f "${PHASE1_DIR}/${name}/landing_backup_policy_actor.pkl" ] && TRAINED+=("${name}")
 done
 CHECK_OVR=()
 IFS=',' read -r -a _c <<< "${CHECK_SETTING}"
@@ -147,7 +149,7 @@ if has_stage C; then
         [ -f "${OUT}/checks/${name}/check_landing_bcbf.json" ] && continue
         echo "[$(stamp)] [C] self-check ${name} (${CHECK_SETTING})"
         # shellcheck disable=SC2086
-        python scripts/check_landing_bcbf.py --backup "${OUT}/phase1/${name}" "${CHECK_OVR[@]}" \
+        python scripts/check_landing_bcbf.py --backup "${PHASE1_DIR}/${name}" "${CHECK_OVR[@]}" \
             --out "${OUT}/checks/${name}" ${CHECK_ARGS} > "${LOGS}/C_${name}.log" 2>&1
         grep -E "^\[(PASS|FAIL|check)" "${LOGS}/C_${name}.log" | tail -n 5
     done
@@ -159,7 +161,7 @@ if has_stage D; then
         [ -f "${OUT}/tests/${name}/floor_tests.json" ] && continue
         echo "[$(stamp)] [D] reach tests ${name}"
         # shellcheck disable=SC2086
-        python scripts/test_landing_floor_reach.py --backup "${OUT}/phase1/${name}" "${P2_ARGS[@]}" "${TRACK_ARGS[@]}" \
+        python scripts/test_landing_floor_reach.py --backup "${PHASE1_DIR}/${name}" "${P2_ARGS[@]}" "${TRACK_ARGS[@]}" \
             --settings "${FLOOR_SETTINGS}" --out "${OUT}/tests/${name}" ${TEST_ARGS} \
             > "${LOGS}/D_${name}.log" 2>&1 || echo "[$(stamp)] [D] ${name} FAILED (see ${LOGS}/D_${name}.log)"
         grep -E "^\[" "${LOGS}/D_${name}.log" | tail -n 8
@@ -173,7 +175,7 @@ if has_stage E && [ "${#P2_ARGS[@]}" -gt 0 ]; then
         dst="${OUT}/phase2_eval/${name}"
         [ -f "${dst}/summary.json" ] && continue
         echo "[$(stamp)] [E] colleague policy with ${name} (${CHECK_SETTING})"
-        python scripts/evaluate_landing_phase2_filter.py "${P2_ARGS[@]}" --backup "${OUT}/phase1/${name}" \
+        python scripts/evaluate_landing_phase2_filter.py "${P2_ARGS[@]}" --backup "${PHASE1_DIR}/${name}" \
             "${CHECK_OVR[@]}" --num_episodes "${EVAL_EPISODES}" --gif_cases nominal --out "${dst}" ${PS2RL_GPU_FLAG} \
             > "${LOGS}/E_${name}.log" 2>&1 || echo "[$(stamp)] [E] ${name} FAILED (see ${LOGS}/E_${name}.log)"
         grep -E "^\[(starts|filtered|unfiltered)\]" "${LOGS}/E_${name}.log"
@@ -182,6 +184,6 @@ fi
 
 # ------------------------------------------------------------------ F
 if has_stage F; then
-    python scripts/summarize_landing_floor.py --root "${OUT}" && echo "[$(stamp)] report: ${OUT}/REPORT.md"
+    python scripts/summarize_landing_floor.py --root "${OUT}" --phase1_dir "${PHASE1_DIR}" && echo "[$(stamp)] report: ${OUT}/REPORT.md"
 fi
 echo "[$(stamp)] done"

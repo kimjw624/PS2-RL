@@ -121,6 +121,7 @@ def summarize_runs(td: dict, res: dict, mask=None) -> dict:
         "final_radial": _stats(td["final_radial"][m]),
         "max_slack": float(res["slack"][m].max()),
         "qp_fallbacks": int((~res["qp_used"][m].astype(bool)).sum()),
+        "safeguard_active_rate": float((res["safeguard_lambda"][m] < 1.0).mean()) if "safeguard_lambda" in res else None,
     }
 
 
@@ -189,6 +190,7 @@ def main():
         rt = proj.runtime
         rec_fn = L.make_recoverability_fn(cfg, rt)
         entry = {"overrides": over, "floor_constraint": bool(cfg.landing.floor_constraint), "alpha": cfg.alpha,
+                 "sensitivity_propagation": cfg.sensitivity_propagation, "discrete_safeguard": cfg.discrete_safeguard,
                  "alpha_per_constraint": cfg.alpha_per_constraint, "relative_time_per_constraint": cfg.relative_time_per_constraint}
 
         # T2 hover map

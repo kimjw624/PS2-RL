@@ -73,3 +73,39 @@ Among safe pairs, the report ranks by T3 touchdown, then T1 touchdown, then the 
 ## After the report
 
 Train Phase II through the CIL with the recommended backup and setting (`LANDING_HANDOFF.md`, `landing_projection_setup(ckpt, alpha=..., alpha_floor=...)`). Use a reference that touches down on the pad; the cone-cutting one is a good test.
+
+## First overnight run (2026-10-01) and the CIL fix it led to
+
+Eight Phase-I runs: 4 variants × 2 seeds, 5M steps each, about 24 min per run on the RTX 4050 with two running at once. All were certified, and all passed the self-check.
+
+**Coverage.**
+- Recoverability w.r.t. S, the C_N the filter uses, is the same for every variant: general ≈ 0.90, edge ≈ 0.52.
+- The gentle-recovery envelope lowers only Phase I's own μ, which also counts envelope violations as failures. It does not cost coverage.
+
+**Reaching the floor.**
+- Without the envelope, only the fixed-τ floor rows touch down. The relative-time rows hold the vehicle 2–5 cm up.
+- With the envelope and κ ≤ α, the paper's relative-time rows touch down too:
+  - `floor_rec10` with α 10 / α_floor 20 lands 100 % of LQR landings and cone-cutting tracking runs, in 2.0–2.5 s;
+  - it hovers over the pad down to about 1–3 mm;
+  - holding still is feasible in about 97 % of the lower half of the cone.
+
+**Safety issue found.**
+- With α = 20 (all variants), and with α = 10 for one backup (`floor_frec10` seed 1), fast random starts (|v| ≈ 4 m/s) left the cone by up to 4.5 cm. The QP needed slack of 0.2–0.6.
+- Cause: the learned backups are stiff (dt·‖J‖ ≈ 1.5). The repo's sensitivity Q_{k+1} = exp(dt J) Q_k under-predicted how fast the backup rollout's margin shrinks by about 2×. Every row was satisfied while the state slipped out of C_N, about 8 steps before the QP noticed.
+
+**Fix** (now the landing default):
+- `sensitivity_propagation="discrete"`: the exact Jacobian of the Euler rollout map. This roughly halves the prediction error.
+- `discrete_safeguard=True`: after the QP, the next state of the Euler plant is checked for backup-recoverability. If it fails, the action is blended toward π_b(x), using the largest λ ∈ {1, .75, .5, .25, 0} whose next state is in C_N. λ = 0 always qualifies from a state in C_N, so C_N is forward-invariant exactly at every step, independent of the rows' linearisation error.
+
+**After the fix.** Every previously failing case now keeps min h_cone ≥ 0 and min height ≥ 0, with slack ≤ 1.2e-3 and 100 % touchdown, at both α = 10 and α = 20.
+- With the recommended setting, the colleague's miss-reference policy still has 0/58 cone exits.
+- It now rides the cone wall (median min h 0.004 m) instead of being held 0.30 m inside.
+
+**Recommendation:** `checkpoints/landing_phase1/floor_rec10_td3_seed0` with `alpha=10, alpha_floor=20`, relative-time rows, and the defaults above.
+
+To re-run checks, tests and report for all overnight runs with the fixed CIL, without retraining:
+
+```bash
+docker exec -d px4sitl bash -c "cd ~/ws_shared/PS2-RL && OUT=outputs/landing_floor_v2 PHASE1_DIR=outputs/landing_floor/phase1 \
+    STAGES='C D E F' bash docker_batch/run_landing_floor_overnight.sh > outputs/landing_floor_v2.out 2>&1"
+```

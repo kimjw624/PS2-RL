@@ -214,14 +214,18 @@ def rollout_nominal(cfg, projector, x0: np.ndarray, nominal: Callable[[jax.Array
     """Closed loop x_{k+1} = F(x_k, u_k) with u_k = nominal(x_k, k), optionally through the filter."""
     step_b = jax.jit(jax.vmap(lambda x, u: lbcbf.landing_step(x, u, cfg)))
     xs = [jnp.asarray(x0, dtype=jnp.float32)]
-    u_ref_t, u_t, slack_t, used_t = [], [], [], []
+    u_ref_t, u_t, slack_t, used_t, lam_t = [], [], [], [], []
     for k in range(steps):
         x = xs[-1]
         u_ref = nominal(x, k)
+        lam = np.ones((x.shape[0],))
         if filtered:
-            u, slack, used, _ = projector.solve_batch_with_info(x, u_ref)
+            u, slack, used, info = projector.solve_batch_with_info(x, u_ref)
+            if "safeguard_lambda" in info:
+                lam = np.asarray(info["safeguard_lambda"])
         else:
             u, slack, used = u_ref, jnp.zeros((x.shape[0],)), jnp.ones((x.shape[0],), dtype=bool)
+        lam_t.append(lam)
         u_ref_t.append(np.asarray(u_ref))
         u_t.append(np.asarray(u))
         slack_t.append(np.asarray(slack))
@@ -229,7 +233,8 @@ def rollout_nominal(cfg, projector, x0: np.ndarray, nominal: Callable[[jax.Array
         xs.append(step_b(x, jnp.asarray(u, dtype=jnp.float32)))
     traj = np.stack([np.asarray(x) for x in xs], 1)
     return {"traj": traj, "u_ref": np.stack(u_ref_t, 1), "u": np.stack(u_t, 1),
-            "slack": np.stack(slack_t, 1), "qp_used": np.stack(used_t, 1)}
+            "slack": np.stack(slack_t, 1), "qp_used": np.stack(used_t, 1),
+            "safeguard_lambda": np.stack(lam_t, 1)}
 
 
 def touchdown_metrics(cfg, traj: np.ndarray, *, zeta_touch: float, v_touch: float) -> dict[str, np.ndarray]:

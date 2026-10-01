@@ -1,5 +1,18 @@
 # Landing: using the Phase I safe-arrival backup in Phase II
 
+> **Update (2026-10-01): use the floor-aware backup for landing.** For the 45° cone
+> (r0 0.3 m, the colleague's reference) use `checkpoints/landing_phase1/floor_rec10_td3_seed0/`:
+> - safe set is cone n floor;
+> - gentle-recovery backup, κ = 10;
+> - certified and self-checked.
+>
+> Use it with `landing_projection_setup(CKPT, alpha=10.0, alpha_floor=20.0)`. The CIL now
+> defaults to exact discrete sensitivities and a discrete-time safeguard
+> (`sensitivity_propagation="discrete"`, `discrete_safeguard=True`). The safeguard keeps C_N
+> forward-invariant step by step. With this setting a filtered controller lands on the pad
+> without leaving the cone. See `docker_batch/README_landing_floor.md`.
+> `td3_seed0` below is the earlier 30° cone checkpoint.
+
 This package gives Phase II everything it needs to train (or filter) a landing policy
 through the control-invariant layer (CIL) with the **approach-cone safe set** and the
 **learned Phase I safe-arrival backup**:

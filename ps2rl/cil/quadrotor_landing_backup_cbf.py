@@ -103,6 +103,18 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
     # allows holding still right at the floor but drops that feasibility argument.
     alpha_floor: float | None = None
     relative_time_floor: bool | None = None
+    # Sensitivity of the backup rollout used in every row: "discrete" (exact Jacobian of the
+    # Euler rollout the plant follows) or "expm" (continuous-time variational equation, the
+    # powerloop default). The learned landing backups are stiff (dt*||J|| ~ 1.5), where
+    # "expm" under-predicts margin loss and lets fast states slip out of C_N.
+    sensitivity_propagation: str = "discrete"
+    # Discrete-time safeguard on top of the QP: accept u_QP only if the next state of the
+    # Euler plant is backup-recoverable (first-hit C_N test against S); otherwise blend toward
+    # pi_b(x), taking the largest lambda in ``safeguard_lambdas`` whose next state is in C_N.
+    # lambda = 0 (pure backup) always qualifies from a state in C_N, so C_N is forward invariant
+    # exactly in discrete time, independent of the rows' linearisation error.
+    discrete_safeguard: bool = True
+    safeguard_lambdas: tuple = (1.0, 0.75, 0.5, 0.25, 0.0)
 
     def __post_init__(self) -> None:
         mode = str(self.backup_policy_mode).strip().lower()
@@ -118,6 +130,12 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
         for name, given, derived in (("T", self.T, lc.T), ("dt", self.dt, lc.dt)):
             if given is not None and not isclose(float(given), float(derived), rel_tol=1e-9):
                 raise ValueError(f"{name}={given} disagrees with the landing config ({derived}); set it there instead")
+        lams = tuple(float(v) for v in self.safeguard_lambdas)
+        if not lams or lams[-1] != 0.0 or any(a <= b for a, b in zip(lams, lams[1:])) or lams[0] > 1.0:
+            raise ValueError(f"safeguard_lambdas must be strictly decreasing in (0, 1] and end with 0, got {lams}")
+        object.__setattr__(self, "safeguard_lambdas", lams)
+        if self.sensitivity_propagation not in ("discrete", "expm"):
+            raise ValueError(f"sensitivity_propagation must be 'discrete' or 'expm', got '{self.sensitivity_propagation}'")
         if self.qp_solve_dtype not in ("float32", "float64"):
             raise ValueError(f"qp_solve_dtype must be 'float32' or 'float64', got '{self.qp_solve_dtype}'")
         if self.qp_solve_dtype == "float64" and not jax.config.jax_enable_x64:
@@ -348,18 +366,84 @@ rollout_backup_flow_and_sensitivity_with_info = _facades["rollout_backup_flow_an
 build_discretized_backup_cbf_rows = _facades["build_discretized_backup_cbf_rows"]
 build_discretized_backup_cbf_rows_with_info = _facades["build_discretized_backup_cbf_rows_with_info"]
 build_backup_cbf_qp = _facades["build_backup_cbf_qp"]
-solve_backup_cbf_qp_single = _facades["solve_backup_cbf_qp_single"]
-solve_backup_cbf_qp_single_with_info = _facades["solve_backup_cbf_qp_single_with_info"]
-solve_backup_cbf_qp_batch = _facades["solve_backup_cbf_qp_batch"]
-solve_backup_cbf_qp_batch_with_info = _facades["solve_backup_cbf_qp_batch_with_info"]
+_qp_single_with_info = _facades["solve_backup_cbf_qp_single_with_info"]
+_qp_batch_with_info = _facades["solve_backup_cbf_qp_batch_with_info"]
 constraint_residuals = _facades["constraint_residuals"]
 
 
+def _first_hit_single_fn(cfg: QuadrotorLandingBCBFConfig, rt: BCBFSystem, *, training_envelope: bool = False):
+    """x0 -> (recoverable, crashed, arrival_step): first-hit C_N test of the composed backup."""
+    cone, base_set = landing_sets(cfg)
+    n = int(cfg.num_steps)
+    ok_fn = cone.training_contains if training_envelope else cone.contains
+
+    def one(x0):
+        def body(c, k):
+            x, hb, hf, tb = c
+            xn = landing_step(x, rt.backup_policy_fn(x), cfg)
+            act = ~(hb | hf)
+            nf = act & ~ok_fn(xn)
+            nb = act & ~nf & base_set.contains(xn)
+            return (jnp.where(act, xn, x), hb | nb, hf | nf, jnp.where(nb, k + 1, tb)), None
+
+        start_in_b = base_set.contains(x0)
+        (_, hb, hf, tb), _ = jax.lax.scan(body, (x0, start_in_b, ~ok_fn(x0), jnp.where(start_in_b, 0, -1)), jnp.arange(n))
+        return hb, hf, tb
+
+    return one
+
+
+def apply_discrete_safeguard(x_b: jax.Array, u_b: jax.Array, cfg: QuadrotorLandingBCBFConfig, rt: BCBFSystem):
+    """Largest lambda with F(x, lambda u + (1 - lambda) pi_b(x)) in C_N; returns (u, lambda, found)."""
+    lams = jnp.asarray(cfg.safeguard_lambdas, dtype=u_b.dtype)
+    ub = jax.vmap(rt.backup_policy_fn)(x_b).astype(u_b.dtype)
+    lo, hi = jnp.asarray(cfg.action_low, dtype=u_b.dtype), jnp.asarray(cfg.action_high, dtype=u_b.dtype)
+    cand = jnp.clip(lams[:, None, None] * u_b[None] + (1.0 - lams)[:, None, None] * ub[None], lo, hi)  # (L, B, m)
+    n_l, n_b = cand.shape[0], cand.shape[1]
+    x_rep = jnp.broadcast_to(x_b[None], (n_l,) + x_b.shape).reshape((n_l * n_b,) + x_b.shape[1:])
+    xn = jax.vmap(lambda x, u: landing_step(x, u, cfg))(x_rep, cand.reshape((n_l * n_b, -1)).astype(x_b.dtype))
+    ok, _, _ = jax.vmap(_first_hit_single_fn(cfg, rt))(xn)
+    ok = ok.reshape((n_l, n_b))
+    found = jnp.any(ok, axis=0)
+    idx = jnp.where(found, jnp.argmax(ok, axis=0), n_l - 1)  # first (largest) admissible lambda; else pure backup
+    u = cand[idx, jnp.arange(n_b)]
+    return u, lams[idx], found
+
+
+def solve_backup_cbf_qp_batch_with_info(x_batch, u_ref_batch, cfg, runtime=None):
+    """Batch BCBF-QP (engine) followed by the discrete-time safeguard (if enabled)."""
+    rt = _resolve_runtime(cfg, runtime)
+    u, slack, used, info = _qp_batch_with_info(x_batch, u_ref_batch, cfg, rt)
+    if bool(getattr(cfg, "discrete_safeguard", False)):
+        u, lam, found = apply_discrete_safeguard(x_batch, u, cfg, rt)
+        info = {**info, "safeguard_lambda": lam, "safeguard_found": found}
+    return u, slack, used, info
+
+
+def solve_backup_cbf_qp_batch(x_batch, u_ref_batch, cfg, runtime=None):
+    u, slack, _, _ = solve_backup_cbf_qp_batch_with_info(x_batch, u_ref_batch, cfg, runtime)
+    return u, slack
+
+
+def solve_backup_cbf_qp_single_with_info(x, u_ref, cfg, runtime=None):
+    u, slack, used, info = solve_backup_cbf_qp_batch_with_info(x[None], u_ref[None], cfg, runtime)
+    return u[0], slack[0], used[0], {k: v[0] for k, v in info.items()}
+
+
+def solve_backup_cbf_qp_single(x, u_ref, cfg, runtime=None):
+    u, slack, _, _ = solve_backup_cbf_qp_single_with_info(x, u_ref, cfg, runtime)
+    return u, slack
+
+
 class QuadrotorLandingBackupCBFProjector(BackupCBFProjector):
-    """Jitted single/batch projection u_ref -> u_safe for the landing task."""
+    """Jitted single/batch projection u_ref -> u_safe for the landing task (QP + safeguard)."""
 
     def __init__(self, cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem | None = None):
         super().__init__(cfg, _resolve_runtime(cfg, runtime))
+        self._solve_single = jax.jit(lambda x, u: solve_backup_cbf_qp_single_with_info(x, u, self.cfg, self.runtime)[:2])
+        self._solve_single_with_info = jax.jit(lambda x, u: solve_backup_cbf_qp_single_with_info(x, u, self.cfg, self.runtime))
+        self._solve_batch = jax.jit(lambda x, u: solve_backup_cbf_qp_batch_with_info(x, u, self.cfg, self.runtime)[:2])
+        self._solve_batch_with_info = jax.jit(lambda x, u: solve_backup_cbf_qp_batch_with_info(x, u, self.cfg, self.runtime))
 
 
 # ------------------------------------------------------------------ env helpers
@@ -401,31 +485,15 @@ def make_recoverability_fn(cfg: QuadrotorLandingBCBFConfig, runtime: BCBFSystem 
 
     Returns a jitted ``fn(x_batch) -> (recoverable, crashed, arrival_step)``. Phase-II
     episodes should start from recoverable states; outside C_N the QP can need slack.
+    ``training_envelope=True`` reproduces Phase I's failure test (S n gentle-recovery envelope);
+    the default is membership w.r.t. the safety specification S only.
     """
     rt = _resolve_runtime(cfg, runtime)
-    cone, base_set = landing_sets(cfg)
-    n = int(cfg.num_steps)
-    # training_envelope=True reproduces Phase I's failure test (S n gentle-recovery envelope);
-    # the default is membership w.r.t. the safety specification S only.
-    ok_fn = cone.training_contains if training_envelope else cone.contains
-
-    def one(x0):
-        def body(c, k):
-            x, hb, hf, tb = c
-            xn = landing_step(x, rt.backup_policy_fn(x), cfg)
-            act = ~(hb | hf)
-            nf = act & ~ok_fn(xn)
-            nb = act & ~nf & base_set.contains(xn)
-            return (jnp.where(act, xn, x), hb | nb, hf | nf, jnp.where(nb, k + 1, tb)), None
-
-        start_in_b = base_set.contains(x0)
-        (_, hb, hf, tb), _ = jax.lax.scan(body, (x0, start_in_b, ~cone.contains(x0), jnp.where(start_in_b, 0, -1)), jnp.arange(n))
-        return hb, hf, tb
-
-    return jax.jit(jax.vmap(one))
+    return jax.jit(jax.vmap(_first_hit_single_fn(cfg, rt, training_envelope=training_envelope)))
 
 
 __all__ = [
+    "apply_discrete_safeguard",
     "floor_value",
     "safe_value",
     "BACKUP_MODES",

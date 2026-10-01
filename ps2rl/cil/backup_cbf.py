@@ -116,8 +116,18 @@ def rollout_backup_flow_and_sensitivity_with_info(
 ) -> Tuple[jax.Array, jax.Array, Dict[str, jax.Array]]:
     """Rollout backup flow and Q-sensitivity with diagnostics.
 
-    Sensitivity propagation is Q_{k+1} = exp(dt * J_k) Q_k with optional
-    Frobenius-norm clipping.
+    Sensitivity propagation (``cfg.sensitivity_propagation``, default "expm"):
+
+    * "expm":     Q_{k+1} = exp(dt J_k) Q_k, the continuous-time variational equation.
+                  Accurate when dt * ||J|| << 1.
+    * "discrete": Q_{k+1} = dF/dx(x_k) Q_k with F(x) = post(x + dt f_pi(x)), the exact
+                  Jacobian of the rollout map the states actually follow (explicit Euler
+                  + quaternion renormalisation). Needed for stiff backups: with a learned
+                  backup at dt * ||J|| ~ 1.5, "expm" under-predicts how fast a rollout
+                  margin shrinks by ~2x, so the QP can satisfy every row while the state
+                  leaves C_N.
+
+    Optional Frobenius-norm clipping applies to both.
     """
     dt_j = jnp.array(cfg.dt, dtype=x0.dtype)
     clip_enabled = bool(cfg.sensitivity_clip > 0.0)
@@ -126,6 +136,8 @@ def rollout_backup_flow_and_sensitivity_with_info(
         cfg.use_analytic_jacobian and system.use_analytic_jacobian and system.analytic_closed_loop_and_jacobian_fn
     )
     jac_backup = jax.jacfwd(lambda z: closed_loop_backup_dynamics(z, system))
+    discrete = str(getattr(cfg, "sensitivity_propagation", "expm")) == "discrete"
+    jac_step = jax.jacfwd(lambda z: system.postprocess_rollout_state_fn(z + dt_j * closed_loop_backup_dynamics(z, system)))
 
     one_j = jnp.array(1.0, dtype=x0.dtype)
     eps_j = jnp.array(1e-12, dtype=x0.dtype)
@@ -147,7 +159,7 @@ def rollout_backup_flow_and_sensitivity_with_info(
             j_pi = jac_backup(x)
         x_next = system.postprocess_rollout_state_fn(x + dt_j * f_pi)
 
-        q_pred = propagate_q(q, j_pi)
+        q_pred = jac_step(x) @ q if discrete else propagate_q(q, j_pi)
         step_max_abs_q = jnp.max(jnp.abs(q_pred))
         max_abs_q_next = jnp.maximum(max_abs_q, step_max_abs_q)
         if clip_enabled:

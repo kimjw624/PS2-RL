@@ -41,6 +41,7 @@ def _f(x, spec=".3f", none="–"):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default="outputs/landing_floor")
+    ap.add_argument("--phase1_dir", default=None, help="Phase-I runs (default: <root>/phase1)")
     ap.add_argument("--tol", type=float, default=1e-3, help="tolerated negative margin [m]")
     ap.add_argument("--slack_tol", type=float, default=1e-2)
     args = ap.parse_args(argv)
@@ -49,7 +50,7 @@ def main(argv=None):
 
     # ---------------------------------------------------------------- Phase I
     p1 = {}
-    for d in sorted((root / "phase1").glob("*")):
+    for d in sorted((Path(args.phase1_dir) if args.phase1_dir else root / "phase1").glob("*")):
         s = _load(d / "summary.json")
         if not s or not (d / "landing_backup_policy_actor.pkl").exists():
             continue
@@ -110,6 +111,10 @@ def main(argv=None):
                 "slack": max(c.get("max_slack", 0.0), tr.get("max_slack", 0.0)),
                 "fallbacks": c.get("qp_fallbacks", 0) + tr.get("qp_fallbacks", 0),
                 "mu": p1.get(d.name, {}).get("mu"), "safe": safe,
+                # relative-time rows everywhere = the paper's form: pi_b is always a feasible QP point
+                "guaranteed": all(e.get("relative_time_per_constraint") or [True]),
+                "safeguard": e.get("discrete_safeguard"),
+                "sg_rate": max(v for v in (c.get("safeguard_active_rate"), tr.get("safeguard_active_rate"), 0.0) if v is not None),
                 "zt": rep.get("zeta_touch"), "vt": rep.get("v_touch"),
             })
     if rows:
@@ -128,8 +133,8 @@ def main(argv=None):
                 f"{_f(r['trk_unf_out'], '.2f')} | {_f(r['slack'], '.1e')} | {'yes' if r['safe'] else 'no'} |")
         lines.append("")
         cands = [r for r in rows if r["safe"]]
-        key = lambda r: (r["trk_td"] or 0.0, r["lqr_td"] or 0.0, -(r["hover_low"] if r["hover_low"] is not None else 9.0),  # noqa: E731
-                         r["mu"] or 0.0)
+        key = lambda r: (r["trk_td"] or 0.0, r["lqr_td"] or 0.0, bool(r["guaranteed"]),  # noqa: E731
+                         -(r["hover_low"] if r["hover_low"] is not None else 9.0), r["mu"] or 0.0)
         if cands:
             best = max(cands, key=key)
             lines += ["## Recommendation", "",
