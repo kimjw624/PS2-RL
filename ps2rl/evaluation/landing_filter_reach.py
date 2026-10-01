@@ -194,10 +194,19 @@ def hover_feasibility(cfg, runtime, positions: np.ndarray, *, tol: float = 1e-3,
     return {"residual": res.reshape(shape), "feasible": (res <= tol).reshape(shape)}
 
 
-def tracking_lqr(cfg) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
-    """u = u_ref - K (e(x) - e(x_ref)): the hover LQR gain around a moving reference, with feedforward."""
-    _, base = lbcbf.landing_sets(cfg)
-    ctrl = base.controller
+def tracking_lqr(cfg, lqr_overrides: dict | None = None) -> Callable[[jax.Array, jax.Array, jax.Array], jax.Array]:
+    """u = u_ref - K (e(x) - e(x_ref)): a hover-LQR gain around a moving reference, with feedforward.
+
+    ``lqr_overrides`` (e.g. {"lqr_q_z": 10}) re-solves the LQR with other weights; this only
+    shapes the nominal tracker, not the backup or the base set.
+    """
+    if lqr_overrides:
+        from ps2rl.base_controller.quadrotor_landing_dlqr import QuadrotorLandingDLQR
+
+        ctrl = QuadrotorLandingDLQR.from_config(cfg.landing.replace(**lqr_overrides))
+    else:
+        _, base = lbcbf.landing_sets(cfg)
+        ctrl = base.controller
     k = jnp.asarray(ctrl.k_matrix_f64(), dtype=jnp.float32)
     low = jnp.asarray(cfg.action_low, dtype=jnp.float32)
     high = jnp.asarray(cfg.action_high, dtype=jnp.float32)

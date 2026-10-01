@@ -115,6 +115,15 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
     # exactly in discrete time, independent of the rows' linearisation error.
     discrete_safeguard: bool = True
     safeguard_lambdas: tuple = (1.0, 0.75, 0.5, 0.25, 0.0)
+    # Per-action weights of the QP objective sum_i w_i (u_i - u_ref_i)^2, ordered
+    # (a_cmd, omega_x, omega_y, omega_z); None -> ``control_weight`` for every action.
+    # Only the choice among safe actions changes: the rows, C_N and the feasibility of pi_b
+    # do not depend on it. With equal weights a vehicle pushed into the cone wall near the
+    # pad is corrected mostly through thrust, so the filter holds it up (it climbs the wall).
+    # Cheaper roll/pitch rates, e.g. (1, 0.1, 0.1, 1), correct through tilt instead, so the
+    # vehicle keeps its commanded descent and slides along the wall onto the pad
+    # (scripts/demo_landing_skid.py). Keep the largest weight at 1: slack_weight is relative.
+    control_weights: tuple | None = None
 
     def __post_init__(self) -> None:
         mode = str(self.backup_policy_mode).strip().lower()
@@ -134,6 +143,11 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
         if not lams or lams[-1] != 0.0 or any(a <= b for a, b in zip(lams, lams[1:])) or lams[0] > 1.0:
             raise ValueError(f"safeguard_lambdas must be strictly decreasing in (0, 1] and end with 0, got {lams}")
         object.__setattr__(self, "safeguard_lambdas", lams)
+        if self.control_weights is not None:
+            w = tuple(float(v) for v in self.control_weights)
+            if len(w) != 4 or any((not isfinite(v)) or v <= 0.0 for v in w):
+                raise ValueError(f"control_weights must be 4 positive finite numbers (a_cmd, wx, wy, wz), got {self.control_weights}")
+            object.__setattr__(self, "control_weights", w)
         if self.sensitivity_propagation not in ("discrete", "expm"):
             raise ValueError(f"sensitivity_propagation must be 'discrete' or 'expm', got '{self.sensitivity_propagation}'")
         if self.qp_solve_dtype not in ("float32", "float64"):

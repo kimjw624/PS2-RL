@@ -109,3 +109,64 @@ To re-run checks, tests and report for all overnight runs with the fixed CIL, wi
 docker exec -d px4sitl bash -c "cd ~/ws_shared/PS2-RL && OUT=outputs/landing_floor_v2 PHASE1_DIR=outputs/landing_floor/phase1 \
     STAGES='C D E F' bash docker_batch/run_landing_floor_overnight.sh > outputs/landing_floor_v2.out 2>&1"
 ```
+
+## Skid-out landing demo: the filter lands a tracker that aims beside the platform
+
+`scripts/demo_landing_skid.py` (Docker wrapper: `docker_batch/run_landing_skid_demo.sh`).
+
+**Reference.** `ps2rl/envs/assets/quadrotor_landing_skid_reference.npz` comes from the colleague's generator:
+
+```bash
+python ps2rl/envs/assets/generate_quadrotor_landing_reference.py --offset 0.5 --offset_dir_deg 30 \
+    --r0 0.3 --theta_deg 45 --eps 0.015 --out ps2rl/envs/assets/quadrotor_landing_skid_reference.npz
+```
+
+- It starts inside the cone (h = +0.30 m at (−2, 0, 2) m).
+- It leaves the cone at t = 1.54 s, 0.11 m above the pad (min h −0.20 m).
+- It touches down 0.5 m from the pad centre, i.e. 0.2 m beyond the platform rim. The platform is the cone footprint, radius r0 = 0.3 m.
+
+**What runs.**
+- Each tracker (an LQR around the moving reference, with feedforward) runs alone, then through the filter once per filter setting.
+- Starts: the reference start plus 12 random perturbations (±0.15 m, ±0.3 m/s). Each start lies inside the cone with h ≥ 0.05 and is in C_N for every setting.
+- Ground contact: the vehicle is landed at the first step with height ≤ 2 cm and speed ≤ 0.3 m/s. If that point is inside the cone, it is on the platform. After that it rests with motors off (`--no_land_latch` keeps flying).
+- Safety and intervention statistics cover the flight up to touchdown.
+
+**Finding: the QP metric decides whether the filter lands the vehicle.**
+- With equal weights on (a_cmd, ω), the cheapest way to stay off the cone wall near the pad is extra thrust.
+  - Measured on the wall: the tracker asks for a_cmd ≈ 4.6 m/s² (descend and push out). The filter returns ≈ 9.8 m/s² (hover) and changes ω by ≤ 1 rad/s.
+  - So the vehicle climbs the wall and hovers; it never gets closer than 4–12 cm to the pad. This holds for every tracker tried (q_z up to 30).
+- `control_weights=(1, w, w, 1)` with w < 1 makes roll and pitch corrections cheaper than thrust corrections (the order is a_cmd, ωx, ωy, ωz). The filter then tilts the vehicle back from the wall instead of lifting it. The commanded descent survives, and the vehicle slides down the wall onto the platform.
+- Yaw rate keeps weight 1. It does not move the vehicle. Making it cheap too (`1/w/w/w`) lands about as well, but the QP then also uses yaw corrections of up to 6 rad/s, because the learned backup depends on yaw.
+- This changes only which safe action the QP picks. The safe set, the rows, C_N, the backup and π_b's feasibility are the same in every setting. Keep the largest weight at 1, because `slack_weight` is relative to it.
+
+**Results** (backup `floor_rec10_td3_seed0`, α = 10, α_floor = 20, 13 starts). Alone, every tracker leaves the cone on every start and lands 0.49–0.50 m from the centre, beside the platform. Columns separated by "/" are the settings uniform / tilt3 / tilt10.
+
+| tracker | on platform | median time [s] | worst touchdown radius [m] | intervention (mean) | roughness |
+|---|---|---|---|---|---|
+| lqr | 0 / 0 / 0 % | – | – | 0.055 / 0.056 / 0.063 | 0.010 / 0.013 / 0.022 |
+| lqr_q_z=10 | 0 / 0 / 100 % | – / – / 1.86 | – / – / 0.270 | 0.110 / 0.074 / 0.053 | 0.010 / 0.013 / 0.051 |
+| lqr_q_z=30 | 0 / 100 / **100 %** | – / 2.02 / **1.82** | – / 0.286 / **0.261** | 0.134 / 0.057 / **0.058** | 0.010 / 0.025 / **0.055** |
+
+- `tilt3` is `control_weights=1/0.3/0.3/1`; `tilt10` is `control_weights=1/0.1/0.1/1`.
+- Every pair is safe on every start up to touchdown: min h_cone ≥ +0.0028, min height ≥ +0.017, slack ≤ 1.3e-4, no QP fallbacks, and the safeguard never had to blend.
+- Intervention is the mean ‖u − u_ref‖ with each action scaled by half its range. Roughness is the mean step-to-step change of the applied action, scaled the same way.
+- The tracker needs some descent priority. The plain LQR (equal position weights) is pulled outward more than downward and stays on the wall.
+- **Selected: `lqr_q_z=30` + `tilt10`.** It lands on the platform from every start in about 1.8 s; the worst touchdown is 3.9 cm inside the rim, the best margin in the default grid.
+  - `--select_by intervention` picks `tilt3` (0.057 vs 0.058), which lands 1.4 cm from the rim.
+  - w = 0.03 (`1/0.03/0.03/1`) lands deeper (6 cm inside), but its actions are 2–3× rougher, with peak corrections of 1.2 half-ranges. It is therefore not in the default grid; add it with `--settings`.
+
+```bash
+docker exec -it px4sitl bash ~/ws_shared/PS2-RL/docker_batch/run_landing_skid_demo.sh
+# also render the same tracker through the equal-weight filter (it hovers on the wall):
+docker exec -it px4sitl bash -c "EXTRA='--gif_pairs lqr_qz30|uniform' bash ~/ws_shared/PS2-RL/docker_batch/run_landing_skid_demo.sh"
+# figures + GIFs for all nine pairs (about 1.5 min per GIF):
+docker exec -it px4sitl bash -c "EXTRA=--gif_all bash ~/ws_shared/PS2-RL/docker_batch/run_landing_skid_demo.sh"
+```
+
+Outputs, in `outputs/landing_skid_demo/`:
+- `summary.md` / `summary.json`;
+- `trackers.png`: side and top views near the pad, one row per filter setting;
+- `case_<tracker>_<setting>.png`, `actuators_<tracker>_<setting>.png`;
+- `skid_landing_<tracker>_<setting>.gif`: 3D view, side view and a close-up of the platform, plus a status line that shows when each vehicle lands and where.
+
+For Phase II with this filter, pass the same `control_weights` to `landing_projection_setup`. Projection gradients then follow the weighted metric.

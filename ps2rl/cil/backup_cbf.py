@@ -285,8 +285,13 @@ def _build_backup_cbf_qp_from_rows(
     g = jnp.concatenate([g_cbf, g_box], axis=0)
     h = jnp.concatenate([h_cbf, h_box], axis=0)
 
-    q_mat = jnp.diag(jnp.array([cfg.control_weight] * m + [cfg.slack_weight], dtype=dtype))
-    q_vec = -jnp.array([cfg.control_weight * u_ref[i] for i in range(m)] + [0.0], dtype=dtype)
+    # Optional per-action weights (``control_weights``, a length-m tuple); default uniform.
+    w_ctrl = getattr(cfg, "control_weights", None)
+    w_ctrl = [cfg.control_weight] * m if w_ctrl is None else [float(v) for v in w_ctrl]
+    if len(w_ctrl) != m:
+        raise ValueError(f"control_weights has {len(w_ctrl)} entries, the action has {m}")
+    q_mat = jnp.diag(jnp.array(w_ctrl + [cfg.slack_weight], dtype=dtype))
+    q_vec = -jnp.array([w_ctrl[i] * u_ref[i] for i in range(m)] + [0.0], dtype=dtype)
     a_eq = jnp.zeros((0, m + 1), dtype=dtype)
     b_eq = jnp.zeros((0,), dtype=dtype)
     return q_mat, q_vec, a_eq, b_eq, g, h

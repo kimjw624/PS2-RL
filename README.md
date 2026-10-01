@@ -189,6 +189,8 @@ These settings are all opt-in.
 
 `docker_batch/run_landing_floor_overnight.sh` trains the variants, certifies and self-checks them, runs the reach tests (`scripts/test_landing_floor_reach.py`), and writes a report. See `docker_batch/README_landing_floor.md`.
 
+`scripts/demo_landing_skid.py` shows the filter landing a tracker whose reference skids out of the cone toward a spot beside the platform. It compares trackers and filter QP metrics (`control_weights`) and renders a GIF of the selected pair. Docker wrapper: `docker_batch/run_landing_skid_demo.sh`.
+
 ## Citation
 
 If you use this code, please cite the paper:

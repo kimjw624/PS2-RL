@@ -236,8 +236,9 @@ def parse_field_overrides(items: list[str] | None, cls, extra: dict[str, type] |
     """Parse ``KEY=VALUE`` strings into typed overrides for the dataclass ``cls``.
 
     Types follow the field defaults, or the annotation for fields defaulting to None
-    (bool accepts 1/0/true/false/yes/no/on/off). ``extra`` adds non-field names with a type.
-    Unknown keys raise.
+    (bool accepts 1/0/true/false/yes/no/on/off; tuples are '/'-separated numbers, e.g.
+    ``control_weights=1/0.1/0.1/0.1``, since ',' separates overrides on the command line).
+    ``extra`` adds non-field names with a type. Unknown keys raise.
     """
     out: dict[str, Any] = {}
     defaults = {f.name: f.default for f in fields(cls)}
@@ -253,6 +254,9 @@ def parse_field_overrides(items: list[str] | None, cls, extra: dict[str, type] |
         if key not in defaults:
             raise KeyError(f"'{key}' is not a field of {cls.__name__}")
         d = defaults[key]
+        if isinstance(d, tuple) or (d is None and "tuple" in annotations[key]):
+            out[key] = _parse_tuple(key, val)
+            continue
         if d is None:
             ann = annotations[key]
             if "bool" in ann:
@@ -275,11 +279,20 @@ def parse_field_overrides(items: list[str] | None, cls, extra: dict[str, type] |
     return out
 
 
+def _parse_tuple(key: str, val: str) -> tuple[float, ...]:
+    parts = [t for t in val.replace(" ", "").split("/") if t]
+    if not parts:
+        raise ValueError(f"{key} expects '/'-separated numbers, got '{val}'")
+    return tuple(float(t) for t in parts)
+
+
 def overrides_tag(overrides: dict[str, Any]) -> str:
     """Short, filesystem-safe tag for a set of overrides (empty if none)."""
     def fmt(v):
         if isinstance(v, bool):
             return "on" if v else "off"
+        if isinstance(v, (tuple, list)):
+            return "x".join(fmt(t) for t in v)
         return f"{v:g}" if isinstance(v, float) else str(v)
     return "_".join(f"{k}-{fmt(v)}" for k, v in sorted(overrides.items()))
 

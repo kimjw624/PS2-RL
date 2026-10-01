@@ -173,7 +173,8 @@ def plot_overview(scene: Scene, recs: dict, h: dict, highlight: int, out: Path, 
 
 
 # ----------------------------------------------------------------- case figures
-def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str) -> str:
+def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, labels: dict | None = None) -> str:
+    lab = {**LABELS, **(labels or {})}
     fig, ax = plt.subplots(2, 2, figsize=(13, 9))
     trajs = [recs[v]["traj"][ep] for v in recs]
     zt = _zeta_top(scene, trajs)
@@ -183,7 +184,7 @@ def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str)
     a.plot(s_ref, z_ref, "--", color=COLORS["reference"], lw=1.6, label="reference")
     for v, rec in recs.items():
         s, z = scene.side(rec["traj"][ep])
-        a.plot(s, z, color=COLORS[v], lw=2, label=LABELS[v])
+        a.plot(s, z, color=COLORS[v], lw=2, label=lab[v])
         a.plot(s[0], z[0], "o", color=COLORS[v], ms=5)
         a.plot(s[-1], z[-1], "s", color=COLORS[v], ms=6)
     a.set_aspect("equal", adjustable="datalim")
@@ -202,7 +203,7 @@ def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str)
     a.plot(scene.ref[:, 0], scene.ref[:, 1], "--", color=COLORS["reference"], lw=1.6, label="reference")
     for v, rec in recs.items():
         tr = rec["traj"][ep]
-        a.plot(tr[:, 0], tr[:, 1], color=COLORS[v], lw=2, label=LABELS[v])
+        a.plot(tr[:, 0], tr[:, 1], color=COLORS[v], lw=2, label=lab[v])
     a.set_aspect("equal", adjustable="datalim")
     a.set_xlabel("x [m]")
     a.set_ylabel("y [m]")
@@ -213,7 +214,7 @@ def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str)
     a = ax[1, 0]
     t = np.arange(h["filtered"].shape[1]) * scene.dt
     for v in recs:
-        a.plot(t, h[v][ep], color=COLORS[v], lw=2, label=LABELS[v])
+        a.plot(t, h[v][ep], color=COLORS[v], lw=2, label=lab[v])
     a.axhline(0.0, color="k", lw=1.0)
     a.set_xlabel("t [s]")
     a.set_ylabel("h_cone [m]")
@@ -224,8 +225,8 @@ def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str)
     a = ax[1, 1]
     for v, rec in recs.items():
         tr = rec["traj"][ep]
-        a.plot(t, tr[:, 2] - scene.pad[2], color=COLORS[v], lw=2, label=f"height, {LABELS[v]}")
-        a.plot(t, scene.radial(tr), color=COLORS[v], lw=1.2, ls="-.", label=f"radial distance, {LABELS[v]}")
+        a.plot(t, tr[:, 2] - scene.pad[2], color=COLORS[v], lw=2, label=f"height, {lab[v]}")
+        a.plot(t, scene.radial(tr), color=COLORS[v], lw=1.2, ls="-.", label=f"radial distance, {lab[v]}")
     tr_ref = np.arange(scene.ref.shape[0]) * float(scene.ref_t[1] - scene.ref_t[0] if scene.ref_t.size > 1 else scene.dt)
     a.plot(tr_ref, scene.ref[:, 2] - scene.pad[2], "--", color="k", lw=1.2, label="reference height")
     a.plot(tr_ref, scene.radial(scene.ref), ":", color="k", lw=1.2, label="reference radial distance")
@@ -239,16 +240,17 @@ def plot_case(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str)
     return _save(fig, out)
 
 
-def plot_actuators(scene: Scene, recs: dict, ep: int, low, high, out: Path, title: str, gravity: float) -> str:
+def plot_actuators(scene: Scene, recs: dict, ep: int, low, high, out: Path, title: str, gravity: float, labels: dict | None = None) -> str:
+    lab = {**LABELS, **(labels or {})}
     fig, ax = plt.subplots(5, 1, figsize=(11, 12), sharex=True)
     T = recs["filtered"]["u"].shape[1]
     t = np.arange(T) * scene.dt
     for j in range(4):
         a = ax[j]
-        a.plot(t, recs["unfiltered"]["u"][ep, :, j], color=COLORS["unfiltered"], lw=1.4, label="policy only: applied")
+        a.plot(t, recs["unfiltered"]["u"][ep, :, j], color=COLORS["unfiltered"], lw=1.4, label=f"{lab['unfiltered']}: applied")
         a.plot(t, recs["filtered"]["u_raw"][ep, :, j], "--", color=COLORS["filtered"], lw=1.2,
-               label="filtered run: policy proposal u_ref")
-        a.plot(t, recs["filtered"]["u"][ep, :, j], color=COLORS["filtered"], lw=1.8, label="filtered run: applied u_safe")
+               label=f"{lab['filtered']}: proposal u_ref")
+        a.plot(t, recs["filtered"]["u"][ep, :, j], color=COLORS["filtered"], lw=1.8, label=f"{lab['filtered']}: applied u_safe")
         a.axhline(low[j], color="0.4", ls=":", lw=1)
         a.axhline(high[j], color="0.4", ls=":", lw=1)
         if j == 0:
@@ -306,7 +308,16 @@ def plot_distributions(ep_metrics: dict, recoverable: np.ndarray, r0: float, out
 
 # ----------------------------------------------------------------- GIF
 def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, *,
-             slowdown: float = 0.25, stride: int = 1, trail: int = 60, dpi: int = 90) -> str:
+             slowdown: float = 0.25, stride: int = 1, trail: int = 60, dpi: int = 90, labels: dict | None = None,
+             touchdown: dict | None = None, zoom: dict | None = None, xlabel: str = "along miss direction [m]") -> str:
+    """3D view + side view (+ an optional close-up side view ``zoom={"s": (lo, hi), "z": (lo, hi)}``).
+
+    ``touchdown`` maps a variant to a frame index, or to (index, message), from which the status
+    line shows the message ("LANDED" by default).
+    """
+    lab = {**LABELS, **(labels or {})}
+    touchdown = touchdown or {}
+    wlab = max(len(v) for v in lab.values()) + 1
     trajs = {v: recs[v]["traj"][ep] for v in recs}
     du = recs["filtered"]["du_norm"][ep]
     n = next(iter(trajs.values())).shape[0]
@@ -318,9 +329,11 @@ def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, 
     span = float(max(np.ptp(allp[:, 0]), np.ptp(allp[:, 1]), zt, 1.0))
     arm = 0.06 * span
 
-    fig = plt.figure(figsize=(13.5, 6.0))
-    ax3 = fig.add_subplot(1, 2, 1, projection="3d")
-    ax2 = fig.add_subplot(1, 2, 2)
+    ncol = 3 if zoom else 2
+    fig = plt.figure(figsize=(6.75 * ncol, 6.0))
+    ax3 = fig.add_subplot(1, ncol, 1, projection="3d")
+    ax2 = fig.add_subplot(1, ncol, 2)
+    axz = fig.add_subplot(1, ncol, 3) if zoom else None
 
     # cone surface
     zz = np.linspace(0.0, zt, 18)
@@ -351,9 +364,18 @@ def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, 
     s_ref, z_ref = scene.side(scene.ref)
     ax2.plot(s_ref, z_ref, "--", color="k", lw=1.2, label="reference")
     ax2.set_aspect("equal", adjustable="datalim")
-    ax2.set_xlabel("along miss direction [m]")
+    ax2.set_xlabel(xlabel)
     ax2.set_ylabel("height above pad [m]")
     ax2.grid(alpha=0.3)
+    if axz is not None:
+        _draw_cone_side(axz, scene, max(zt, zoom["z"][1]), zeta_bot=min(0.0, zoom["z"][0]))
+        axz.plot(s_ref, z_ref, "--", color="k", lw=1.2)
+        axz.set_xlim(*zoom["s"])
+        axz.set_ylim(*zoom["z"])
+        axz.set_aspect("equal")
+        axz.set_xlabel(xlabel)
+        axz.set_title("close-up near the platform", fontsize=10)
+        axz.grid(alpha=0.3)
 
     art = {}
     for v, tr in trajs.items():
@@ -362,15 +384,18 @@ def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, 
             "arm1": ax3.plot([], [], [], "-", color=col, lw=2.2)[0],
             "arm2": ax3.plot([], [], [], "-", color=col, lw=2.2)[0],
             "up": ax3.plot([], [], [], "-", color="0.2", lw=1.4)[0],
-            "trail3": ax3.plot([], [], [], "-", color=col, lw=1.2, alpha=0.8, label=LABELS[v])[0],
-            "trail2": ax2.plot([], [], "-", color=col, lw=1.6, label=LABELS[v])[0],
+            "trail3": ax3.plot([], [], [], "-", color=col, lw=1.2, alpha=0.8, label=lab[v])[0],
+            "trail2": ax2.plot([], [], "-", color=col, lw=1.6, label=lab[v])[0],
             "dot2": ax2.plot([], [], "o", color=col, ms=7)[0],
         }
+        if axz is not None:
+            art[v]["trailz"] = axz.plot([], [], "-", color=col, lw=1.8)[0]
+            art[v]["dotz"] = axz.plot([], [], "o", color=col, ms=8)[0]
     ax3.legend(fontsize=8, loc="upper left")
     ax2.legend(fontsize=8, loc="lower right")
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.88, bottom=0.1, wspace=0.12)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.88, bottom=0.1, wspace=0.12 if not zoom else 0.18)
     ttl = fig.suptitle("", fontsize=11)
-    status = ax2.text(0.02, 0.98, "", transform=ax2.transAxes, va="top", fontsize=9, family="monospace",
+    status = ax2.text(0.02, 0.98, "", transform=ax2.transAxes, va="top", fontsize=8 if zoom else 9, family="monospace",
                       bbox=dict(boxstyle="round", fc="white", alpha=0.85))
 
     def update(fi):
@@ -395,7 +420,13 @@ def save_gif(scene: Scene, recs: dict, h: dict, ep: int, out: Path, title: str, 
             s, z = scene.side(tr[: k + 1])
             art[v]["trail2"].set_data(s, z)
             art[v]["dot2"].set_data([s[-1]], [z[-1]])
-            lines.append(f"{LABELS[v]:<21} h={h[v][ep, k]:+.2f} m  tilt={_tilt_deg(tr[k, 6:10]):4.0f}°")
+            if axz is not None:
+                art[v]["trailz"].set_data(s, z)
+                art[v]["dotz"].set_data([s[-1]], [z[-1]])
+            td = touchdown.get(v)
+            td, msg = td if isinstance(td, tuple) else (td, "LANDED")
+            landed = f"  {msg}" if (td is not None and k >= td) else ""
+            lines.append(f"{lab[v]:<{wlab}} h={h[v][ep, k]:+.2f} m  z={tr[k, 2] - scene.pad[2]:5.2f} m  tilt={_tilt_deg(tr[k, 6:10]):3.0f}°{landed}")
         kk = min(k, du.shape[0] - 1)
         lines.append(f"filter {'ACTIVE' if du[kk] > 1e-3 else 'idle  '}  ‖Δu‖={du[kk]:.2f}")
         status.set_text("\n".join(lines))

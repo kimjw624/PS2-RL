@@ -12,6 +12,14 @@
 > forward-invariant step by step. With this setting a filtered controller lands on the pad
 > without leaving the cone. See `docker_batch/README_landing_floor.md`.
 > `td3_seed0` below is the earlier 30° cone checkpoint.
+>
+> **Policies that aim outside the cone near the pad.** Add `control_weights=(1.0, 0.1, 0.1, 1.0)`
+> (QP weights on a_cmd, ωx, ωy, ωz). With equal weights the filter corrects such a policy mostly
+> through thrust, which lifts it up the cone wall, and it never lands. Cheaper roll and pitch rates
+> make it tilt back instead, so the vehicle slides down the wall onto the platform. The safe set,
+> the rows and C_N are unchanged. In `scripts/demo_landing_skid.py` a tracker heading 0.2 m beyond
+> the platform rim lands on the platform from every start with this setting, and never with
+> equal weights.
 
 This package gives Phase II everything it needs to train (or filter) a landing policy
 through the control-invariant layer (CIL) with the **approach-cone safe set** and the
