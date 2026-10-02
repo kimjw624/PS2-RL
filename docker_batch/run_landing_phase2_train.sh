@@ -26,7 +26,7 @@
 #   FILTER         landing CIL settings                          (alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1)
 #   TRACKER_SEEDS  tracker seeds                                 ("0 1 2")
 #   SEED           PS2 training seed                             (0)
-#   TRACKER_STEPS  tracker training steps                        (8000000)
+#   TRACKER_STEPS  tracker training steps (upper bound)          (3000000)
 #   PS2_STEPS      PS2 training steps (upper bound)              (1500000)
 #   PS2_HOURS      wall-time budget per PS2 run, 0 = none        (3)
 #   PS2_DEVICE     auto | gpu | cpu                              (auto: timed, see stage C)
@@ -51,7 +51,7 @@ BACKUP="${BACKUP:-checkpoints/landing_phase1/floor_rec10_td3_seed0}"
 FILTER="${FILTER:-alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1}"
 SEED="${SEED:-0}"
 TRACKER_SEEDS="${TRACKER_SEEDS:-0 1 2}"
-TRACKER_STEPS="${TRACKER_STEPS:-8000000}"
+TRACKER_STEPS="${TRACKER_STEPS:-3000000}"
 PS2_STEPS="${PS2_STEPS:-1500000}"
 PS2_HOURS="${PS2_HOURS:-3}"
 PS2_DEVICE="${PS2_DEVICE:-auto}"

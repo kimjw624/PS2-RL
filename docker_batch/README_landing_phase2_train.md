@@ -60,9 +60,9 @@ xdg-open ~/px4-ros-docker/ws_shared/PS2-RL/outputs/landing_phase2/training.html
 
 ## Tracker recipe
 
-The first batch used the settings of the colleague's landing trackers (`--preset tracker_v1`). In those six runs, five lost their progress at least once and one never recovered. The logs show the same event each time: within about 1000 updates the critics' value of the policy's own action jumps from about −300 to the clip at +10000, although every reward is negative, and the policy follows it. Three things in the recipe make that possible and slow to undo:
+The first batch used the settings of the colleague's landing trackers (`--preset tracker_v1`). Of those six runs, five lost their progress at least once and one never recovered. The logs show the same event each time: within 20–30 thousand env steps the critics' value of the policy's own action jumps from about −300 to the clip at +10000, although every reward is negative, and the policy follows it. Three things in the recipe make that possible and slow to undo:
 
-1. **Scale.** The reward reaches −50 per step, so returns are in the thousands. Adam changes a critic's output at a rate set by the learning rate, not by the error, so the critics lag for millions of steps and take about a million more to come back from an overshoot.
+1. **Scale.** The reward reaches −50 per step, so returns are in the thousands. Adam changes a critic's output at a rate set by the learning rate, not by the error, so the critics lag for millions of steps and need hundreds of thousands more to come back from an overshoot.
 2. **Unbounded targets.** The bootstrapped target may exceed any return the reward can produce, so an overestimate feeds itself.
 3. **Clipped predictions.** Past ±10000 the prediction's gradient is zero: a critic that gets there stays there, and the actor gets no gradient either.
 
@@ -81,16 +81,20 @@ The `tracker` preset keeps the reward, network and data rates and changes this:
 - **Termination:** a policy that cannot fly yet stays near the reference instead of drifting tens of metres away, where the reward is saturated. A terminated episode is reported with the reward floor for the steps not flown, and evaluations always fly full episodes, so returns stay comparable.
 - **`--critic_reward normalized`** (1 + r/50) is the milder alternative. `--preset tracker_v1` reproduces the old runs.
 
-CPU test, reference `b2_m10`, seed 0, evaluation position error:
+Evaluation position error (mean over the episode, deterministic policy), old recipe on the GPU against the CPU tests of the new one:
 
-| recipe | 0.5 m reached at | note |
-|---|---|---|
-| `tracker_v1` (first GPU batch) | 4.0–4.5M steps | then collapsed at 4.66M and never recovered |
-| normalized, lr 1e-4, batch 64 | 1.75M steps | one overshoot at 1.35M, recovered within 0.3M steps |
-| normalized, lr 3e-4, batch 256 | 1.05M steps (0.57 m) | |
-| exp, lr 3e-4, batch 256 (`tracker`) | 0.40M steps | |
+| recipe | run | steps trained | first ≤ 0.6 m | first ≤ 0.2 m | at the end |
+|---|---|---|---|---|---|
+| `tracker_v1` | b2_m10, seed 0 | 8M | 4.20M | never | 39 m (collapsed at 4.66M) |
+| `tracker_v1` | b3_m20, seed 0 (the best of the six) | 8M | 3.75M | 5.80M | 0.10 m |
+| normalized, lr 1e-4, batch 64 | b2_m10, seed 0 | 2M | 1.65M | – | 0.54 m |
+| normalized, lr 3e-4, batch 256 | b2_m10, seed 0 | 1.5M | 1.05M | – | 0.72 m |
+| `tracker` (exp, lr 3e-4, batch 256) | b2_m10, seed 0 | 1.5M | 0.35M | 0.85M | 0.09 m |
+| `tracker` (exp, lr 3e-4, batch 256) | b2_m20, seed 1 | 1.2M | 0.60M | 0.90M | 0.13 m |
 
-These are single runs of at most 2M steps. The old collapses came at 3–5M steps, so the GPU batch is the real test; the curves page shows it as it happens.
+"At the end" is the median of the last three evaluations. So the new preset needs about 1.5M steps for what the old one's best run reached in 8M. These are two runs of at most 1.5M steps; the old collapses came at 3–5M steps, so the new recipe is not yet tested that far. `TRACKER_STEPS` defaults to 3M; the curves page shows whether that is enough.
+
+Flown alone from 32 starts, the `b2_m10` test tracker follows the reference to 0.08 m, leaves the cone on every start and touches down beside the platform. Through the filter it never leaves the safe set (smallest margin +0.007 m) and ends hovering on the cone wall about 15 cm up, without touching down. Landing from there is what PS2 has to learn.
 
 ## PS2 settings
 
@@ -106,7 +110,7 @@ The first GPU batch ran PS2 at 22–25 steps/s per run. On a 2-core CPU the new 
 
 ## Duration
 
-- **Trackers:** the first batch ran 8M steps in about 16 min per run, three at a time. With two new seeds per reference that is 12 runs, about 1.1 h if every run goes to 8M. Stop a run once its curve is flat.
+- **Trackers:** the first batch ran at 8000–9700 steps/s per run, three at a time, so 3M steps take about 6 min per run and the 18 runs about 35–40 min. Stop a run once its curve is flat; `touch outputs/landing_phase2/*_tracker_s*/STOP` stops the three that are running.
 - **Selection:** a few minutes.
 - **PS2:** at most `PS2_HOURS` per wave of `MAX_PARALLEL` runs, so two waves and about 6 h with the defaults, plus about 10 min for the device timing.
 
@@ -116,7 +120,7 @@ The first GPU batch ran PS2 at 22–25 steps/s per run. On a 2-core CPU the new 
 |---|---|
 | `REFS` | the six `b*` references |
 | `TRACKER_SEEDS` | `"0 1 2"` |
-| `TRACKER_STEPS` | 8000000 |
+| `TRACKER_STEPS` | 3000000 |
 | `PS2_STEPS` | 1500000 |
 | `PS2_HOURS` | 3 |
 | `PS2_DEVICE` | `auto` (`gpu`, `cpu`) |
