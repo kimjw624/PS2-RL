@@ -113,8 +113,14 @@ def rollout_backup_flow_and_sensitivity_with_info(
     x0: jax.Array,
     cfg: Any,
     system: BCBFSystem,
+    seed: jax.Array | None = None,
 ) -> Tuple[jax.Array, jax.Array, Dict[str, jax.Array]]:
     """Rollout backup flow and Q-sensitivity with diagnostics.
+
+    ``seed`` (state_dim, k), "discrete" propagation only: propagate Q_k @ seed instead of the
+    full Q_k (seed = identity), with k Jacobian-vector products per step instead of state_dim.
+    The rows only ever use Q_k @ [f(x0), g(x0)], so seeding with those 1 + action_dim columns
+    gives the same rows for about half the tangent work.
 
     Sensitivity propagation (``cfg.sensitivity_propagation``, default "expm"):
 
@@ -137,7 +143,12 @@ def rollout_backup_flow_and_sensitivity_with_info(
     )
     jac_backup = jax.jacfwd(lambda z: closed_loop_backup_dynamics(z, system))
     discrete = str(getattr(cfg, "sensitivity_propagation", "expm")) == "discrete"
-    jac_step = jax.jacfwd(lambda z: system.postprocess_rollout_state_fn(z + dt_j * closed_loop_backup_dynamics(z, system)))
+    def step_map(z: jax.Array) -> jax.Array:
+        return system.postprocess_rollout_state_fn(z + dt_j * closed_loop_backup_dynamics(z, system))
+
+    jac_step = jax.jacfwd(step_map)
+    if seed is not None and not discrete:
+        raise ValueError("a sensitivity seed needs sensitivity_propagation='discrete'")
 
     one_j = jnp.array(1.0, dtype=x0.dtype)
     eps_j = jnp.array(1e-12, dtype=x0.dtype)
@@ -156,10 +167,14 @@ def rollout_backup_flow_and_sensitivity_with_info(
             f_pi, j_pi = system.analytic_closed_loop_and_jacobian_fn(x)
         else:
             f_pi = closed_loop_backup_dynamics(x, system)
-            j_pi = jac_backup(x)
+            # the continuous-time Jacobian is only needed by the "expm" propagation
+            j_pi = None if discrete else jac_backup(x)
         x_next = system.postprocess_rollout_state_fn(x + dt_j * f_pi)
 
-        q_pred = jac_step(x) @ q if discrete else propagate_q(q, j_pi)
+        if discrete and seed is not None:
+            q_pred = jax.vmap(lambda v: jax.jvp(step_map, (x,), (v,))[1], in_axes=1, out_axes=1)(q)
+        else:
+            q_pred = jac_step(x) @ q if discrete else propagate_q(q, j_pi)
         step_max_abs_q = jnp.max(jnp.abs(q_pred))
         max_abs_q_next = jnp.maximum(max_abs_q, step_max_abs_q)
         if clip_enabled:
@@ -171,7 +186,7 @@ def rollout_backup_flow_and_sensitivity_with_info(
 
         return (x_next, q_next, max_abs_q_next, q_saturated_next), (x_next, q_next)
 
-    q0 = jnp.eye(system.state_dim, dtype=x0.dtype)
+    q0 = jnp.eye(system.state_dim, dtype=x0.dtype) if seed is None else jnp.asarray(seed, dtype=x0.dtype)
     q0_abs = jnp.max(jnp.abs(q0))
     q_saturated0 = jnp.asarray((q0_abs >= clip_j) if clip_enabled else False, dtype=jnp.bool_)
     (_, _, max_abs_q_final, q_saturated_final), (xs_tail, qs_tail) = jax.lax.scan(
@@ -192,8 +207,15 @@ def build_discretized_backup_cbf_rows_with_info(
     system: BCBFSystem,
 ) -> Tuple[jax.Array, jax.Array, Dict[str, jax.Array]]:
     """Build A u <= b from discretized backup-CBF constraints with diagnostics."""
-    xs, qs, rollout_diag = rollout_backup_flow_and_sensitivity_with_info(x, cfg, system)
     f0, g0 = system.control_affine_terms_fn(x)
+    # "reduced" sensitivities: propagate Q @ [f0, g0] directly (see the rollout docstring). With the
+    # optional Frobenius clip the diagnostics then refer to these columns rather than to Q.
+    reduced = bool(getattr(cfg, "reduced_sensitivity", False))
+    if reduced:
+        seed = jnp.concatenate([f0[:, None], g0], axis=1)
+        xs, ms, rollout_diag = rollout_backup_flow_and_sensitivity_with_info(x, cfg, system, seed=seed)
+    else:
+        xs, qs, rollout_diag = rollout_backup_flow_and_sensitivity_with_info(x, cfg, system)
     # Optional per-constraint class-K gains / relative-time flags (tuples over the safe-set
     # rows); configs that do not define them get the uniform rows exactly as before.
     alpha_vec = getattr(cfg, "alpha_per_constraint", None)
@@ -201,8 +223,11 @@ def build_discretized_backup_cbf_rows_with_info(
 
     def per_node_rows(xi, qi):
         h_c, dh_c = system.safe_set_values_and_grads_fn(xi)
-        qi_g0 = qi @ g0
-        qi_f0 = qi @ f0
+        if reduced:
+            qi_f0, qi_g0 = qi[:, 0], qi[:, 1:]
+        else:
+            qi_g0 = qi @ g0
+            qi_f0 = qi @ f0
         a = -(dh_c @ qi_g0)
         f_pi_i = closed_loop_backup_dynamics(xi, system)
         if rt_vec is None:
@@ -214,15 +239,18 @@ def build_discretized_backup_cbf_rows_with_info(
         b = alpha * h_c + corr
         return a, b
 
-    a_seq, b_seq = jax.vmap(per_node_rows, in_axes=(0, 0))(xs, qs)
+    a_seq, b_seq = jax.vmap(per_node_rows, in_axes=(0, 0))(xs, ms if reduced else qs)
     a_rows = a_seq.reshape((-1, system.action_dim))
     b_rows = b_seq.reshape((-1,))
 
     x_t = xs[-1]
-    q_t = qs[-1]
     h_s, dh_s = system.base_set_values_and_grads_fn(x_t)
-    q_t_g0 = q_t @ g0
-    q_t_f0 = q_t @ f0
+    if reduced:
+        q_t_f0, q_t_g0 = ms[-1][:, 0], ms[-1][:, 1:]
+    else:
+        q_t = qs[-1]
+        q_t_g0 = q_t @ g0
+        q_t_f0 = q_t @ f0
     a_term = -(dh_s @ q_t_g0)
     b_term = cfg.base_alpha * h_s + dh_s @ q_t_f0
     a_rows = jnp.concatenate([a_rows, a_term], axis=0)
@@ -320,6 +348,25 @@ def _default_cbf_finite_info(
     }
 
 
+@jax.custom_vjp
+def _finite_cotangent(x: jax.Array) -> jax.Array:
+    """Identity whose backward pass replaces non-finite cotangents by zero.
+
+    When the QP solve of one sample fails (non-finite iterate), the layer outputs the backup action
+    for it, but the solver's backward pass still returns NaN for that sample even though its
+    cotangent is zero. Without this guard a single failed sample makes the whole batch-mean actor
+    gradient NaN, and the trainer's gradient sanitiser then zeroes that entire update: with a
+    failure rate p and batch size B only a fraction (1 - p)^B of the actor updates would act.
+    """
+    return x
+
+
+_finite_cotangent.defvjp(
+    lambda x: (x, None),
+    lambda _, g: (jnp.nan_to_num(g, nan=0.0, posinf=0.0, neginf=0.0),),
+)
+
+
 def solve_backup_cbf_qp_single_with_info(
     x: jax.Array,
     u_ref: jax.Array,
@@ -327,8 +374,30 @@ def solve_backup_cbf_qp_single_with_info(
     system: BCBFSystem,
 ) -> Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]:
     """Solve one backup-CBF QP and report solver usage + finiteness diagnostics."""
+    x = system.sanitize_solve_state_fn(x)
+    a_rows, b_rows, cbf_diag = build_discretized_backup_cbf_rows_with_info(x, cfg, system)
+    return solve_backup_cbf_qp_from_rows_single_with_info(x, u_ref, a_rows, b_rows, cbf_diag, cfg, system)
+
+
+def solve_backup_cbf_qp_from_rows_single_with_info(
+    x: jax.Array,
+    u_ref: jax.Array,
+    a_rows: jax.Array,
+    b_rows: jax.Array,
+    cbf_diag: Dict[str, jax.Array],
+    cfg: Any,
+    system: BCBFSystem,
+) -> Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]:
+    """The QP stage for rows ``A u <= b`` built earlier for the same state ``x``.
+
+    The rows depend on the state only (not on ``u_ref``), so they can be built once and
+    reused, e.g. stored with a transition and reused by every SAC update that samples it.
+    ``cbf_diag`` is the diagnostics dict of ``build_discretized_backup_cbf_rows_with_info``
+    (``max_abs_q``, ``q_saturated``, ``max_abs_b``).
+    """
     m = system.action_dim
     x = system.sanitize_solve_state_fn(x)
+    u_ref = _finite_cotangent(u_ref)
     u_ref = jnp.nan_to_num(u_ref, nan=0.0, posinf=0.0, neginf=0.0)
     u_ref = jnp.clip(
         u_ref,
@@ -341,7 +410,6 @@ def solve_backup_cbf_qp_single_with_info(
     fallback_slack = jnp.zeros((), dtype=x.dtype)
     fallback_z = jnp.concatenate([fallback_u, fallback_slack[None]], axis=0)
 
-    a_rows, b_rows, cbf_diag = build_discretized_backup_cbf_rows_with_info(x, cfg, system)
     max_abs_q = cbf_diag["max_abs_q"]
     q_saturated = cbf_diag["q_saturated"]
     max_abs_b = cbf_diag["max_abs_b"]

@@ -25,7 +25,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import pickle
 import sys
 import time
 
@@ -71,10 +70,11 @@ sys.path.insert(0, str(REPO))
 from ps2rl.cil import quadrotor_landing_backup_cbf as L  # noqa: E402
 from ps2rl.envs.quadrotor_env import QuadrotorEnvConfig, build_quadrotor_env  # noqa: E402
 from ps2rl.evaluation import landing_filter_reach as R  # noqa: E402
+from ps2rl.evaluation.landing_phase2_policy_eval import (  # noqa: E402
+    evaluation_starts, load_landing_run as load_run, make_mean_policy as make_policy, rollout_policy as rollout)
 from ps2rl.evaluation.landing_phase2_run import parse_field_overrides, resolve_repo_path  # noqa: E402
 from ps2rl.phase2_ps2.landing_ps2_entry import DEFAULT_FILTER  # noqa: E402
 from ps2rl.plotting import landing_phase2_plots as lp  # noqa: E402
-from ps2rl.utils.policy import ActorConfig, actor_mean_action  # noqa: E402
 
 VARIANTS = ("tracker", "tracker+filter", "ps2")
 PLOT_KEY = {"tracker": "unfiltered", "tracker+filter": "filtered", "ps2": "ps2"}
@@ -91,57 +91,6 @@ def _jd(o):
 
 def _f(v, fmt=".3f"):
     return "–" if v is None else format(v, fmt)
-
-
-def load_run(run_dir: Path, weights: str) -> dict:
-    cfg = json.loads((run_dir / "configs.json").read_text())
-    meta = cfg.get("landing_meta") or json.loads((run_dir / "landing_meta.json").read_text())
-    env = dict(cfg["env"])
-    env["reference_path"] = str(resolve_repo_path(env["reference_path"], repo_root=REPO, run_dir=run_dir))
-    lib = env.get("init_state_library", "")
-    if lib:
-        try:
-            env["init_state_library"] = str(resolve_repo_path(lib, repo_root=REPO, run_dir=run_dir))
-        except FileNotFoundError:
-            env["init_state_library"] = str(run_dir / "init_states.npz")
-    env_cfg = QuadrotorEnvConfig(**{k: v for k, v in env.items() if k in QuadrotorEnvConfig.__dataclass_fields__})
-    with open(run_dir / f"{weights}_weights.pkl", "rb") as fh:
-        params = pickle.load(fh)["actor_params"]
-    return {"dir": run_dir, "env_cfg": env_cfg, "meta": meta, "hidden": int(cfg["sac"]["hidden_size"]), "params": params,
-            "summary": json.loads((run_dir / "summary.json").read_text()) if (run_dir / "summary.json").exists() else {}}
-
-
-def make_policy(run: dict, cbf_cfg, obs_dim: int):
-    actor_cfg = ActorConfig(obs_dim=obs_dim, action_dim=4, hidden_sizes=(run["hidden"], run["hidden"]))
-    scale = jnp.asarray(cbf_cfg.action_scale, dtype=jnp.float32)
-    lo, hi = jnp.asarray(cbf_cfg.action_low, dtype=jnp.float32), jnp.asarray(cbf_cfg.action_high, dtype=jnp.float32)
-    params = jax.tree_util.tree_map(lambda a: jnp.asarray(a, dtype=jnp.float32), run["params"])
-    return jax.jit(lambda obs: actor_mean_action(params, obs, scale, actor_cfg, action_low=lo, action_high=hi))
-
-
-def rollout(policy, observe, cfg, projector, x0: np.ndarray, steps: int) -> dict:
-    step_b = jax.jit(jax.vmap(lambda x, u: L.landing_step(x, u, cfg)))
-    x = jnp.asarray(x0, dtype=jnp.float32)
-    n = x.shape[0]
-    xs, us, raws, slacks, used, lams = [x], [], [], [], [], []
-    for k in range(steps):
-        obs = observe(x, jnp.full((n,), k, dtype=jnp.int32))
-        raw = policy(obs)
-        if projector is None:
-            u, s, ok, lam = raw, jnp.zeros((n,)), jnp.ones((n,), dtype=bool), jnp.ones((n,))
-        else:
-            u, s, ok, info = projector.solve_batch_with_info(x, raw)
-            lam = info.get("safeguard_lambda", jnp.ones((n,)))
-        x = step_b(x, jnp.asarray(u, dtype=jnp.float32))
-        xs.append(x)
-        us.append(u)
-        raws.append(raw)
-        slacks.append(s)
-        used.append(ok)
-        lams.append(lam)
-    st = lambda a: np.stack([np.asarray(v, dtype=np.float64) for v in a], axis=1)  # noqa: E731
-    return {"traj": st(xs), "u": st(us), "u_raw": st(raws), "slack": st(slacks), "qp_used": st(used).astype(bool),
-            "safeguard_lambda": st(lams)}
 
 
 def main():
@@ -184,9 +133,7 @@ def main():
     # starts: the reference start (if admissible) + library starts
     lib_path = env_cfg.init_state_library
     lib = np.load(lib_path)["states"] if lib_path else np.zeros((0, 10), np.float32)
-    x_ref0 = ref_x[0:1].astype(np.float32)
-    ok0 = bool(np.asarray(L.safe_value(jnp.asarray(x_ref0), cfg))[0] >= 0) and bool(np.asarray(rec_fn(jnp.asarray(x_ref0))[0])[0])
-    x0 = np.concatenate([x_ref0, lib[: args.n_starts - 1]] if ok0 else [lib[: args.n_starts]], axis=0).astype(np.float32)
+    x0, ok0 = evaluation_starts(ref_x, lib, args.n_starts, cfg, rec_fn)
     rc = np.asarray(rec_fn(jnp.asarray(x0))[0])
     print(f"[eval] {title_name}: {len(x0)} starts ({'reference start + ' if ok0 else ''}library), all in C_N: {bool(rc.all())}; "
           f"{steps} steps; filter {filt}; weights {args.weights}", flush=True)

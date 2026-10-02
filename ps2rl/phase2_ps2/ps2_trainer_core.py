@@ -27,6 +27,8 @@ from ps2rl.utils.replay_buffer import (
 )
 
 PS2_REPLAY_FIELDS: Tuple[str, ...] = ("obs", "act", "rew", "next_obs", "done")
+# log-probabilities are clipped to +-LOGP_CLIP wherever they enter a loss
+LOGP_CLIP = 20.0
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,24 @@ class SACConfig:
     target_entropy: float = -2.0
     max_grad_norm: float = 5.0
     q_clip_abs: float = 1e3
+    # The critics learn the return of reward_shift + reward_scale * r (logged returns keep the
+    # env's units). Adam moves a critic's output at a rate set by the learning rate, not by the
+    # loss, so returns in the thousands are fitted slowly; a reward range of order one is not.
+    # With early termination a shift that makes rewards non-negative also makes ending worst.
+    reward_scale: float = 1.0
+    reward_shift: float = 0.0
+    # If > 0 (for rewards <= 0, i.e. negative costs): the critics learn exp(r / temperature) in
+    # (0, 1] instead; reward_scale / reward_shift are then not used. An error-free step is worth 1
+    # and a cost of one temperature 1/e, so most of the range resolves small costs.
+    reward_exp_temperature: float = 0.0
+    # Bounds of the critic targets (None: +-q_clip_abs). With bounded rewards the return is
+    # bounded, so targets outside the bound are estimation error and are cut off.
+    q_target_min: float | None = None
+    q_target_max: float | None = None
+    # Also clip the critics' predictions to +-q_clip_abs (True: the original behaviour). A
+    # prediction beyond the clip then has zero gradient, so a critic that overshoots stays there
+    # and the actor gets no gradient either; False clips the targets only.
+    q_clip_predictions: bool = True
 
     hidden_size: int = 128
 
@@ -72,9 +92,16 @@ class SACConfig:
     # Stop collecting after this many seconds of training (0 = no limit); the run then finishes
     # normally (final evaluation, checkpoints) at the step it reached.
     wall_time_budget_sec: float = 0.0
+    # Store each visited state's QP rows in the replay buffer and let the actor update reuse them
+    # (needs a layer whose binding provides rows_fn / project_from_rows_with_info_fn). The rows
+    # depend on the state only, so this is exact; it removes the backup rollout from every update.
+    # Critic-target projections (project_target_actions) are not cached and stay full projections.
+    cache_cbf_rows: bool = False
 
 
-def ps2_replay_init(capacity: int, obs_dim: int, act_dim: int) -> JaxReplayState:
+def ps2_replay_init(
+    capacity: int, obs_dim: int, act_dim: int, extra_fields: Dict[str, Tuple[int, ...]] | None = None
+) -> JaxReplayState:
     return jax_replay_init(
         capacity,
         {
@@ -83,8 +110,17 @@ def ps2_replay_init(capacity: int, obs_dim: int, act_dim: int) -> JaxReplayState
             "rew": (),
             "next_obs": (obs_dim,),
             "done": (),
+            **(extra_fields or {}),
         },
     )
+
+
+def cbf_row_cache_enabled(sac_cfg: Any, proj: BCBFProjectionOps) -> bool:
+    """Row caching is on iff requested, the layer supports it and actor actions are projected."""
+    want = bool(getattr(sac_cfg, "cache_cbf_rows", False)) and bool(sac_cfg.use_projection and sac_cfg.project_actor_actions)
+    if want and (proj.rows is None or proj.project_from_rows_with_info is None):
+        raise ValueError("cache_cbf_rows=True needs a layer with rows_fn and project_from_rows_with_info_fn")
+    return want
 
 
 def validate_action_scale(name: str, actual: np.ndarray | jax.Array, expected: np.ndarray, atol: float = 1e-6) -> None:
@@ -220,12 +256,17 @@ def make_projection_ops(
     project_with_info_fn: Callable[..., Any],
     project_fn: Callable[..., Any],
     backup_policy_fn: Callable[..., Any],
+    rows_fn: Callable[..., Any] | None = None,
+    project_from_rows_with_info_fn: Callable[..., Any] | None = None,
 ) -> BCBFProjectionOps:
     """Assemble the trainer-facing projection ops from a system's backup-CBF QP callables."""
     return BCBFProjectionOps(
         project_with_info=lambda obs_phys, act: project_with_info_fn(obs_phys, act, cbf_cfg, runtime=backup_runtime),
         project=lambda obs_phys, act: project_fn(obs_phys, act, cbf_cfg, runtime=backup_runtime),
         backup_policy=lambda obs_phys: backup_policy_fn(obs_phys, cbf_cfg, runtime=backup_runtime),
+        rows=None if rows_fn is None else (lambda obs_phys: rows_fn(obs_phys, cbf_cfg, runtime=backup_runtime)),
+        project_from_rows_with_info=None if project_from_rows_with_info_fn is None else (
+            lambda obs_phys, act, rows: project_from_rows_with_info_fn(obs_phys, act, rows, cbf_cfg, runtime=backup_runtime)),
     )
 
 
@@ -239,6 +280,10 @@ class PS2SystemBinding(NamedTuple):
     backup_policy_fn: Callable[..., Any]
     action_bounds_fn: Callable[[jax.Array, Any], Tuple[jax.Array, jax.Array]]
     disable_backup_fallback_fn: Callable[[Any], bool]
+    # optional row caching (see SACConfig.cache_cbf_rows)
+    rows_fn: Callable[..., Any] | None = None
+    project_from_rows_with_info_fn: Callable[..., Any] | None = None
+    row_shapes_fn: Callable[[Any], Dict[str, Tuple[int, ...]]] | None = None
 
     def projection_ops(self, cbf_cfg: Any, backup_runtime: Any) -> BCBFProjectionOps:
         return make_projection_ops(
@@ -247,6 +292,8 @@ class PS2SystemBinding(NamedTuple):
             project_with_info_fn=self.project_with_info_fn,
             project_fn=self.project_fn,
             backup_policy_fn=self.backup_policy_fn,
+            rows_fn=self.rows_fn,
+            project_from_rows_with_info_fn=self.project_from_rows_with_info_fn,
         )
 
 
@@ -281,6 +328,27 @@ def build_ps2_update_fn(
             return jnp.clip(x, -q_clip_abs, q_clip_abs)
         return x
 
+    q_target_lo = getattr(sac_cfg, "q_target_min", None)
+    q_target_hi = getattr(sac_cfg, "q_target_max", None)
+    clip_predictions = bool(getattr(sac_cfg, "q_clip_predictions", True))
+    reward_scale = float(getattr(sac_cfg, "reward_scale", 1.0))
+    reward_shift = float(getattr(sac_cfg, "reward_shift", 0.0))
+    reward_exp_temperature = float(getattr(sac_cfg, "reward_exp_temperature", 0.0))
+
+    def _critic_reward(rew: jax.Array) -> jax.Array:
+        if reward_exp_temperature > 0.0:
+            return jnp.exp(jnp.minimum(rew, 0.0) / reward_exp_temperature)
+        return reward_shift + reward_scale * rew
+
+    def _clip_target(x: jax.Array) -> jax.Array:
+        x = _maybe_clip_q(x)
+        if q_target_lo is not None or q_target_hi is not None:
+            x = jnp.clip(x, q_target_lo, q_target_hi)
+        return x
+
+    def _clip_prediction(x: jax.Array) -> jax.Array:
+        return _maybe_clip_q(x) if clip_predictions else x
+
     def tree_l2_norm(tree) -> jax.Array:
         leaves = jax.tree_util.tree_leaves(tree)
         sq = jnp.array(0.0, dtype=jnp.float32)
@@ -308,10 +376,15 @@ def build_ps2_update_fn(
             default_qp_finite_info(act_b.shape[0]),
         )
 
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
+
     def maybe_project_actor(
-        obs_b: jax.Array, act_b: jax.Array
+        obs_b: jax.Array, act_b: jax.Array, batch: Dict[str, jax.Array] | None = None
     ) -> Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]:
         if sac_cfg.use_projection and sac_cfg.project_actor_actions:
+            if cache_rows and batch is not None:
+                rows = {k: v for k, v in batch.items() if k not in PS2_REPLAY_FIELDS}
+                return proj.project_from_rows_with_info(physical_obs(obs_b), act_b, rows)
             return proj.project_with_info(physical_obs(obs_b), act_b)
         return (
             act_b,
@@ -364,7 +437,7 @@ def build_ps2_update_fn(
             next_raw = jnp.nan_to_num(next_raw, nan=0.0, posinf=0.0, neginf=0.0)
             next_raw = jnp.clip(next_raw, action_low, action_high)
             next_logp = jnp.nan_to_num(next_logp, nan=0.0, posinf=10.0, neginf=-10.0)
-            next_logp = jnp.clip(next_logp, -20.0, 20.0)
+            next_logp = jnp.clip(next_logp, -LOGP_CLIP, LOGP_CLIP)
             next_safe, _, target_use_solver, target_finite_info = maybe_project_target(batch["next_obs"], next_raw)
             next_safe, target_bad_rate = sanitize_action(next_safe, batch["next_obs"])
             target_use_solver_rate = jnp.mean(target_use_solver.astype(jnp.float32))
@@ -394,17 +467,17 @@ def build_ps2_update_fn(
             target_q2 = q_value(state["target_q2_params"], batch["next_obs"], next_safe)
             target_q = jnp.minimum(target_q1, target_q2) - alpha * next_logp
             target_q = _q_nan_to_num(target_q)
-            target_q = _maybe_clip_q(target_q)
-            backup = batch["rew"] + sac_cfg.gamma * (1.0 - batch["done"]) * target_q
+            target_q = _clip_target(target_q)
+            backup = _critic_reward(batch["rew"]) + sac_cfg.gamma * (1.0 - batch["done"]) * target_q
             backup = _q_nan_to_num(backup)
-            backup = _maybe_clip_q(backup)
+            backup = _clip_target(backup)
 
             q1_pred = q_value(q1_params, batch["obs"], batch["act"])
             q2_pred = q_value(q2_params, batch["obs"], batch["act"])
             q1_pred = _q_nan_to_num(q1_pred)
             q2_pred = _q_nan_to_num(q2_pred)
-            q1_pred = _maybe_clip_q(q1_pred)
-            q2_pred = _maybe_clip_q(q2_pred)
+            q1_pred = _clip_prediction(q1_pred)
+            q2_pred = _clip_prediction(q2_pred)
             q1_loss = jnp.mean((q1_pred - backup) ** 2)
             q2_loss = jnp.mean((q2_pred - backup) ** 2)
             aux["q_backup_mean"] = jnp.mean(backup)
@@ -433,8 +506,8 @@ def build_ps2_update_fn(
             raw_action = jnp.nan_to_num(raw_action, nan=0.0, posinf=0.0, neginf=0.0)
             raw_action = jnp.clip(raw_action, action_low, action_high)
             logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
-            logp = jnp.clip(logp, -20.0, 20.0)
-            safe_action, slack, actor_use_solver, actor_finite_info = maybe_project_actor(batch["obs"], raw_action)
+            logp = jnp.clip(logp, -LOGP_CLIP, LOGP_CLIP)
+            safe_action, slack, actor_use_solver, actor_finite_info = maybe_project_actor(batch["obs"], raw_action, batch)
             safe_action, actor_bad_rate = sanitize_action(safe_action, batch["obs"])
             actor_use_solver_rate = jnp.mean(actor_use_solver.astype(jnp.float32))
             actor_fallback_rate = 1.0 - actor_use_solver_rate
@@ -449,7 +522,7 @@ def build_ps2_update_fn(
             q2_pi = q_value(q2_params, batch["obs"], safe_action)
             q_pi = jnp.minimum(q1_pi, q2_pi)
             q_pi = _q_nan_to_num(q_pi)
-            q_pi = _maybe_clip_q(q_pi)
+            q_pi = _clip_prediction(q_pi)
             loss = jnp.mean(alpha * logp - q_pi)
             aux = {
                 "logp": logp,
@@ -647,6 +720,8 @@ def build_ps2_batched_action_fn(
     phys_dim: int,
     disable_backup_fallback: bool = False,
 ):
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
+
     @jax.jit
     def sample_action_batch(actor_params: Dict[str, Any], obs_b: jax.Array, key: jax.Array):
         raw, logp, _ = sample_actor_action(
@@ -661,9 +736,14 @@ def build_ps2_batched_action_fn(
         raw = jnp.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0)
         raw = jnp.clip(raw, action_low, action_high)
         logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
-        logp = jnp.clip(logp, -20.0, 20.0)
+        logp = jnp.clip(logp, -LOGP_CLIP, LOGP_CLIP)
 
-        if sac_cfg.use_projection and sac_cfg.project_actor_actions:
+        rows = None
+        if cache_rows:
+            # build the rows once: used for this projection and stored with the transition
+            rows = proj.rows(obs_b[..., :phys_dim])
+            safe, slack, use_solver, _ = proj.project_from_rows_with_info(obs_b[..., :phys_dim], raw, rows)
+        elif sac_cfg.use_projection and sac_cfg.project_actor_actions:
             safe, slack, use_solver, _ = proj.project_with_info(obs_b[..., :phys_dim], raw)
         else:
             safe = raw
@@ -676,6 +756,8 @@ def build_ps2_batched_action_fn(
             safe = jnp.where(finite_mask, safe, fallback)
         safe = jnp.nan_to_num(safe, nan=0.0, posinf=0.0, neginf=0.0)
         safe = jnp.clip(safe, action_low, action_high)
+        if cache_rows:
+            return safe, raw, logp, slack, use_solver, rows
         return safe, raw, logp, slack, use_solver
 
     return sample_action_batch
@@ -786,6 +868,7 @@ def build_ps2_one_vec_step(
     num_envs = int(sac_cfg.num_envs)
     batch_size_i32 = jnp.int32(sac_cfg.batch_size)
     update_after_i32 = jnp.int32(sac_cfg.update_after)
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
     update_every_i32 = jnp.int32(max(1, sac_cfg.update_every))
     num_envs_i32 = jnp.int32(num_envs)
     max_due_per_vec_step = max(1, int(np.ceil(float(num_envs) / float(max(1, sac_cfg.update_every)))))
@@ -817,7 +900,11 @@ def build_ps2_one_vec_step(
             random_safe = jnp.nan_to_num(random_safe, nan=0.0, posinf=0.0, neginf=0.0)
             random_safe = jnp.clip(random_safe, action_low, action_high)
 
-        policy_safe, _, _, _, _ = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+        if cache_rows:
+            policy_safe, _, _, _, _, rows_i = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+        else:
+            policy_safe, _, _, _, _ = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+            rows_i = {}
         use_random = global_step_i < jnp.int32(sac_cfg.start_steps)
         act_i = jnp.where(use_random, random_safe, policy_safe)
 
@@ -836,6 +923,7 @@ def build_ps2_one_vec_step(
                 "rew": rew_i.astype(jnp.float32),
                 "next_obs": replay_next_obs_i.astype(jnp.float32),
                 "done": done_i.astype(jnp.float32),
+                **{k: v.astype(jnp.float32) for k, v in rows_i.items()},
             },
         )
         obs_i = next_obs_out_i
@@ -869,7 +957,7 @@ def build_ps2_one_vec_step(
                 def grad_body(_, grad_inner):
                     state_g, replay_g, key_g, updates_g, step_metrics_g = grad_inner
                     key_g, key_sample, key_upd = jax.random.split(key_g, 3)
-                    batch = jax_replay_sample(replay_g, sac_cfg.batch_size, key_sample, PS2_REPLAY_FIELDS)
+                    batch = jax_replay_sample(replay_g, sac_cfg.batch_size, key_sample, tuple(replay_g.data.keys()))
                     state_g, upd_metrics, _ = update_fn(state_g, batch, key_upd)
                     updates_g = updates_g + jnp.int32(1)
                     step_metrics_g = dict(step_metrics_g)
@@ -936,6 +1024,7 @@ __all__ = [
     "build_ps2_batched_action_fn",
     "build_ps2_one_vec_step",
     "build_ps2_update_fn",
+    "cbf_row_cache_enabled",
     "default_qp_finite_info",
     "init_sac_state",
     "make_ps2_chunk_fn_getter",

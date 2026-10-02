@@ -89,6 +89,12 @@ class QuadrotorEnvConfig:
     # Safety constraints.
     z_max: float = 3.0
     terminate_on_violation: bool = False
+    # Tracking-failure termination (0 = off): the episode ends when |p - p_ref| exceeds this [m].
+    # It keeps a policy that cannot fly yet near the reference instead of collecting transitions
+    # tens of metres away, where the reward is saturated. With reward_mode="landing_v2" the
+    # reported return of such an episode is completed with the reward floor for the steps not
+    # flown, so reported returns stay comparable with full-length episodes.
+    terminate_pos_error: float = 0.0
 
     # Optional fixed world-frame translational acceleration disturbance.
     # This is intentionally deterministic; no domain randomization is used.
@@ -231,6 +237,9 @@ class QuadrotorEnvConfig:
             v = float(getattr(self, f"landing_reward_{name}"))
             if (not isfinite(v)) or v <= 0.0:
                 raise ValueError(f"landing_reward_{name} must be positive and finite, got {v}")
+        tpe = float(self.terminate_pos_error)
+        if (not isfinite(tpe)) or tpe < 0.0:
+            raise ValueError(f"terminate_pos_error must be finite and >= 0 (0 = off), got {self.terminate_pos_error}")
         safety_mode = str(self.safety_mode).strip().lower()
         if safety_mode not in ("ceiling", "landing"):
             raise ValueError(f"safety_mode must be 'ceiling' or 'landing', got {self.safety_mode!r}")
@@ -351,6 +360,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
 
     max_steps_i32 = jnp.int32(cfg.max_steps)
     terminate_on_violation = jnp.asarray(cfg.terminate_on_violation, dtype=jnp.bool_)
+    terminate_pos_error = float(cfg.terminate_pos_error)
 
     z_max = jnp.asarray(cfg.z_max, dtype=dtype)
 
@@ -596,6 +606,15 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
             reward_ref_omega,
         )
 
+        if terminate_pos_error > 0.0:
+            lost = pos_err_norm > jnp.asarray(terminate_pos_error, dtype=dtype)
+            done = done | lost
+            # report the episode as if the remaining steps had been flown at the reward floor
+            unflown = (max_steps_i32 - next_steps).astype(dtype) * (lost & (~done_time)).astype(dtype)
+            return_fill = -unflown * lr["floor"] if cfg.reward_mode == "landing_v2" else jnp.asarray(0.0, dtype=dtype)
+        else:
+            return_fill = jnp.asarray(0.0, dtype=dtype)
+
         ep_return = state.ep_return + reward
         ep_len = state.ep_len + jnp.int32(1)
         ep_safe_sum = state.ep_safe_sum + safe.astype(dtype)
@@ -607,7 +626,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         done_f = done.astype(dtype)
         ep_len_f = jnp.maximum(ep_len.astype(dtype), jnp.asarray(1.0, dtype=dtype))
 
-        completed_return = done_f * ep_return
+        completed_return = done_f * (ep_return + return_fill)
         completed_len = done_f * ep_len.astype(dtype)
         completed_safe_rate = done_f * (ep_safe_sum / ep_len_f)
         completed_pos_error_norm = done_f * (ep_pos_err_sum / ep_len_f)

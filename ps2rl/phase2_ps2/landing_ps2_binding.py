@@ -47,6 +47,9 @@ LANDING_BINDING = PS2SystemBinding(
     backup_policy_fn=lbcbf.backup_policy_batch,
     action_bounds_fn=_action_bounds,
     disable_backup_fallback_fn=_disable_backup_fallback,
+    rows_fn=lbcbf.backup_cbf_rows_batch,
+    project_from_rows_with_info_fn=lbcbf.solve_backup_cbf_qp_from_rows_batch_with_info,
+    row_shapes_fn=lbcbf.backup_cbf_row_shapes,
 )
 
 

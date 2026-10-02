@@ -23,3 +23,7 @@ class BCBFProjectionOps(NamedTuple):
     project_with_info: Callable[[jax.Array, jax.Array], Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]]
     project: Callable[[jax.Array, jax.Array], Tuple[jax.Array, jax.Array]]
     backup_policy: Callable[[jax.Array], jax.Array]
+    # Optional row caching (None if the layer does not support it): rows(obs_phys) -> dict of
+    # per-state QP rows; project_from_rows_with_info(obs_phys, act, rows) -> as project_with_info.
+    rows: Callable[[jax.Array], Dict[str, jax.Array]] | None = None
+    project_from_rows_with_info: Callable[..., Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]] | None = None

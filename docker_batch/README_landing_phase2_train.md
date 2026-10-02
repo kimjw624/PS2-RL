@@ -23,14 +23,15 @@ The earlier `skid`, `nearside` and `cornercut` references are still in `ps2rl/en
 
 | stage | what | output |
 |---|---|---|
-| B | **tracker** per reference: SAC without the filter, 8M steps. These are the colleague's landing-tracker settings (`outputs/landing/land_v2_*`): landing reward v2, 32 envs, start perturbation ±0.3 m / ±0.5 m/s / ±10°. | `outputs/landing_phase2/<ref>_tracker/` |
-| C | **PS2** per reference: SAC through the landing CIL, warm-started from the tracker. Uses the paper's PS2 settings (no random warm-up, actor lr 5e-5, projected critic targets), batched for the GPU: 256 envs, an update of 512 samples every 64 env steps. The SAC updates project with the QP only; executed actions and evaluation use QP + safeguard. Stops at 3M steps or after `PS2_HOURS` (3 h), whichever comes first. | `outputs/landing_phase2/<ref>_ps2/` |
+| B | **trackers**: SAC without the filter, one run per reference and per seed in `TRACKER_SEEDS` | `outputs/landing_phase2/<ref>_tracker_s<seed>/` |
+| S | **selection**: every checkpoint (best and final of every seed) is flown alone from the same 64 starts; the one with the smallest mean position error becomes the reference's tracker | `outputs/landing_phase2/<ref>_tracker/` (+ `selection.json`) |
+| C | **PS2**: SAC through the landing CIL, warm-started from the selected tracker. It stops at `PS2_STEPS` or after `PS2_HOURS`, whichever comes first | `outputs/landing_phase2/<ref>_ps2/` |
 | D | **evaluation** from the same 32 starts (the reference start plus reset-library starts): tracker alone, tracker + filter at deployment, PS2 | `outputs/landing_phase2/eval_<ref>/` |
-| E | report | `outputs/landing_phase2/REPORT.md` |
+| E | report, including the tracker selection table | `outputs/landing_phase2/REPORT.md` |
 
-- **Filter:** backup `floor_rec10_td3_seed0`, α = 10, α_floor = 20, `control_weights=1/0.1/0.1/1`, discrete sensitivities and the discrete-time safeguard. The QP is solved in float32. In float64 the networks would become float64 too, which is slow on consumer GPUs. Measured on these references, the float32 QP falls back to the backup action on 0.2–3 % of steps; that is safe, but those samples carry no gradient.
+- **Filter:** backup `floor_rec10_td3_seed0`, α = 10, α_floor = 20, `control_weights=1/0.1/0.1/1`, discrete sensitivities and the discrete-time safeguard. The QP is solved in float32; where it fails, the layer falls back to the backup action (safe, no gradient).
 - **Starts:** each run keeps the start perturbations that lie inside the safe set (margin 2 cm) and are backup-recoverable. These go into `init_states.npz`, and every reset draws from it. PS2 reuses the tracker's library, so both policies see the same starts.
-- **Environment:** the repo's quadrotor env with `reward_mode="landing_v2"`, which is the colleague's normalised Charbonnier reward. I checked it against his env: identical rewards on 64 random transitions. It also uses `safety_mode="landing"`, so the logged `hard_deck_*` margins are the cone/floor margins.
+- **Environment:** the repo's quadrotor env with `reward_mode="landing_v2"` (the colleague's normalised Charbonnier cost, floored at −50 per step) and `safety_mode="landing"`, so the logged `hard_deck_*` margins are the cone/floor margins. Logged returns are always in this reward's units, whatever the critics learn.
 
 ## Commands
 
@@ -40,51 +41,111 @@ docker exec -d px4sitl bash -c "bash ~/ws_shared/PS2-RL/docker_batch/run_landing
 docker exec -it px4sitl bash -c "tail -F ~/ws_shared/PS2-RL/outputs/landing_phase2.out"
 ```
 
-The log streams every run's lines with a `[run]` prefix. Each progress line shows steps/s, elapsed time and the ETA. The batch is resumable: re-running it skips finished runs and evaluations.
+Run a subset of stages with `-e STAGES="B S"` (e.g. `docker exec -d -e STAGES="B S" px4sitl bash -c "..."`). The batch is resumable: re-running it skips finished runs and evaluations.
 
-**Why the PS2 preset is batched.** The first GPU run used the paper's 32 envs and ran at about 20 steps/s per run, no faster than a CPU. The projection is latency-bound: each QP call runs sequential 100-step backup rollouts and QP iterations on tiny batches, so the GPU sits idle between small kernels.
-- The `ps2` preset keeps the number of QP calls per vector step and the samples-per-env-step ratio (8). It collects 8× the env steps per vector step, so the speed-up should be several-fold.
-- It also drops the safeguard from the update projections, saving 5 extra rollouts per call. On the 2-core CPU it already runs at 30 instead of 17 steps/s.
-- The old setting is still available as `--preset ps2_paper`.
+**Results of the first batch are kept, not overwritten.** They are moved aside as `<name>_old_<timestamp>`: the single-seed `<ref>_tracker` runs (old recipe; they take no part in the selection, so every PS2 run starts from the same kind of tracker), a PS2 run older than its tracker's selection, and an evaluation older than its PS2 run.
 
-**Duration.**
-- Six references, with three runs on the GPU at once.
-- **Trackers:** 8M steps each. The colleague's took about 21 min alone on his GPU; expect roughly 1–1.5 h for both waves.
-- **PS2:** much slower per step, because every env step and every update solves the filter QP with a 100-step backup rollout per sample. I measured about 17 steps/s on a 2-core CPU but could not time the RTX 4050. `PS2_HOURS=3` caps each run, so two waves take about 6 h.
-- **Total:** about 7–7.5 h.
-- **Adjusting:** check the first PS2 progress lines (steps/s, ETA). Raise `PS2_STEPS` if the GPU is fast. Shorten with `PS2_HOURS=2` or fewer references (`REFS=...`). If three parallel runs are slower in total than two (watch steps/s), set `MAX_PARALLEL=2`.
+## Watching the curves and stopping a run
 
-Knobs:
+While the batch runs it keeps `outputs/landing_phase2/training.html` up to date (every `CURVES_EVERY` = 30 s; the page reloads itself). `outputs` is on the shared volume, so open it on the host:
+
+```bash
+xdg-open ~/px4-ros-docker/ws_shared/PS2-RL/outputs/landing_phase2/training.html
+```
+
+- **Figures:** one per mode (`training_tracker.png`, `training_ps2.png`), a column per reference and a line per run. Top row: mean position error over an episode; bottom row: −return. Thick lines are evaluations (deterministic policy, full-length episodes), thin lines are training episodes.
+- **Table:** step, steps/s, time left, last and best evaluation error of every run, and the command that stops it.
+- **Stopping:** `touch outputs/landing_phase2/<run>/STOP` (host or container). The run finishes at its next chunk exactly as it would at the end: final evaluation, `final_weights.pkl`, `best_weights.pkl`, `summary.json`. The batch then starts the next run. The best weights are the evaluation with the highest return so far, so stopping late costs nothing.
+- **Without the batch:** `python scripts/plot_landing_training.py --root outputs/landing_phase2 --watch 30`.
+
+## Tracker recipe
+
+The first batch used the settings of the colleague's landing trackers (`--preset tracker_v1`). In those six runs, five lost their progress at least once and one never recovered. The logs show the same event each time: within about 1000 updates the critics' value of the policy's own action jumps from about −300 to the clip at +10000, although every reward is negative, and the policy follows it. Three things in the recipe make that possible and slow to undo:
+
+1. **Scale.** The reward reaches −50 per step, so returns are in the thousands. Adam changes a critic's output at a rate set by the learning rate, not by the error, so the critics lag for millions of steps and take about a million more to come back from an overshoot.
+2. **Unbounded targets.** The bootstrapped target may exceed any return the reward can produce, so an overestimate feeds itself.
+3. **Clipped predictions.** Past ±10000 the prediction's gradient is zero: a critic that gets there stays there, and the actor gets no gradient either.
+
+The `tracker` preset keeps the reward, network and data rates and changes this:
+
+| setting | `tracker_v1` | `tracker` |
+|---|---|---|
+| what the critics learn | r, in [−50, 0] | exp(r / 3), in (0, 1] (`--critic_reward exp`) |
+| critic targets | clipped at ±10000 | bounded by the reward's range / (1 − γ) |
+| critic predictions | clipped at ±10000 | not clipped |
+| temperature α | auto-tuned, floor 0.1 | fixed at the same ratio to the reward range |
+| learning rates, batch | 1e-4, 64 | 3e-4, 256 |
+| episode end | time only | also when the position error exceeds 1.5 m (`--terminate_pos_error`) |
+
+- **exp(r / 3):** an error-free step is worth 1 and a cost of 3 is worth 1/e, so most of the critics' range resolves small tracking errors. With r itself, most of the range separates crashes from flying.
+- **Termination:** a policy that cannot fly yet stays near the reference instead of drifting tens of metres away, where the reward is saturated. A terminated episode is reported with the reward floor for the steps not flown, and evaluations always fly full episodes, so returns stay comparable.
+- **`--critic_reward normalized`** (1 + r/50) is the milder alternative. `--preset tracker_v1` reproduces the old runs.
+
+CPU test, reference `b2_m10`, seed 0, evaluation position error:
+
+| recipe | 0.5 m reached at | note |
+|---|---|---|
+| `tracker_v1` (first GPU batch) | 4.0–4.5M steps | then collapsed at 4.66M and never recovered |
+| normalized, lr 1e-4, batch 64 | 1.75M steps | one overshoot at 1.35M, recovered within 0.3M steps |
+| normalized, lr 3e-4, batch 256 | 1.05M steps (0.57 m) | |
+| exp, lr 3e-4, batch 256 (`tracker`) | 0.40M steps | |
+
+These are single runs of at most 2M steps. The old collapses came at 3–5M steps, so the GPU batch is the real test; the curves page shows it as it happens.
+
+## PS2 settings
+
+- **Preset `ps2`:** the paper's PS2 settings (warm start, no random warm-up, actor lr 5e-5), with 256 envs and an update of 512 samples every 64 env steps. `--preset ps2_paper` is the paper's 32-env setting.
+- **Same critic reward as the tracker.** The critics are warm-started, so the run reads the transform from the tracker's `configs.json`.
+- **Cached QP rows.** A state's QP rows (100-step backup rollout and its sensitivities) depend on the state only. They are computed once when the state is visited and stored with the transition; the actor update re-solves only the small QP. This is exact.
+- **No projection of the critic-target actions** (the paper projects them).
+- **Gradient guard.** When one sample's float32 QP fails, its backward pass returns NaN even though the sample falls back to the backup action. Before the fix that NaN turned the whole batch's actor gradient into zero; with 512 samples and a 0.6 % failure rate, about 95 % of the actor updates did nothing. The failed sample's gradient is now zero and the rest of the batch counts.
+- **KKT solve.** qpax factorises a 5×5 matrix by QR at every interior-point iteration; `ps2rl/cil/qpax_batched.py` replaces it by an elementwise Cholesky. Each run times both at start-up and uses the faster (`[qp] ...` lines in its log).
+- **Device (`PS2_DEVICE=auto`).** The projection is thousands of tiny QPs, which a GPU does not necessarily run faster than the CPU. Stage C first runs `MAX_PARALLEL` short PS2 runs on the GPU, then on the CPU, and trains on the faster; the log says which and by how much.
+
+The first GPU batch ran PS2 at 22–25 steps/s per run. On a 2-core CPU the new path runs at about 115 steps/s. I have not been able to time it on the GPU.
+
+## Duration
+
+- **Trackers:** the first batch ran 8M steps in about 16 min per run, three at a time. With two new seeds per reference that is 12 runs, about 1.1 h if every run goes to 8M. Stop a run once its curve is flat.
+- **Selection:** a few minutes.
+- **PS2:** at most `PS2_HOURS` per wave of `MAX_PARALLEL` runs, so two waves and about 6 h with the defaults, plus about 10 min for the device timing.
+
+## Knobs
 
 | variable | default |
 |---|---|
 | `REFS` | the six `b*` references |
+| `TRACKER_SEEDS` | `"0 1 2"` |
 | `TRACKER_STEPS` | 8000000 |
 | `PS2_STEPS` | 1500000 |
 | `PS2_HOURS` | 3 |
+| `PS2_DEVICE` | `auto` (`gpu`, `cpu`) |
+| `PS2_PROBE_STEPS` | 8192 |
 | `MAX_PARALLEL` | 3 |
+| `CURVES_EVERY` | 30 (seconds; 0 = off) |
 | `FILTER` | `alpha=10,alpha_floor=20,control_weights=1/0.1/0.1/1` |
-| `SEED` | 0 |
-| `STAGES` | `"B C D E"` (e.g. `"D E"` to re-evaluate) |
+| `SEED` | 0 (PS2) |
+| `STAGES` | `"B S C D E"` |
 | `TRACKER_ARGS`, `PS2_ARGS`, `EVAL_ARGS` | extra flags for `scripts/train_phase2_landing.py` / `scripts/evaluate_landing_phase2_runs.py` |
 
 ## Afterwards: what to send back
 
 ```bash
-cd ~/ws_shared/PS2-RL/outputs && zip -r landing_phase2_results.zip landing_phase2 landing_phase2.out \
-    -x "landing_phase2/*/final_weights.pkl"
+cd ~/px4-ros-docker/ws_shared/PS2-RL/outputs && zip -r landing_phase2_results.zip landing_phase2 landing_phase2.out \
+    -x "landing_phase2/*/final_weights.pkl" -x "landing_phase2/*_old_*/*" -x "landing_phase2/probe/*"
 ```
 
-If the zip is over 30 MB, also add `-x "*.gif"` and send the `eval_*/landing_*.gif` files separately (in a second zip if needed).
+If the zip is over 30 MB, also add `-x "*.gif"` and send the `eval_*/landing_*.gif` files separately.
 
 ## Single runs
 
 ```bash
 python scripts/train_phase2_landing.py --reference <npz> --projection off --run_name <name>          # tracker
+python scripts/select_landing_tracker.py --candidates <run dir> ... --out <dir>                       # pick one
 python scripts/train_phase2_landing.py --reference <npz> --projection on --run_name <name> \
-    --warm_start_weights outputs/landing_phase2/<tracker>/best_weights.pkl \
-    --init_library outputs/landing_phase2/<tracker>/init_states.npz [--wall_time_budget_hours 4]      # PS2
+    --warm_start_weights <tracker dir>/best_weights.pkl \
+    --init_library <tracker dir>/init_states.npz [--wall_time_budget_hours 3]                         # PS2
 python scripts/evaluate_landing_phase2_runs.py --tracker_run <dir> --ps2_run <dir> --out <dir>
 ```
 
-Every SAC hyperparameter can be passed as `--<name>`. The defaults are the `tracker` / `ps2` presets in `ps2rl/phase2_ps2/landing_ps2_entry.py`.
+Every SAC hyperparameter can be passed as `--<name>`. The defaults are the presets in `ps2rl/phase2_ps2/landing_ps2_entry.py`.

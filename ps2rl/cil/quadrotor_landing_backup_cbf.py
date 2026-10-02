@@ -49,6 +49,8 @@ from ps2rl.cil.backup_cbf import (
     BCBFSystem,
     make_backup_cbf_facades,
 )
+from ps2rl.cil.backup_cbf import build_discretized_backup_cbf_rows_with_info as _engine_rows
+from ps2rl.cil.backup_cbf import solve_backup_cbf_qp_from_rows_single_with_info as _engine_solve_from_rows
 from ps2rl.cil.quadrotor_backup_cbf import QuadrotorBCBFConfig
 from ps2rl.envs.quadrotor_env import (
     quadrotor_control_affine_terms,
@@ -108,6 +110,9 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
     # powerloop default). The learned landing backups are stiff (dt*||J|| ~ 1.5), where
     # "expm" under-predicts margin loss and lets fast states slip out of C_N.
     sensitivity_propagation: str = "discrete"
+    # Propagate only Q @ [f(x), g(x)] (the 1 + 4 columns the rows use) instead of the full 10 x 10
+    # sensitivity: identical rows, about half the Jacobian-vector products. Needs "discrete".
+    reduced_sensitivity: bool = True
     # Discrete-time safeguard on top of the QP: accept u_QP only if the next state of the
     # Euler plant is backup-recoverable (first-hit C_N test against S); otherwise blend toward
     # pi_b(x), taking the largest lambda in ``safeguard_lambdas`` whose next state is in C_N.
@@ -150,6 +155,8 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
             object.__setattr__(self, "control_weights", w)
         if self.sensitivity_propagation not in ("discrete", "expm"):
             raise ValueError(f"sensitivity_propagation must be 'discrete' or 'expm', got '{self.sensitivity_propagation}'")
+        if self.reduced_sensitivity and self.sensitivity_propagation != "discrete":
+            object.__setattr__(self, "reduced_sensitivity", False)
         if self.qp_solve_dtype not in ("float32", "float64"):
             raise ValueError(f"qp_solve_dtype must be 'float32' or 'float64', got '{self.qp_solve_dtype}'")
         if self.qp_solve_dtype == "float64" and not jax.config.jax_enable_x64:
@@ -437,6 +444,47 @@ def solve_backup_cbf_qp_batch_with_info(x_batch, u_ref_batch, cfg, runtime=None)
 def solve_backup_cbf_qp_batch(x_batch, u_ref_batch, cfg, runtime=None):
     u, slack, _, _ = solve_backup_cbf_qp_batch_with_info(x_batch, u_ref_batch, cfg, runtime)
     return u, slack
+
+
+# Rows A u <= b depend on the state only. Building them once per visited state and storing them
+# with the transition lets every SAC update that samples it skip the 100-step backup rollout and
+# its sensitivities (the expensive part of a projection) and solve only the small QP.
+CBF_ROW_FIELDS = ("cbf_a", "cbf_b", "cbf_sat")
+
+
+def backup_cbf_row_shapes(cfg) -> dict[str, tuple[int, ...]]:
+    """Trailing shapes of the stored-row fields (for replay allocation)."""
+    n = int(cfg.num_backup_inequalities)
+    return {"cbf_a": (n, len(cfg.action_low)), "cbf_b": (n,), "cbf_sat": ()}
+
+
+def backup_cbf_rows_batch(x_batch, cfg, runtime=None) -> dict[str, jax.Array]:
+    """Rows of the BCBF-QP for a batch of states: {"cbf_a": (B, R, m), "cbf_b": (B, R), "cbf_sat": (B,)}."""
+    rt = _resolve_runtime(cfg, runtime)
+
+    def one(x):
+        x = rt.sanitize_solve_state_fn(x)
+        a, b, d = _engine_rows(x, cfg, rt)
+        return {"cbf_a": a, "cbf_b": b, "cbf_sat": d["q_saturated"].astype(a.dtype)}
+
+    return jax.vmap(one)(rt.solve_state_slice_fn(x_batch))
+
+
+def solve_backup_cbf_qp_from_rows_batch_with_info(x_batch, u_ref_batch, rows, cfg, runtime=None):
+    """As ``solve_backup_cbf_qp_batch_with_info`` with the rows supplied (same states, same settings)."""
+    rt = _resolve_runtime(cfg, runtime)
+    xb = rt.solve_state_slice_fn(x_batch)
+
+    def one(x, u, a, b, sat):
+        diag = {"max_abs_q": jnp.max(jnp.abs(a)).astype(a.dtype), "q_saturated": sat > 0.5,
+                "max_abs_b": jnp.max(jnp.abs(b)).astype(b.dtype)}
+        return _engine_solve_from_rows(x, u, a.astype(x.dtype), b.astype(x.dtype), diag, cfg, rt)
+
+    u, slack, used, info = jax.vmap(one)(xb, u_ref_batch, rows["cbf_a"], rows["cbf_b"], rows["cbf_sat"])
+    if bool(getattr(cfg, "discrete_safeguard", False)):
+        u, lam, found = apply_discrete_safeguard(x_batch, u, cfg, rt)
+        info = {**info, "safeguard_lambda": lam, "safeguard_found": found}
+    return u, slack, used, info
 
 
 def solve_backup_cbf_qp_single_with_info(x, u_ref, cfg, runtime=None):

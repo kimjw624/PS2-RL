@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import pickle
@@ -354,6 +354,9 @@ def _evaluate_policy(
     episodes: int,
 ) -> Dict[str, Any]:
     """Roll out eval episodes on the JAX env and aggregate tracking metrics."""
+    if float(getattr(env_cfg, "terminate_pos_error", 0.0)) > 0.0:
+        # full-length episodes: returns and errors stay comparable between checkpoints and runs
+        env_cfg = replace(env_cfg, terminate_pos_error=0.0)
     env_fns = build_quadrotor_env(env_cfg)
     base_key = make_prng_key(seed + 777)
     returns = []
@@ -585,6 +588,11 @@ def _eval_selection_key_return(eval_stats: Dict[str, Any]) -> Tuple[float, ...]:
     )
 
 
+def eval_selection_key_return_only(eval_stats: Dict[str, Any]) -> Tuple[float, ...]:
+    """Maximize evaluation return alone; lower is better."""
+    return (-float(eval_stats.get("return_mean", -float("inf"))),)
+
+
 def _save_best_weight_snapshots(
     output_dir: str | None,
     *,
@@ -696,6 +704,8 @@ def _run_training_jax(
     make_projector: Callable[[Any], Any] | None = None,
     validate_learned_backup: bool = True,
     update_cbf_cfg: Any | None = None,
+    selection_key_fn: Callable[[Dict[str, Any]], Tuple[float, ...]] | None = None,
+    stop_requested: Callable[[], bool] | None = None,
 ) -> Dict[str, Any]:
     """Train safe SAC using pure-JAX batched environment stepping.
 
@@ -705,7 +715,13 @@ def _run_training_jax(
     learned-backup compatibility check (other layers validate their own checkpoint).
     ``update_cbf_cfg`` (same layer, other settings) is used for the projections inside the SAC
     update only; collection and evaluation always use ``cbf_cfg``.
+    ``stop_requested`` is polled between collection chunks; when it returns True the run finishes
+    as it would at ``total_steps`` (final evaluation, checkpoints, summary).
+    ``selection_key_fn`` ranks evaluations for ``best_weights.pkl`` (lower is better; default:
+    safety first, then return). A tracker trained without the layer on a reference that leaves the
+    safe set must rank by return alone, otherwise the checkpoints that track best are discarded.
     """
+    selection_key_fn = _eval_selection_key_return if selection_key_fn is None else selection_key_fn
     binding = _BINDING if binding is None else binding
     make_projector = QuadrotorBackupCBFProjector if make_projector is None else make_projector
     if int(sac_cfg.num_envs) <= 0:
@@ -757,8 +773,13 @@ def _run_training_jax(
 
     jax_key, key_state, key_env = jax.random.split(jax_key, 3)
     state = _init_state(key_state, actor_cfg, critic_cfg, sac_cfg)
-    replay = ps2_replay_init(sac_cfg.replay_size, env_fns.obs_dim, env_fns.action_dim)
     projector = make_projector(cbf_cfg)
+    row_fields = None
+    if bool(getattr(sac_cfg, "cache_cbf_rows", False)) and sac_cfg.use_projection and sac_cfg.project_actor_actions:
+        if binding.row_shapes_fn is None:
+            raise ValueError("cache_cbf_rows=True needs a binding with row_shapes_fn")
+        row_fields = binding.row_shapes_fn(cbf_cfg)
+    replay = ps2_replay_init(sac_cfg.replay_size, env_fns.obs_dim, env_fns.action_dim, extra_fields=row_fields)
     backup_runtime = projector.runtime
     proj_ops = _make_projection_ops(cbf_cfg, backup_runtime, binding)
 
@@ -883,10 +904,15 @@ def _run_training_jax(
     vec_done = 0
     wall_budget = float(getattr(sac_cfg, "wall_time_budget_sec", 0.0) or 0.0)
     stopped_by_wall_budget = False
+    stopped_by_request = False
     while vec_done < total_vec_steps:
         if wall_budget > 0.0 and time.time() - t0 >= wall_budget:
             stopped_by_wall_budget = True
             print(f"Wall-time budget of {wall_budget:.0f} s reached at step {vec_done * num_envs}; finishing the run.")
+            break
+        if stop_requested is not None and stop_requested():
+            stopped_by_request = True
+            print(f"Stop requested at step {vec_done * num_envs}; finishing the run.")
             break
         this_vec = min(steps_per_jit, total_vec_steps - vec_done)
         loop_state, chunk = get_chunk_fn(this_vec)(loop_state)
@@ -986,7 +1012,7 @@ def _run_training_jax(
                 "p95_pos_xyz_mean": float(eval_stats["p95_pos_xyz_mean"]),
                 "max_pos_xyz_mean": float(eval_stats["max_pos_xyz_mean"]),
             }
-            eval_key_return = _eval_selection_key_return(eval_stats)
+            eval_key_return = selection_key_fn(eval_stats)
             improve_return = (best_eval_key_return is None) or (eval_key_return < best_eval_key_return)
             if improve_return:
                 best_eval_key_return = eval_key_return
@@ -1103,7 +1129,7 @@ def _run_training_jax(
             next_log_step += int(sac_cfg.log_every)
 
     total_time = time.time() - t0
-    if stopped_by_wall_budget:
+    if stopped_by_wall_budget or stopped_by_request:
         total_steps = int(min(total_steps, vec_done * num_envs))
     eval_stats = _evaluate_policy(
         env_cfg,
@@ -1112,7 +1138,7 @@ def _run_training_jax(
         sac_cfg.seed + 99_999,
         sac_cfg.eval_episodes,
     )
-    final_eval_key_return = _eval_selection_key_return(eval_stats)
+    final_eval_key_return = selection_key_fn(eval_stats)
     improve_return = (best_eval_key_return is None) or (final_eval_key_return < best_eval_key_return)
     if improve_return:
         best_eval_key_return = final_eval_key_return
@@ -1136,6 +1162,7 @@ def _run_training_jax(
         "num_envs": num_envs,
         "steps_per_jit": steps_per_jit,
         "stopped_by_wall_budget": bool(stopped_by_wall_budget),
+        "stopped_by_request": bool(stopped_by_request),
     }
     final_compact_eval = _compact_eval_stats(eval_stats)
     best_eval_return = best_eval_stats_return if best_eval_stats_return is not None else final_compact_eval

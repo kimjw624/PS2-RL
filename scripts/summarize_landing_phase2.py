@@ -19,8 +19,19 @@ def main(argv=None):
     args = p.parse_args(argv)
     root = Path(args.root)
     md = ["# Phase-II landing: tracker vs tracker + filter vs PS2", ""]
-    rows, notes = [], []
+    rows, notes, selection, ps2_setup = [], [], [], {}
     for name in args.names:
+        sel = root / f"{name}_tracker" / "selection.json"
+        if sel.exists():
+            d = json.loads(sel.read_text())
+            cands = ", ".join(f"{Path(c['run']).name.rsplit('_', 1)[-1]}/{c['weights']} {c['tracking_error_mean']:.3f}" for c in d["candidates"])
+            pick = d["selected"]
+            selection.append(f"| {name} | {Path(pick['run']).name.rsplit('_', 1)[-1]} ({pick['weights']}) | {pick['tracking_error_mean']:.3f} | "
+                             f"{pick['tracking_error_max']:.2f} | {100 * pick['leaves_cone_rate']:.0f} % | {cands} |")
+        meta = root / f"{name}_ps2" / "landing_meta.json"
+        if meta.exists():
+            m = json.loads(meta.read_text())
+            ps2_setup[name] = f"PS2 trained on {m.get('device', '?')}, KKT solve {m.get('qp_kkt', '?')}"
         f = root / f"eval_{name}" / "summary.json"
         if not f.exists():
             notes.append(f"- `{name}`: no evaluation ({f} missing)")
@@ -35,6 +46,7 @@ def main(argv=None):
                        f"{_f(v.get('steps_per_sec'), '.0f')} steps/s{' (wall-time budget hit)' if v.get('stopped_by_wall_budget') else ''}"
                        for k, v in s.get("training", {}).items())
         notes.append(f"- `{name}`: {s['starts']} starts, filter `{s['filter']}`, backup `{Path(s['backup']).name}`. Training — {tr}. "
+                     f"{ps2_setup.get(name, 'no PS2 run')}. "
                      f"Figures: `eval_{name}/` ({', '.join(Path(v).name for v in s['figures'].values())}).")
     md += ["| reference | policy | leaves safe set | min margin [m] | on platform | beside platform | median touchdown [s] | "
            "tracking error [m] | max slack | QP fallbacks | intervention |",
@@ -43,6 +55,12 @@ def main(argv=None):
            "landing filter at deployment; `ps2` = trained through the filter (warm-started from the tracker), run with it. "
            "Touchdown = height ≤ ζ at speed ≤ v_touch; on the platform = within r0 of the pad centre. Safety/intervention "
            "statistics cover the flight up to touchdown."]
+    if selection:
+        md += ["", "## Tracker selection", "",
+               "Every checkpoint of every tracker seed, run alone from the same starts; the smallest mean position error wins "
+               "and is the warm start of PS2. A tracker that follows its reference leaves the cone (the reference does).", "",
+               "| reference | selected (seed, checkpoint) | tracking error [m] | max [m] | starts leaving the cone | "
+               "all candidates: seed/checkpoint error [m] |", "|---|---|---|---|---|---|"] + selection
     (root / "REPORT.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))
 
