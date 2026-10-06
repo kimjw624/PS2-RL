@@ -19,6 +19,10 @@ class ActorConfig:
     hidden_sizes: Tuple[int, ...] = (256, 256)
     log_std_min: float = -5.0
     log_std_max: float = 2.0
+    # Hidden activation. "relu" reproduces the paper runs; a C^1 choice ("elu",
+    # "tanh", "softplus") keeps pi_b smooth for the CIL sensitivity integration
+    # (landing note, Remark 6).
+    activation: str = "relu"
 
 
 def _coerce_actor_cfg(cfg_payload: Any) -> ActorConfig:
@@ -58,13 +62,24 @@ def _init_mlp(key: jax.Array, sizes: Sequence[int]):
     return {"layers": layers}
 
 
-def _mlp_apply(params, x: jax.Array) -> jax.Array:
+_ACTIVATIONS = {
+    "relu": jax.nn.relu,
+    "elu": jax.nn.elu,
+    "tanh": jnp.tanh,
+    "softplus": jax.nn.softplus,
+}
+
+
+def _mlp_apply(params, x: jax.Array, activation: str = "relu") -> jax.Array:
+    if activation not in _ACTIVATIONS:
+        raise ValueError(f"unknown actor activation '{activation}', expected one of {sorted(_ACTIVATIONS)}")
+    act = _ACTIVATIONS[activation]
     h = x
     n_layers = len(params["layers"])
     for i, layer in enumerate(params["layers"]):
         h = h @ layer["w"] + layer["b"]
         if i != n_layers - 1:
-            h = jax.nn.relu(h)
+            h = act(h)
     return h
 
 
@@ -74,7 +89,7 @@ def init_actor_params(key: jax.Array, cfg: ActorConfig):
 
 
 def _actor_dist_params(params, obs: jax.Array, cfg: ActorConfig) -> Tuple[jax.Array, jax.Array]:
-    out = _mlp_apply(params, obs)
+    out = _mlp_apply(params, obs, getattr(cfg, "activation", "relu"))
     mean, log_std_raw = jnp.split(out, 2, axis=-1)
     # Smooth clamp of log std.
     t = jnp.tanh(log_std_raw)
