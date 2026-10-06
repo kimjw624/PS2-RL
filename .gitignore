@@ -29,6 +29,8 @@ matplotlib-cache/
 # Ignore arbitrary checkpoints, but publish the exact lightweight policies
 # required by PS2RL_SITL_final.md.
 /checkpoints/*
+# Landing Phase-I safe-arrival backup consumed by the landing CIL (see LANDING_HANDOFF.md).
+!/checkpoints/landing_phase1/
 !/checkpoints/sitl_delay_comparison/
 /checkpoints/sitl_delay_comparison/*
 !/checkpoints/sitl_delay_comparison/policies/
@@ -49,3 +51,6 @@ matplotlib-cache/
 /.venv/
 **/__pycache__/
 *.py[cod]
+
+# Persistent XLA compilation cache (docker_batch/landing_env.sh)
+.jax_cache/

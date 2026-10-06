@@ -132,6 +132,69 @@ The `slurm_batch/` directory holds the Slurm drivers that reproduce the reported
 
 Submit from the repository root, e.g. `sbatch slurm_batch/slurm_train_uni_phase2.sh`. The drivers target a Supercloud-style cluster (`module load anaconda/Python-ML-2025a`, partition `xeon-g6-volta`, V100 GPU, `JAX_PLATFORMS=cuda`); adapt the `#SBATCH` headers to your environment. Approximate single-GPU training times from the paper: Phase-1 safe-arrival ≈ **840 s** (unicycle) / **2400 s** (quadrotor); Phase-2 PS2 ≈ **4.6 h** (unicycle) / **13.6 h** (quadrotor).
 
+## Landing task (approach cone)
+
+The landing task replaces the ceiling with a smooth one-sided approach cone over a pad, optionally
+intersected with the pad plane, and the 7-D hover base set with a 9-D one that also regulates horizontal
+position (a bounded cone cannot contain a horizontally unbounded base set). Phase I trains the
+safe-arrival backup for it; the landing control-invariant layer (CIL) then uses that backup the way the
+powerloop CIL uses its own.
+
+**Shipped backup.** `checkpoints/landing_phase1/floor_rec10_td3_seed0/` is a certified safe-arrival
+backup for a 45° cone over a pad of radius 0.3 m, with the pad plane in the safe set. Its results are in
+`results/landing_phase1/floor_rec10_td3_seed0/`, and `LANDING_HANDOFF.md` explains how to use it in the CIL.
+
+### Phase I
+
+Defaults live in `ps2rl/envs/quadrotor_landing_config.py`; a JSON file (`--config_json`) or flags override them.
+
+| | default | shipped backup |
+|---|---|---|
+| cone | r0 = 0.5 m, θ = 30°, ε = 0.05 r0 | r0 = 0.3 m, θ = 45°, ε = 0.05 r0 |
+| pad plane in the safe set (`floor_constraint`) | off | on |
+| gentle-recovery envelope (`recovery_rate_cone/floor`) | off | κ = 10 for both |
+| base set | z_des = 1.25 m, c_B = 12 | the same |
+| LQR | powerloop weights, q_x = q_y = 1, yaw re-weighted (q_θz 0.5, r_ωz 0.04) | the same |
+
+```bash
+# certify (c_U, chart, cone, ground, adversarial Lyapunov) and sweep z_des
+JAX_PLATFORMS=cpu python scripts/certify_landing_base_set.py --out outputs/landing_cert.json
+
+# train a safe-arrival policy: --backbone sac (default) or td3
+python scripts/train_phase1_landing.py --backbone sac --seed 0
+
+# the shipped backup
+python scripts/train_phase1_landing.py --config_json docker_batch/configs/landing_cone45_r0p3.json --backbone td3 --seed 0 \
+    --floor_constraint true --region_edge_floor_prob 0.3 --recovery_rate_cone 10 --recovery_rate_floor 10
+```
+
+Inside the px4sitl Docker container (GPU), `docker_batch/` wraps this: `setup_train_venv.sh`
+(Python 3.10 venv with CUDA JAX + GPU check), `smoke_landing_phase1.sh` (smoke test + ETA),
+`run_landing_phase1_compare.sh` (SAC vs TD3 over seeds, resumable) and
+`summarize_landing_phase1.py` (table + learning curves). See `docker_batch/README_landing_phase1.md`.
+
+Initial states come from `ps2rl/phase1_sa/landing_design_region.py`: a general region
+that is uniform per altitude slice over Ω \ B, the low-altitude cone edge with outward
+velocity, and the capture shell. The SAC backbone keeps entropy out of the critic target
+(see the module docstring of `ps2rl/phase1_sa/sa_trainer_core.py`); the TD3 path is
+unchanged and bit-identical to before.
+
+### Landing CIL
+
+`ps2rl/cil/quadrotor_landing_backup_cbf.py` is the landing counterpart of `quadrotor_backup_cbf`.
+It takes the safe set, the 9-D base set and the learned backup, all read from the Phase-I checkpoint.
+`ps2rl/phase2_ps2/landing_ps2_binding.py` is the matching trainer binding.
+Start with `LANDING_HANDOFF.md` and verify with `scripts/check_landing_bcbf.py`.
+
+### Reaching the floor
+
+These settings are all opt-in.
+- `floor_constraint=True` adds the pad plane to the safe set, in Phase I (failure, certificate) and in the CIL (a floor row per backup node).
+- `alpha_floor` / `relative_time_floor` tune the floor rows.
+- The Phase-I option `recovery_rate_cone/floor` trains a backup that never pulls away from a boundary faster than κ·h. With the paper's relative-time rows, that makes holding still feasible anywhere in C_N, so the filtered vehicle can get arbitrarily close to the floor.
+
+`docker_batch/run_landing_floor_overnight.sh` trains the variants, certifies and self-checks them, runs the reach tests (`scripts/test_landing_floor_reach.py`), and writes a report. See `docker_batch/README_landing_floor.md`.
+
 ## Citation
 
 If you use this code, please cite the paper:
