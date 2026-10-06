@@ -43,6 +43,10 @@ class BCBFSystem:
     base_set_values_fn: Callable[[jax.Array], jax.Array] | None = None
     use_analytic_jacobian: bool = False
     analytic_closed_loop_and_jacobian_fn: Callable[[jax.Array], Tuple[jax.Array, jax.Array]] | None = None
+    #: Optional dtype for the qpax solve only (rows are still built in the state dtype).
+    #: ``None`` keeps the historical behaviour. ``jnp.float64`` needs ``jax_enable_x64``;
+    #: it removes float32 interior-point failures (non-finite solutions -> backup fallback).
+    qp_solve_dtype: Any = None
 
 
 @dataclass(frozen=True)
@@ -112,8 +116,18 @@ def rollout_backup_flow_and_sensitivity_with_info(
 ) -> Tuple[jax.Array, jax.Array, Dict[str, jax.Array]]:
     """Rollout backup flow and Q-sensitivity with diagnostics.
 
-    Sensitivity propagation is Q_{k+1} = exp(dt * J_k) Q_k with optional
-    Frobenius-norm clipping.
+    Sensitivity propagation (``cfg.sensitivity_propagation``, default "expm"):
+
+    * "expm":     Q_{k+1} = exp(dt J_k) Q_k, the continuous-time variational equation.
+                  Accurate when dt * ||J|| << 1.
+    * "discrete": Q_{k+1} = dF/dx(x_k) Q_k with F(x) = post(x + dt f_pi(x)), the exact
+                  Jacobian of the rollout map the states actually follow (explicit Euler
+                  + quaternion renormalisation). Needed for stiff backups: with a learned
+                  backup at dt * ||J|| ~ 1.5, "expm" under-predicts how fast a rollout
+                  margin shrinks by ~2x, so the QP can satisfy every row while the state
+                  leaves C_N.
+
+    Optional Frobenius-norm clipping applies to both.
     """
     dt_j = jnp.array(cfg.dt, dtype=x0.dtype)
     clip_enabled = bool(cfg.sensitivity_clip > 0.0)
@@ -122,6 +136,8 @@ def rollout_backup_flow_and_sensitivity_with_info(
         cfg.use_analytic_jacobian and system.use_analytic_jacobian and system.analytic_closed_loop_and_jacobian_fn
     )
     jac_backup = jax.jacfwd(lambda z: closed_loop_backup_dynamics(z, system))
+    discrete = str(getattr(cfg, "sensitivity_propagation", "expm")) == "discrete"
+    jac_step = jax.jacfwd(lambda z: system.postprocess_rollout_state_fn(z + dt_j * closed_loop_backup_dynamics(z, system)))
 
     one_j = jnp.array(1.0, dtype=x0.dtype)
     eps_j = jnp.array(1e-12, dtype=x0.dtype)
@@ -143,7 +159,7 @@ def rollout_backup_flow_and_sensitivity_with_info(
             j_pi = jac_backup(x)
         x_next = system.postprocess_rollout_state_fn(x + dt_j * f_pi)
 
-        q_pred = propagate_q(q, j_pi)
+        q_pred = jac_step(x) @ q if discrete else propagate_q(q, j_pi)
         step_max_abs_q = jnp.max(jnp.abs(q_pred))
         max_abs_q_next = jnp.maximum(max_abs_q, step_max_abs_q)
         if clip_enabled:
@@ -178,6 +194,10 @@ def build_discretized_backup_cbf_rows_with_info(
     """Build A u <= b from discretized backup-CBF constraints with diagnostics."""
     xs, qs, rollout_diag = rollout_backup_flow_and_sensitivity_with_info(x, cfg, system)
     f0, g0 = system.control_affine_terms_fn(x)
+    # Optional per-constraint class-K gains / relative-time flags (tuples over the safe-set
+    # rows); configs that do not define them get the uniform rows exactly as before.
+    alpha_vec = getattr(cfg, "alpha_per_constraint", None)
+    rt_vec = getattr(cfg, "relative_time_per_constraint", None)
 
     def per_node_rows(xi, qi):
         h_c, dh_c = system.safe_set_values_and_grads_fn(xi)
@@ -185,8 +205,13 @@ def build_discretized_backup_cbf_rows_with_info(
         qi_f0 = qi @ f0
         a = -(dh_c @ qi_g0)
         f_pi_i = closed_loop_backup_dynamics(xi, system)
-        flow_term = qi_f0 - f_pi_i if cfg.include_relative_time_term else qi_f0
-        b = cfg.alpha * h_c + dh_c @ flow_term
+        if rt_vec is None:
+            flow_term = qi_f0 - f_pi_i if cfg.include_relative_time_term else qi_f0
+            corr = dh_c @ flow_term
+        else:
+            corr = dh_c @ qi_f0 - jnp.asarray(rt_vec, dtype=xi.dtype) * (dh_c @ f_pi_i)
+        alpha = cfg.alpha if alpha_vec is None else jnp.asarray(alpha_vec, dtype=xi.dtype)
+        b = alpha * h_c + corr
         return a, b
 
     a_seq, b_seq = jax.vmap(per_node_rows, in_axes=(0, 0))(xs, qs)
@@ -345,16 +370,29 @@ def solve_backup_cbf_qp_single_with_info(
         inputs_finite = q_mat_finite & q_vec_finite & g_finite & h_finite
 
         def _solve_qp(_: None) -> jax.Array:
-            return qpax.solve_qp_primal(
-                q_mat,
-                q_vec,
-                a_eq,
-                b_eq,
-                g,
-                h,
+            if system.qp_solve_dtype is None:
+                return qpax.solve_qp_primal(
+                    q_mat,
+                    q_vec,
+                    a_eq,
+                    b_eq,
+                    g,
+                    h,
+                    solver_tol=cfg.solver_tol,
+                    target_kappa=cfg.target_kappa,
+                )
+            qd = system.qp_solve_dtype
+            z = qpax.solve_qp_primal(
+                q_mat.astype(qd),
+                q_vec.astype(qd),
+                a_eq.astype(qd),
+                b_eq.astype(qd),
+                g.astype(qd),
+                h.astype(qd),
                 solver_tol=cfg.solver_tol,
                 target_kappa=cfg.target_kappa,
             )
+            return z.astype(x.dtype)
 
         z_candidate = jax.lax.cond(inputs_finite, _solve_qp, lambda _: fallback_z, operand=None)
         z_finite = inputs_finite & jnp.all(jnp.isfinite(z_candidate))
