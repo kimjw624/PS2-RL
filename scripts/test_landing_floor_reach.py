@@ -47,6 +47,8 @@ def parse_args(argv=None):
     p.add_argument("--backup", required=True)
     p.add_argument("--settings", default=DEFAULT_SETTINGS)
     p.add_argument("--phase2_run", default=None, help="Phase-II run (reference start and miss direction)")
+    p.add_argument("--reference", default=None,
+                   help="reference .npz for the reference start and miss direction, when there is no Phase-II run to take it from")
     p.add_argument("--tracking_reference", default=None, help="reference .npz for T3")
     p.add_argument("--n_random", type=int, default=16, help="random C_N starts for T1")
     p.add_argument("--n_track", type=int, default=8, help="perturbed starts for T3 (besides the nominal)")
@@ -137,7 +139,9 @@ def main():
     pad = np.array([lc0.pad_x, lc0.pad_y, lc0.pad_z])
     tan_t = float(np.tan(np.radians(lc0.cone_theta_deg)))
     ref = None
-    if args.phase2_run:
+    if args.reference:
+        ref = np.asarray(np.load(args.reference)["states"], np.float64)
+    elif args.phase2_run:
         ref = np.asarray(np.load(load_phase2_run(args.phase2_run, repo_root=REPO).reference_path)["states"], np.float64)
     trk = None
     if args.tracking_reference:

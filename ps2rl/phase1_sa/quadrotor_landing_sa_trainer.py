@@ -163,9 +163,17 @@ def build_landing_evaluator(
     *,
     beta: float,
     hoeffding_delta: float,
+    raw_action_fn: Any = None,
 ):
-    """Return run_eval(actor_params, split) -> stats, evaluating 1[x0 in C_N(pi_b)] per region."""
+    """Return run_eval(actor_params, split) -> stats, evaluating 1[x0 in C_N(pi_b)] per region.
+
+    ``raw_action_fn(actor_params, x)`` replaces the actor outside the base set, e.g. the hover LQR
+    to measure the base controller alone as a baseline (``actor_cfg`` and the params are then unused).
+    """
     scale, low, high = landing_action_box(cfg)
+    if raw_action_fn is None:
+        def raw_action_fn(params, x):
+            return actor_mean_action(params, x, scale, actor_cfg, action_low=low, action_high=high)
     step_plant = landing_step_fn(cfg)
     cone, base_set = env_fns.safe_set, env_fns.base_set
     n_steps = int(cfg.num_steps)
@@ -176,7 +184,7 @@ def build_landing_evaluator(
         # First-hit semantics (Lemma 4): x0 in C_N  <=>  tau_B <= N and tau_B < tau_F.
         def body(carry, _):
             x, hit_b, hit_f = carry
-            raw = jnp.clip(actor_mean_action(params, x, scale, actor_cfg, action_low=low, action_high=high), low, high)
+            raw = jnp.clip(raw_action_fn(params, x), low, high)
             u = BackupPolicy.select_action(x, raw, base_set)
             xn = step_plant(x, u)
             active = ~(hit_b | hit_f)

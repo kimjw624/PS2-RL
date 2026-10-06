@@ -37,7 +37,7 @@ REFERENCE_GEOMETRY_KEYS = {
     "eps": "cone_eps",
 }
 # Phase-II env field -> QuadrotorLandingConfig field (dynamics and action box)
-ENV_DYNAMICS_KEYS = ("dt", "gravity", "a_cmd_min", "a_cmd_max", "omega_max")
+ENV_DYNAMICS_KEYS = ("dt", "gravity", "a_cmd_min", "a_cmd_max", "omega_max", "omega_z_max")
 
 
 def _dataclass_from_dict(cls, payload: dict[str, Any]):

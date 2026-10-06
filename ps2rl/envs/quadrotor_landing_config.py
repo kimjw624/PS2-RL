@@ -9,6 +9,11 @@ Defaults are the certified choice (see ``scripts/certify_landing_base_set.py``):
   the other three integrator chains, so this only affects yaw; with the powerloop
   yaw weights the quaternion chart caps c at 5.39 and the Lyapunov decrease fails
   near 6.7, whereas with these weights c_U = 17.9, c_chart = 23.2, c_Lyap ~ 15.5.
+
+These defaults assume the powerloop airframe's action box (thrust up to 4 g, body rates up to
+18 rad/s). For another vehicle, ``scripts/design_landing_base_set.py`` derives the action box
+from the vehicle's constants, rescales the LQR input weights to the new input ranges and picks
+the level; it writes a config file for ``train_phase1_landing.py --config_json``.
 """
 
 from __future__ import annotations
@@ -27,6 +32,9 @@ class QuadrotorLandingConfig:
     a_cmd_min: float = 0.0
     a_cmd_max: float = 39.24
     omega_max: float = 18.0
+    # Separate yaw-rate limit (0 = off: yaw uses omega_max like roll and pitch). For vehicles whose
+    # yaw torque is much weaker than their roll/pitch torque, e.g. the stock Gazebo x500.
+    omega_z_max: float = 0.0
 
     # pad and approach cone
     pad_x: float = 0.0
@@ -72,6 +80,36 @@ class QuadrotorLandingConfig:
             raise ValueError("recovery_rate_floor > 0 needs floor_constraint=True")
         if bool(self.floor_constraint) and float(self.z_clear) < 0.0:
             raise ValueError("with the floor in the safe set the base set must stay above it (z_clear >= 0)")
+        if float(self.omega_z_max) < 0.0 or float(self.omega_z_max) > float(self.omega_max):
+            raise ValueError(f"omega_z_max must lie in [0, omega_max] (0 = use omega_max), got {self.omega_z_max}")
+
+    # ----------------------------------------------------------------- action box
+    @property
+    def omega_limits(self) -> tuple[float, float, float]:
+        """Body-rate limits (roll, pitch, yaw) [rad/s]."""
+        w = float(self.omega_max)
+        return (w, w, float(self.omega_z_max) if float(self.omega_z_max) > 0.0 else w)
+
+    @property
+    def omega_clip(self):
+        """What the shared plant step clips the body rates with: the scalar omega_max, or the
+        per-axis limits when a separate yaw limit is set (the clip broadcasts over the three rates)."""
+        return self.omega_limits if float(self.omega_z_max) > 0.0 else float(self.omega_max)
+
+    @property
+    def action_low(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_min), -wx, -wy, -wz)
+
+    @property
+    def action_high(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_max), wx, wy, wz)
+
+    @property
+    def action_scale(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_max), wx, wy, wz)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

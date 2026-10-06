@@ -75,15 +75,18 @@ def build_landing_sets(cfg: QuadrotorLandingConfig) -> tuple[QuadrotorLandingSaf
 
 
 def landing_action_box(cfg: QuadrotorLandingConfig, dtype=jnp.float32) -> tuple[Array, Array, Array]:
-    low = jnp.asarray([cfg.a_cmd_min, -cfg.omega_max, -cfg.omega_max, -cfg.omega_max], dtype=dtype)
-    high = jnp.asarray([cfg.a_cmd_max, cfg.omega_max, cfg.omega_max, cfg.omega_max], dtype=dtype)
-    scale = jnp.asarray([cfg.a_cmd_max, cfg.omega_max, cfg.omega_max, cfg.omega_max], dtype=dtype)
+    low = jnp.asarray(cfg.action_low, dtype=dtype)
+    high = jnp.asarray(cfg.action_high, dtype=dtype)
+    scale = jnp.asarray(cfg.action_scale, dtype=dtype)
     return scale, low, high
 
 
 def landing_step_fn(cfg: QuadrotorLandingConfig) -> Callable[[Array, Array], Array]:
+    omega_clip = cfg.omega_clip  # omega_max, or per-axis limits when a separate yaw limit is set
+    omega_clip = omega_clip if isinstance(omega_clip, float) else jnp.asarray(omega_clip, dtype=jnp.float32)
+
     def step(x: Array, u: Array) -> Array:
-        xn = quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, cfg.omega_max)
+        xn = quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, omega_clip)
         return xn.at[6:10].set(normalize_quaternion_batch(xn[6:10]))
 
     return step

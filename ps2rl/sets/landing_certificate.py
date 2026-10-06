@@ -269,12 +269,17 @@ def c_lyap_adversarial(
     *,
     c_hi: float,
     iters: int = 12,
+    ascent_iters: int | None = None,
     **kwargs: Any,
 ) -> float:
     """Bisect the largest level whose adversarial worst ratio stays below 1.
 
     Assumes the violation is monotone in the level (true in every sweep we ran).
+    ``iters`` counts bisection steps; ``ascent_iters`` (default: that of
+    ``lyapunov_worst_adversarial``) the gradient-ascent steps of each search.
     """
+    if ascent_iters is not None:
+        kwargs["iters"] = int(ascent_iters)
     return _bisect_largest(
         lambda lev: lyapunov_worst_adversarial(controller, step_single, level=lev, **kwargs)[0] < 1.0,
         c_hi,

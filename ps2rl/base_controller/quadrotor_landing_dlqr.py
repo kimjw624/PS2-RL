@@ -107,18 +107,20 @@ class QuadrotorLandingDLQR(DiscreteLQR):
         a_cmd_min: float,
         a_cmd_max: float,
         omega_max: float,
+        omega_z_max: float = 0.0,
     ) -> "QuadrotorLandingDLQR":
         a_raw, b_raw = cls.linearization_error_coords(gravity)
         a_d, b_d = euler_discretize(a_raw, b_raw, dt)
         omega_max = float(omega_max)
+        omega_z = float(omega_z_max) if float(omega_z_max) > 0.0 else omega_max  # 0: yaw uses omega_max
         return cls(
             a_d=tuple(tuple(row) for row in a_d.tolist()),
             b_d=tuple(tuple(row) for row in b_d.tolist()),
             q_diag=tuple(float(v) for v in q_diag),
             r_diag=tuple(float(v) for v in r_diag),
             u_star=(float(gravity), 0.0, 0.0, 0.0),
-            u_low=(float(a_cmd_min), -omega_max, -omega_max, -omega_max),
-            u_high=(float(a_cmd_max), omega_max, omega_max, omega_max),
+            u_low=(float(a_cmd_min), -omega_max, -omega_max, -omega_z),
+            u_high=(float(a_cmd_max), omega_max, omega_max, omega_z),
             z_des=float(z_des),
             pad_x=float(pad[0]),
             pad_y=float(pad[1]),
@@ -149,6 +151,7 @@ class QuadrotorLandingDLQR(DiscreteLQR):
             a_cmd_min=_get("a_cmd_min"),
             a_cmd_max=_get("a_cmd_max"),
             omega_max=_get("omega_max"),
+            omega_z_max=_get("omega_z_max", 0.0),
         )
 
     # ------------------------------------------------------------------ maps

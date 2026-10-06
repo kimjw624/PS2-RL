@@ -1,0 +1,137 @@
+{
+  "landing": {
+    "a_cmd_min": 1.992,
+    "a_cmd_max": 14.945,
+    "omega_max": 3.84,
+    "omega_z_max": 0.203,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "floor_constraint": true,
+    "recovery_rate_cone": 10.0,
+    "recovery_rate_floor": 10.0,
+    "base_set_c": 15.1,
+    "lqr_q_thetaz": 0.09925992084876718,
+    "lqr_r_a_cmd": 0.0729939918215959,
+    "lqr_r_omega_x": 0.263671875,
+    "lqr_r_omega_y": 0.263671875,
+    "lqr_r_omega_z": 2.667385485334276
+  },
+  "region": {
+    "yaw_max_deg": 25.0,
+    "edge_floor_prob": 0.3
+  },
+  "provenance": {
+    "designed_by": "scripts/design_landing_base_set.py",
+    "vehicle": "docker_batch/configs/vehicles/gz_x500.json",
+    "reference_design": "checkpoints/landing_phase1/floor_rec10_td3_seed0/configs.json",
+    "thrust_reserve": 0.1,
+    "rate_rise_time": 0.04,
+    "vehicle_limits": {
+      "mass_kg": 2.0643076923076924,
+      "thrust_per_motor_N": [
+        0.19234305000000002,
+        8.54858
+      ],
+      "thrust_reserve_per_motor_N": 0.835623695,
+      "max_thrust_acceleration": 16.56454613206141,
+      "idle_thrust_acceleration": 0.3727022879713817,
+      "a_cmd_min": 1.9918866723803845,
+      "a_cmd_max": 14.945361747652406,
+      "inertia_kgm2": [
+        0.023845154051282055,
+        0.023845154051282055,
+        0.04389395938461539
+      ],
+      "angular_acceleration_at_hover": [
+        101.74655623840947,
+        101.74655623840947,
+        5.082598784505604
+      ],
+      "angular_acceleration_at_box_ends": [
+        24.39045226838155,
+        24.39045226838155,
+        1.218388981759172
+      ],
+      "omega_max": 3.839724354387525,
+      "omega_z_max": 0.20330395138022417,
+      "notes": {
+        "omega_max": "capped by the autopilot's attitude-loop rate limit"
+      }
+    },
+    "explicit_overrides": {},
+    "input_margins_reference": [
+      9.81,
+      18.0,
+      18.0,
+      18.0
+    ],
+    "input_margins": [
+      5.135,
+      3.84,
+      3.84,
+      0.203
+    ],
+    "yaw_rule": {
+      "base_set_yaw_deg": 45.0,
+      "region_yaw_deg": 25.0,
+      "q_thetaz": 0.09925992084876718,
+      "r_omega_z": 2.667385485334276
+    },
+    "level_bounds": {
+      "c_U": 28.65610253417506,
+      "c_chart": 103.10924958367904,
+      "c_Lyap": 28.65610253417506,
+      "c_ground": 19.719994318343044,
+      "c_cone": 32.7812911619593,
+      "c_recovery_floor": 44.08131813258557,
+      "c_recovery_cone": 19.622566967930872
+    },
+    "c_U_per_input": [
+      28.656102534179546,
+      34.22066074718944,
+      34.22066074719255,
+      28.65610253417506
+    ],
+    "c_bar": 19.622566967930872,
+    "binding": "c_recovery_cone",
+    "safety_factor": 0.77,
+    "closed_loop_spectral_radius": 0.9961493301037657,
+    "base_set_extents": {
+      "dx_m": 0.8220667194393493,
+      "dz_m": 0.6562908423373005,
+      "vx_m_s": 2.175456781051122,
+      "vz_m_s": 1.2528904478924152,
+      "tilt_deg": 38.28087918340243,
+      "yaw_deg": 44.999999999997335
+    },
+    "base_set_extents_reference": {
+      "dx_m": 0.7382392656815009,
+      "dz_m": 0.6006329834405176,
+      "vx_m_s": 2.325108285785031,
+      "vz_m_s": 1.5698473904056274,
+      "tilt_deg": 92.03125744224424,
+      "yaw_deg": 79.57538414668736
+    },
+    "task_references": [
+      "ps2rl/envs/assets/quadrotor_landing_b2_m10_reference.npz",
+      "ps2rl/envs/assets/quadrotor_landing_b2_m20_reference.npz",
+      "ps2rl/envs/assets/quadrotor_landing_b2_m30_reference.npz",
+      "ps2rl/envs/assets/quadrotor_landing_b3_m10_reference.npz",
+      "ps2rl/envs/assets/quadrotor_landing_b3_m20_reference.npz",
+      "ps2rl/envs/assets/quadrotor_landing_b3_m30_reference.npz"
+    ],
+    "task_envelope": {
+      "zeta_max": 2.0,
+      "speed_max": 1.2968948100439963,
+      "tilt_max_deg": 4.835435555257978,
+      "yaw_abs_max_deg": 0.0
+    },
+    "region_reasons": {
+      "zeta_max": "default 3.0 (task needs 2.5)",
+      "v_max": "default 2.0 (task needs 2.0) (the reference design had 4.0)",
+      "tilt_max_deg": "default 35.0 (task needs 15.0)",
+      "yaw_max_deg": "capped at what the vehicle can yaw back within the backup horizon (23.3 deg); default 45.0, task needs 0.0 (the reference design had 45.0)"
+    }
+  }
+}

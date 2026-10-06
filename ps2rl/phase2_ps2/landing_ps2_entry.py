@@ -347,7 +347,7 @@ def main(argv=None):
     env_extra = parse_field_overrides(args.env_override, QuadrotorEnvConfig) if args.env_override else {}
     env_cfg = QuadrotorEnvConfig(**{
         "dt": lc.dt, "max_steps_extra_sec": args.max_steps_extra_sec, "backup_horizon_T": lc.T,
-        "gravity": lc.gravity, "a_cmd_min": lc.a_cmd_min, "a_cmd_max": lc.a_cmd_max, "omega_max": lc.omega_max,
+        "gravity": lc.gravity, "a_cmd_min": lc.a_cmd_min, "a_cmd_max": lc.a_cmd_max, "omega_max": lc.omega_max, "omega_z_max": lc.omega_z_max,
         "z_max": 15.0, "terminate_on_violation": args.terminate_on_violation, "reward_mode": args.reward_mode,
         "reference_path": str(reference), "reference_dt": lc.dt,
         "safety_mode": "landing", "landing_pad_x": lc.pad_x, "landing_pad_y": lc.pad_y, "landing_pad_z": lc.pad_z,
@@ -356,6 +356,9 @@ def main(argv=None):
         "terminate_pos_error": float(run_defaults["terminate_pos_error"]),
         **env_extra,
     })
+    if not (np.allclose(env_cfg.action_low, lc.action_low) and np.allclose(env_cfg.action_high, lc.action_high)):
+        raise SystemExit(f"action box differs: env [{list(env_cfg.action_low)}, {list(env_cfg.action_high)}] vs backup "
+                         f"[{list(lc.action_low)}, {list(lc.action_high)}] (an --env_override changed it?)")
 
     preset = dict(PRESETS[preset_name])
     for k in preset:

@@ -53,16 +53,23 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PHYS_DIM = 10
 
 
+def _cbf_action_box(cbf_cfg: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(scale, low, high) of the action box.
+
+    A config that carries its own box (the landing config, whose yaw-rate limit may differ from
+    roll/pitch) provides it; otherwise it is built from the shared scalar ``omega_max``.
+    """
+    if hasattr(cbf_cfg, "action_low") and hasattr(cbf_cfg, "action_high"):
+        return (np.asarray(jax.device_get(cbf_cfg.action_scale), dtype=np.float64),
+                np.asarray(cbf_cfg.action_low, dtype=np.float64), np.asarray(cbf_cfg.action_high, dtype=np.float64))
+    w = float(cbf_cfg.omega_max)
+    high = np.array([cbf_cfg.a_cmd_max, w, w, w], dtype=np.float64)
+    return high.copy(), np.array([cbf_cfg.a_cmd_min, -w, -w, -w], dtype=np.float64), high
+
+
 def _action_bounds_from_cbf_cfg(cbf_cfg: QuadrotorBCBFConfig) -> Tuple[jax.Array, jax.Array]:
-    action_low = jnp.array(
-        [cbf_cfg.a_cmd_min, -cbf_cfg.omega_max, -cbf_cfg.omega_max, -cbf_cfg.omega_max],
-        dtype=jnp.float32,
-    )
-    action_high = jnp.array(
-        [cbf_cfg.a_cmd_max, cbf_cfg.omega_max, cbf_cfg.omega_max, cbf_cfg.omega_max],
-        dtype=jnp.float32,
-    )
-    return action_low, action_high
+    _, low, high = _cbf_action_box(cbf_cfg)
+    return jnp.asarray(low, dtype=jnp.float32), jnp.asarray(high, dtype=jnp.float32)
 
 
 def _disable_backup_fallback(sac_cfg: SACConfig) -> bool:
@@ -737,19 +744,8 @@ def _run_training_jax(
     jax_key = make_prng_key(sac_cfg.seed)
     env_fns = build_quadrotor_env(env_cfg)
 
-    action_scale_np = np.array(
-        [cbf_cfg.a_cmd_max, cbf_cfg.omega_max, cbf_cfg.omega_max, cbf_cfg.omega_max],
-        dtype=np.float64,
-    )
+    action_scale_np, action_low_np, action_high_np = _cbf_action_box(cbf_cfg)
     action_scale = jnp.asarray(action_scale_np, dtype=jnp.float32)
-    action_low_np = np.array(
-        [cbf_cfg.a_cmd_min, -cbf_cfg.omega_max, -cbf_cfg.omega_max, -cbf_cfg.omega_max],
-        dtype=np.float64,
-    )
-    action_high_np = np.array(
-        [cbf_cfg.a_cmd_max, cbf_cfg.omega_max, cbf_cfg.omega_max, cbf_cfg.omega_max],
-        dtype=np.float64,
-    )
     expected_action_scale = np.asarray(jax.device_get(cbf_cfg.action_scale), dtype=np.float64)
     _validate_action_scale("jax_env.action_scale", action_scale_np, expected_action_scale)
     if validate_learned_backup:

@@ -24,6 +24,9 @@
 #   BASE_CFG=checkpoints/landing_phase1/land_v2_miss_td3_seed0/phase1_config.json   Phase-I config the variants extend
 #   BASE_BACKUP=checkpoints/landing_phase1/land_v2_miss_td3_seed0                    stage-A backup
 #   PHASE2_RUN=outputs/landing/land_v2_miss_s1        colleague run (reference start; stage E). Skipped if absent.
+#   START_REF=""                                       reference .npz for the reach tests' "reference start", instead of
+#                                                      the one of PHASE2_RUN (for a backup without a Phase-II run yet)
+#   FOLLOW=0                                           1: print each training run's evaluations here as they come
 #   TRACK_REF=ps2rl/envs/assets/quadrotor_landing_cornercut_reference.npz
 #   VARIANTS="name:extra train flags|name2:..."        Phase-I variants (see default below)
 #   SEEDS="0 1"  BACKBONE=td3  TOTAL_STEPS=5000000  MAX_PARALLEL=2  P1_EXTRA_ARGS=""
@@ -45,6 +48,8 @@ OUT="${OUT:-outputs/landing_floor}"
 BASE_CFG="${BASE_CFG:-checkpoints/landing_phase1/land_v2_miss_td3_seed0/phase1_config.json}"
 BASE_BACKUP="${BASE_BACKUP:-checkpoints/landing_phase1/land_v2_miss_td3_seed0}"
 PHASE2_RUN="${PHASE2_RUN:-outputs/landing/land_v2_miss_s1}"
+START_REF="${START_REF:-}"
+FOLLOW="${FOLLOW:-0}"
 TRACK_REF="${TRACK_REF:-ps2rl/envs/assets/quadrotor_landing_cornercut_reference.npz}"
 FLOOR="--floor_constraint true --region_edge_floor_prob 0.3"
 VARIANTS="${VARIANTS:-floor:${FLOOR}|floor_frec10:${FLOOR} --recovery_rate_floor 10|floor_rec10:${FLOOR} --recovery_rate_cone 10 --recovery_rate_floor 10|floor_rec20:${FLOOR} --recovery_rate_cone 20 --recovery_rate_floor 20}"
@@ -76,6 +81,22 @@ PY
 )"
 P2_ARGS=()
 [ -f "${PHASE2_RUN}/configs.json" ] && P2_ARGS=(--phase2_run "${PHASE2_RUN}")
+REF_ARGS=("${P2_ARGS[@]}")  # reference start of the reach tests (stages A, D)
+if [ -n "${START_REF}" ]; then
+    [ -f "${START_REF}" ] || { echo "START_REF not found: ${START_REF}"; exit 1; }
+    REF_ARGS=(--reference "${START_REF}")
+fi
+# follow LOG PID NAME: print the evaluation lines of a training log, with the step, until PID ends.
+# Detached from this shell's jobs so that `wait` below only sees the training runs.
+follow() {
+    ( tail -n +1 --pid="$2" -F "$1" 2>/dev/null | while IFS= read -r line; do
+          case "${line}" in
+              step=*) s="${line%% *}" ;;
+              *"[eval val]"*) echo "[$3] ${s:-} ${line#"${line%%[![:space:]]*}"}" ;;
+              "[certificate]"*|"[done]"*|*"not certified"*|*Error*) echo "[$3] ${line}" ;;
+          esac
+      done & )
+}
 TRACK_ARGS=()
 [ -f "${TRACK_REF}" ] && TRACK_ARGS=(--tracking_reference "${TRACK_REF}")
 has_stage() { case " ${STAGES} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
@@ -87,7 +108,7 @@ echo "[$(stamp)] settings: ${FLOOR_SETTINGS}"
 if has_stage A && [ ! -f "${OUT}/tests/baseline/floor_tests.json" ]; then
     echo "[$(stamp)] [A] baseline tests with ${BASE_BACKUP}"
     # shellcheck disable=SC2086
-    python scripts/test_landing_floor_reach.py --backup "${BASE_BACKUP}" "${P2_ARGS[@]}" "${TRACK_ARGS[@]}" \
+    python scripts/test_landing_floor_reach.py --backup "${BASE_BACKUP}" "${REF_ARGS[@]}" "${TRACK_ARGS[@]}" \
         --settings "as_trained:;${FLOOR_SETTINGS}" --out "${OUT}/tests/baseline" ${TEST_ARGS} \
         > "${LOGS}/A_baseline.log" 2>&1 || echo "[$(stamp)] [A] FAILED (see ${LOGS}/A_baseline.log)"
     grep -E "^\[" "${LOGS}/A_baseline.log" | tail -n 12
@@ -116,6 +137,7 @@ if has_stage B; then
         python scripts/train_phase1_landing.py --config_json "${BASE_CFG}" --backbone "${BACKBONE}" --seed "${seed}" \
             --total_steps "${TOTAL_STEPS}" --output_dir "${PHASE1_DIR}" --run_name "${name}" ${flags} \
             ${PS2RL_GPU_FLAG} ${P1_EXTRA_ARGS} > "${LOGS}/B_${name}.log" 2>&1 &
+        [ "${FOLLOW}" = "1" ] && follow "${LOGS}/B_${name}.log" "$!" "${name}"
         running=$((running + 1))
         if [ "${running}" -ge "${MAX_PARALLEL}" ]; then
             wait -n || true
@@ -161,7 +183,7 @@ if has_stage D; then
         [ -f "${OUT}/tests/${name}/floor_tests.json" ] && continue
         echo "[$(stamp)] [D] reach tests ${name}"
         # shellcheck disable=SC2086
-        python scripts/test_landing_floor_reach.py --backup "${PHASE1_DIR}/${name}" "${P2_ARGS[@]}" "${TRACK_ARGS[@]}" \
+        python scripts/test_landing_floor_reach.py --backup "${PHASE1_DIR}/${name}" "${REF_ARGS[@]}" "${TRACK_ARGS[@]}" \
             --settings "${FLOOR_SETTINGS}" --out "${OUT}/tests/${name}" ${TEST_ARGS} \
             > "${LOGS}/D_${name}.log" 2>&1 || echo "[$(stamp)] [D] ${name} FAILED (see ${LOGS}/D_${name}.log)"
         grep -E "^\[" "${LOGS}/D_${name}.log" | tail -n 8

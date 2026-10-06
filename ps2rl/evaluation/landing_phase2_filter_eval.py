@@ -48,8 +48,7 @@ class FilterEvalSetup:
 
 def _check_action_box(run: Phase2Run, cbf_cfg) -> None:
     env = run.env_cfg
-    env_low = [env.a_cmd_min, -env.omega_max, -env.omega_max, -env.omega_max]
-    env_high = [env.a_cmd_max, env.omega_max, env.omega_max, env.omega_max]
+    env_low, env_high = list(env.action_low), list(env.action_high)
     if not (np.allclose(env_low, cbf_cfg.action_low) and np.allclose(env_high, cbf_cfg.action_high)):
         raise ValueError(
             f"action box differs: Phase-II env [{env_low}, {env_high}] vs backup [{cbf_cfg.action_low}, "

@@ -1,0 +1,20 @@
+{
+  "name": "gz_x500",
+  "description": "Stock PX4 Gazebo x500 quadrotor (airframe 4001_gz_x500), as shipped: no model or parameter changes.",
+  "mass_base_kg": 2.0,
+  "rotor_mass_kg": 0.016076923076923075,
+  "rotor_count": 4,
+  "inertia_base_kgm2": [0.02166666666666667, 0.02166666666666667, 0.04000000000000001],
+  "rotor_positions_m": [[0.174, -0.174, 0.06], [-0.174, 0.174, 0.06], [0.174, 0.174, 0.06], [-0.174, -0.174, 0.06]],
+  "motor_constant_N_per_rad2_s2": 8.54858e-06,
+  "moment_constant_m": 0.016,
+  "rotor_speed_min_rad_s": 150.0,
+  "rotor_speed_max_rad_s": 1000.0,
+  "autopilot_attitude_rate_limit_deg_s": [220.0, 220.0, 200.0],
+  "sources": {
+    "mass, inertia, rotor positions": "PX4-gazebo-models models/x500_base/model.sdf",
+    "motor and moment constants": "PX4-gazebo-models models/x500/model.sdf (MulticopterMotorModel)",
+    "rotor speed range": "PX4-Autopilot v1.16 ROMFS/px4fmu_common/init.d-posix/airframes/4001_gz_x500 (SIM_GZ_EC_MIN/MAX)",
+    "autopilot_attitude_rate_limit_deg_s": "PX4 v1.16 defaults MC_ROLLRATE_MAX, MC_PITCHRATE_MAX, MC_YAWRATE_MAX. They limit PX4's attitude controller; direct body-rate setpoints are not clipped by them."
+  }
+}

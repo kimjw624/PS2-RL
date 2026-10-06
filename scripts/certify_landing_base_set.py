@@ -16,6 +16,7 @@ c_Lyap is a numerical check, not a proof (landing note, Remark 2). Report it as 
 from __future__ import annotations
 
 import argparse
+from dataclasses import fields
 import json
 import os
 from pathlib import Path
@@ -40,11 +41,14 @@ from ps2rl.sets.quadrotor_cone_sets import QuadrotorConeSafeSet
 
 
 def parse_args(argv=None) -> argparse.Namespace:
-    d = QuadrotorLandingConfig()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for name in ("cone_r0", "cone_theta_deg", "cone_eps", "z_des", "base_set_c", "z_clear",
-                 "lqr_q_x", "lqr_q_y", "lqr_q_z", "lqr_q_thetaz", "lqr_r_omega_z", "omega_max"):
-        p.add_argument(f"--{name}", type=float, default=getattr(d, name))
+    p.add_argument("--config_json", type=str, default="",
+                   help="config file with a 'landing' block, as for train_phase1_landing.py (flags below override it)")
+    for f in fields(QuadrotorLandingConfig):  # every landing field can be set; unset ones keep the default
+        if isinstance(f.default, bool):
+            p.add_argument(f"--{f.name}", type=lambda v: str(v).lower() in ("1", "true", "yes", "on"), default=None)
+        else:
+            p.add_argument(f"--{f.name}", type=type(f.default), default=None)
     p.add_argument("--z_min", type=float, default=0.6)
     p.add_argument("--z_max", type=float, default=4.0)
     p.add_argument("--z_step", type=float, default=0.05)
@@ -57,17 +61,25 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    overrides = {k: v for k, v in vars(args).items() if k in QuadrotorLandingConfig.__dataclass_fields__}
+    file_landing = json.loads(Path(args.config_json).read_text(encoding="utf-8")).get("landing", {}) if args.config_json else {}
+    names = {f.name for f in fields(QuadrotorLandingConfig)}
+    overrides = {**file_landing, **{k: v for k, v in vars(args).items() if k in names and v is not None}}
     cfg = QuadrotorLandingConfig().replace(**overrides)
     cone = QuadrotorConeSafeSet.from_config(cfg)
     ctrl = QuadrotorLandingDLQR.from_config(cfg)
     p_inv = np.linalg.inv(ctrl.p_matrix_f64())
+    omega_clip = cfg.omega_clip if isinstance(cfg.omega_clip, float) else jnp.asarray(cfg.omega_clip)
+    print(f"action box: thrust [{cfg.a_cmd_min:g}, {cfg.a_cmd_max:g}] m/s^2, body rates (roll, pitch, yaw) "
+          f"{', '.join(f'{w:g}' for w in cfg.omega_limits)} rad/s")
 
     def step_single(x, u):
-        return quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, cfg.omega_max)
+        return quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, omega_clip)
 
     # ---- z-independent bounds
     c_u = float(ctrl.max_certified_level)
+    k64 = ctrl.k_matrix_f64()
+    c_u_inputs = [float(m) ** 2 / float(k @ p_inv @ k) for m, k in zip(ctrl._input_margins(), k64)]
+    print("input feasibility per input (thrust, omega_x, omega_y, omega_z): " + ", ".join(f"{v:.2f}" for v in c_u_inputs))
     c_chart = lc.c_chart_bound(p_inv)
     c_lyap = lc.c_lyap_adversarial(ctrl, step_single, c_hi=min(c_u, c_chart))
     c_rest = min(c_u, c_chart, c_lyap)
@@ -101,12 +113,22 @@ def main(argv=None) -> None:
     # ---- configured point
     chosen = lc.level_bounds(ctrl, cone, z_des=cfg.z_des, z_clear=cfg.z_clear, c_lyap=c_lyap, c_hi=c_rest)
     rho = lc.support_radii(p_inv, cfg.base_set_c)
-    ok = cfg.base_set_c <= chosen.c_bar + 1e-9
-    print(f"\nconfigured z_des = {cfg.z_des}, c_B = {cfg.base_set_c}: c_bar(z_des) = {chosen.c_bar:.3f} "
-          f"[{chosen.binding}] -> {'OK' if ok else 'VIOLATES Proposition 1'}")
+    # gentle-recovery envelope (only if the config trains with it): B must lie inside it too
+    recovery = {}
+    if float(cfg.recovery_rate_floor) > 0.0:
+        recovery["c_recovery_floor"] = lc.c_recovery_floor(p_inv, z_des=cfg.z_des, kappa=float(cfg.recovery_rate_floor))
+    if float(cfg.recovery_rate_cone) > 0.0:
+        recovery["c_recovery_cone"] = lc.c_recovery_cone(p_inv, cone, z_des=cfg.z_des, kappa=float(cfg.recovery_rate_cone),
+                                                         c_hi=4.0 * max(c_rest, cfg.base_set_c))
+    c_bar_all = min([chosen.c_bar, *recovery.values()])
+    binding = chosen.binding if c_bar_all == chosen.c_bar else min(recovery, key=recovery.get)
+    ok = cfg.base_set_c <= c_bar_all + 1e-9
+    if recovery:
+        print("\ngentle-recovery envelope at z_des: " + ", ".join(f"{k} = {v:.3f}" for k, v in recovery.items()))
+    print(f"\nconfigured z_des = {cfg.z_des}, c_B = {cfg.base_set_c}: c_bar(z_des) = {c_bar_all:.3f} "
+          f"[{binding}] -> {'OK' if ok else 'VIOLATES Proposition 1'}")
     print("  extents at c_B: " + ", ".join(f"{k}={rho[k]:.3f}" for k in ("dx", "dz", "vx", "vz", "phix", "phiz")))
     tilt_deg = float(np.degrees(2.0 * np.arcsin(min(1.0, 0.5 * rho["phix"]))))
-    k64 = ctrl.k_matrix_f64()
     du = np.sqrt(cfg.base_set_c * np.einsum("ij,jk,ik->i", k64, p_inv, k64))
     print(f"  max tilt in B ~ {tilt_deg:.0f} deg; lowest point {cfg.z_des - rho['dz']:.2f} m above pad; "
           f"max |pi_B - u*| on B: thrust {du[0]:.2f} m/s^2, omega_xy {du[1]:.1f} rad/s, omega_z {du[3]:.1f} rad/s")
@@ -150,6 +172,9 @@ def main(argv=None) -> None:
     report = {
         "config": cfg.as_dict(),
         "c_u": c_u,
+        "c_u_per_input": c_u_inputs,
+        "recovery_bounds": recovery,
+        "c_bar_with_recovery": c_bar_all,
         "c_chart": c_chart,
         "c_lyap_adversarial": c_lyap,
         "c_rest": c_rest,

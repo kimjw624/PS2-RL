@@ -85,6 +85,9 @@ class QuadrotorEnvConfig:
     a_cmd_min: float = 0.0
     a_cmd_max: float | None = None  # Defaults to 4g.
     omega_max: float = 18.0
+    # Separate yaw-rate limit (0 = off: yaw uses omega_max like roll and pitch); see
+    # QuadrotorLandingConfig.omega_z_max.
+    omega_z_max: float = 0.0
 
     # Safety constraints.
     z_max: float = 3.0
@@ -191,6 +194,9 @@ class QuadrotorEnvConfig:
         omega_max = float(self.omega_max)
         if (not isfinite(omega_max)) or omega_max <= 0.0:
             raise ValueError(f"omega_max must be a positive finite value, got {self.omega_max}")
+        omega_z_max = float(self.omega_z_max)
+        if (not isfinite(omega_z_max)) or omega_z_max < 0.0 or omega_z_max > omega_max:
+            raise ValueError(f"omega_z_max must lie in [0, omega_max] (0 = use omega_max), got {self.omega_z_max}")
 
         disturbance_mode = str(self.disturbance_mode).strip().lower()
         if disturbance_mode not in ("none", "sinusoidal"):
@@ -273,6 +279,7 @@ class QuadrotorEnvConfig:
         object.__setattr__(self, "a_cmd_min", a_cmd_min)
         object.__setattr__(self, "a_cmd_max", a_cmd_max)
         object.__setattr__(self, "omega_max", omega_max)
+        object.__setattr__(self, "omega_z_max", omega_z_max)
         object.__setattr__(self, "disturbance_mode", disturbance_mode)
         object.__setattr__(self, "disturbance_amplitude", disturbance_amplitude)
         object.__setattr__(self, "disturbance_frequency_hz", disturbance_frequency_hz)
@@ -285,6 +292,24 @@ class QuadrotorEnvConfig:
         object.__setattr__(self, "init_state_library", str(self.init_state_library).strip())
         object.__setattr__(self, "reference_path", reference_path)
         object.__setattr__(self, "reference_dt", ref_dt)
+
+    # ----------------------------------------------------------------- action box
+    @property
+    def omega_limits(self) -> tuple[float, float, float]:
+        """Body-rate limits (roll, pitch, yaw) [rad/s]."""
+        w = float(self.omega_max)
+        return (w, w, float(self.omega_z_max) if float(self.omega_z_max) > 0.0 else w)
+
+    @property
+    def action_low(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_min), -wx, -wy, -wz)
+
+    @property
+    def action_high(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_max), wx, wy, wz)
+
 
 
 class QuadrotorEnvState(NamedTuple):
@@ -356,7 +381,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
     gravity = jnp.asarray(cfg.gravity, dtype=dtype)
     a_cmd_min = jnp.asarray(cfg.a_cmd_min, dtype=dtype)
     a_cmd_max = jnp.asarray(cfg.a_cmd_max, dtype=dtype)
-    omega_max = jnp.asarray(cfg.omega_max, dtype=dtype)
+    omega_max = jnp.asarray(cfg.omega_limits if cfg.omega_z_max > 0.0 else cfg.omega_max, dtype=dtype)  # scalar or per axis
 
     max_steps_i32 = jnp.int32(cfg.max_steps)
     terminate_on_violation = jnp.asarray(cfg.terminate_on_violation, dtype=jnp.bool_)

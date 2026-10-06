@@ -202,15 +202,15 @@ class QuadrotorLandingBCBFConfig(BackupCBFConfig):
 
     @property
     def action_low(self) -> tuple[float, ...]:
-        return (self.a_cmd_min, -self.omega_max, -self.omega_max, -self.omega_max)
+        return self.landing.action_low
 
     @property
     def action_high(self) -> tuple[float, ...]:
-        return (self.a_cmd_max, self.omega_max, self.omega_max, self.omega_max)
+        return self.landing.action_high
 
     @property
     def action_scale(self) -> jax.Array:
-        return jnp.array([self.a_cmd_max, self.omega_max, self.omega_max, self.omega_max], dtype=jnp.float32)
+        return jnp.array(self.landing.action_scale, dtype=jnp.float32)
 
     @property
     def num_safe_constraints(self) -> int:
@@ -325,6 +325,12 @@ def landing_sets(cfg: QuadrotorLandingBCBFConfig) -> tuple[QuadrotorLandingSafeS
     return cone, EllipsoidBaseSet(ctrl, float(lc.base_set_c), smooth_gain=float(lc.base_set_smooth_gain))
 
 
+def _omega_clip(lc: QuadrotorLandingConfig):
+    """Body-rate clip of the plant step: omega_max, or per-axis limits with a separate yaw limit."""
+    w = lc.omega_clip
+    return w if isinstance(w, float) else jnp.asarray(w, dtype=jnp.float32)
+
+
 def _sanitize_state(x: jax.Array) -> jax.Array:
     x = jnp.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
     return x.at[6:10].set(normalize_quaternion(x[6:10]))
@@ -354,7 +360,7 @@ def make_landing_backup_runtime(cfg: QuadrotorLandingBCBFConfig) -> BCBFSystem:
         backup_policy_fn=backup_policy_fn,
         safe_set_values_and_grads_fn=cone.values_and_grads,
         base_set_values_and_grads_fn=base_set.values_and_grads,
-        dynamics_fn=lambda x, u: quadrotor_dynamics(x, u, lc.gravity, lc.a_cmd_min, lc.a_cmd_max, lc.omega_max),
+        dynamics_fn=lambda x, u: quadrotor_dynamics(x, u, lc.gravity, lc.a_cmd_min, lc.a_cmd_max, _omega_clip(lc)),
         control_affine_terms_fn=lambda x: quadrotor_control_affine_terms(x, lc.gravity),
         postprocess_rollout_state_fn=lambda z: z.at[6:10].set(normalize_quaternion(z[6:10])),
         sanitize_solve_state_fn=_sanitize_state,
@@ -512,7 +518,7 @@ class QuadrotorLandingBackupCBFProjector(BackupCBFProjector):
 def landing_step(x: jax.Array, u: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
     """The plant step Phase I was trained on (explicit Euler + quaternion normalisation)."""
     lc = cfg.landing
-    return quadrotor_step_euler(x, u, lc.dt, lc.gravity, lc.a_cmd_min, lc.a_cmd_max, lc.omega_max)
+    return quadrotor_step_euler(x, u, lc.dt, lc.gravity, lc.a_cmd_min, lc.a_cmd_max, _omega_clip(lc))
 
 
 def cone_value(x: jax.Array, cfg: QuadrotorLandingBCBFConfig) -> jax.Array:
