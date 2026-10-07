@@ -150,3 +150,18 @@ A Phase-II policy must be trained with the same action box as the backup it is f
 `scripts/train_phase2_landing.py --backup <x500 run>` takes the box, including the yaw limit, from
 the backup. A policy trained with the 4 g box cannot be combined with the x500 backup; the filter
 evaluation refuses the pair.
+
+## Flying the filter in Gazebo
+
+The backup of seed 1 from the GPU batch is kept in `checkpoints/landing_phase1/x500_rec10_td3_seed1/`.
+With it the landing filter can be flown in PX4 / Gazebo SITL on the stock x500 before a Phase-II
+policy exists: the hover LQR aimed at the pad, passed through the filter.
+
+- `ps2rl/deploy/landing_runtime.py`: nominal controller + filter for one state (50 Hz loop).
+- `ps2rl/deploy/landing_flight.py`: flight logic (take-off, start gates, hand-over, touchdown test,
+  aborts, records), without ROS.
+- `scripts/rehearse_landing_flight.py`: the same logic against a stand-in vehicle with lags, delay,
+  thrust-map error and noise (`ps2rl/deploy/landing_plant_sim.py`); no PX4, Gazebo or ROS.
+- `scripts/plot_landing_flight.py`: figure and report from a recorded flight.
+- The ROS 2 node, its config and the run steps are in the bridge package:
+  `dual_stage_rl/SITL_src/ps2rl_px4_bridge/README_landing.md`.

@@ -1,0 +1,88 @@
+{
+  "checkpoint": "outputs/landing_x500/phase1/x500_rec10_td3_seed1/landing_backup_policy_actor.pkl",
+  "landing": {
+    "dt": 0.02,
+    "T": 2.0,
+    "num_steps": 100,
+    "gravity": 9.81,
+    "a_cmd_min": 1.992,
+    "a_cmd_max": 14.945,
+    "omega_max": 3.84,
+    "omega_z_max": 0.203,
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "pad_z": 0.0,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "floor_constraint": true,
+    "recovery_rate_cone": 10.0,
+    "recovery_rate_floor": 10.0,
+    "z_des": 1.25,
+    "base_set_c": 15.1,
+    "base_set_smooth_gain": 20.0,
+    "z_clear": 0.5,
+    "lqr_q_x": 1.0,
+    "lqr_q_y": 1.0,
+    "lqr_q_z": 1.0,
+    "lqr_q_vx": 0.16,
+    "lqr_q_vy": 0.16,
+    "lqr_q_vz": 0.4,
+    "lqr_q_thetax": 0.8,
+    "lqr_q_thetay": 0.8,
+    "lqr_q_thetaz": 0.09925992084876718,
+    "lqr_r_a_cmd": 0.0729939918215959,
+    "lqr_r_omega_x": 0.263671875,
+    "lqr_r_omega_y": 0.263671875,
+    "lqr_r_omega_z": 2.667385485334276
+  },
+  "qp": {
+    "alpha": 10.0,
+    "base_alpha": 2.0,
+    "slack_weight": 1000000.0,
+    "solver_tol": 0.0005,
+    "qp_solve_dtype": "float64"
+  },
+  "recoverability_wrt_S_only": {
+    "general": 0.857421875,
+    "edge": 0.49609375,
+    "shell": 1.0
+  },
+  "recoverability": {
+    "fresh": {
+      "general": 0.77734375,
+      "edge": 0.3671875,
+      "shell": 1.0
+    },
+    "phase1_test": {
+      "general": 0.8095703125,
+      "edge": 0.3818359375,
+      "shell": 1.0
+    },
+    "hoeffding_halfwidth": 0.060020174457495044,
+    "ok": true
+  },
+  "filter_stress_test": {
+    "n_start_states": 32,
+    "steps": 150,
+    "unfiltered_leave_cone_frac": 1.0,
+    "filtered_leave_cone_frac": 0.0,
+    "filtered_min_h": 3.838539123535156e-05,
+    "filtered_min_h_per_run_median": 0.0030519962310791016,
+    "max_slack": 0.00020155437232460827,
+    "frac_steps_slack_gt_1e-3": 0.0,
+    "solver_fallback_steps": 0,
+    "mean_intervention_norm": 0.6112512350082397,
+    "frac_steps_intervening": 0.9272916666666666,
+    "qp_batch_solve_ms_median": 33.109426498413086,
+    "ok": true,
+    "solver_fallback_frac": 0.0
+  },
+  "floor_stress_test": {
+    "target_depth": 0.30000000000000004,
+    "unfiltered_min_height": -0.31654447317123413,
+    "filtered_min_height": 8.111310307867825e-07,
+    "max_slack": 0.00020680416491813958,
+    "ok": true
+  }
+}
