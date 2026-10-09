@@ -22,3 +22,42 @@ slurm-*.err
 # Caches
 .matplotlib/
 matplotlib-cache/
+
+# Local training, checkpoint, and Python artifacts
+/outputs/
+
+# Ignore arbitrary checkpoints, but publish the exact lightweight policies
+# required by PS2RL_SITL_final.md.
+/checkpoints/*
+# Landing Phase-I safe-arrival backup consumed by the landing CIL (see LANDING_HANDOFF.md).
+!/checkpoints/landing_phase1/
+!/checkpoints/sitl_delay_comparison/
+/checkpoints/sitl_delay_comparison/*
+!/checkpoints/sitl_delay_comparison/policies/
+/checkpoints/sitl_delay_comparison/policies/*
+
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/
+/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/*
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/configs.json
+!/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/final_weights.pkl
+
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/
+/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/*
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/configs.json
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/summary.json
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/best_weights.pkl
+!/checkpoints/sitl_delay_comparison/policies/delay_d5_j2_h5_seed4/final_weights.pkl
+
+/.venv/
+**/__pycache__/
+*.py[cod]
+
+# Persistent XLA compilation cache (docker_batch/landing_env.sh)
+.jax_cache/
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Local experiment artifacts
+logs/
+results/
+checkpoints/

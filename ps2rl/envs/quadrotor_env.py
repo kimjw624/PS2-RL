@@ -28,6 +28,10 @@ from ps2rl.envs.assets.utils import (
     _load_reference_bundle,
     _load_reference_states,
 )
+from ps2rl.uncertainty.quadrotor_disturbance import (
+    disturbance_value,
+    make_sinusoidal_disturbance_params,
+)
 
 Array = jax.Array
 
@@ -86,6 +90,16 @@ class QuadrotorEnvConfig:
     z_max: float = 3.0
     terminate_on_violation: bool = False
 
+    # Optional fixed world-frame translational acceleration disturbance.
+    # This is intentionally deterministic; no domain randomization is used.
+    disturbance_mode: str = "none"
+    disturbance_amplitude: float = 0.0
+    disturbance_frequency_hz: float = 0.1
+    disturbance_phase: float = 0.0
+    disturbance_direction_x: float = 1.0
+    disturbance_direction_y: float = 0.0
+    disturbance_direction_z: float = 0.0
+
     # Nominal objective.
     reward_mode: str = "trajectory_following"
     reference_path: str = ""
@@ -132,6 +146,33 @@ class QuadrotorEnvConfig:
         if (not isfinite(omega_max)) or omega_max <= 0.0:
             raise ValueError(f"omega_max must be a positive finite value, got {self.omega_max}")
 
+        disturbance_mode = str(self.disturbance_mode).strip().lower()
+        if disturbance_mode not in ("none", "sinusoidal"):
+            raise ValueError(
+                f"disturbance_mode must be 'none' or 'sinusoidal', got {self.disturbance_mode!r}"
+            )
+        disturbance_amplitude = float(self.disturbance_amplitude)
+        disturbance_frequency_hz = float(self.disturbance_frequency_hz)
+        disturbance_phase = float(self.disturbance_phase)
+        disturbance_direction = np.asarray(
+            [
+                self.disturbance_direction_x,
+                self.disturbance_direction_y,
+                self.disturbance_direction_z,
+            ],
+            dtype=np.float64,
+        )
+        if not np.all(np.isfinite(disturbance_direction)):
+            raise ValueError("disturbance direction components must be finite")
+        if (not isfinite(disturbance_amplitude)) or disturbance_amplitude < 0.0:
+            raise ValueError("disturbance_amplitude must be a nonnegative finite value")
+        if (not isfinite(disturbance_frequency_hz)) or disturbance_frequency_hz < 0.0:
+            raise ValueError("disturbance_frequency_hz must be a nonnegative finite value")
+        if not isfinite(disturbance_phase):
+            raise ValueError("disturbance_phase must be finite")
+        if disturbance_mode == "sinusoidal" and np.linalg.norm(disturbance_direction) <= 1e-12:
+            raise ValueError("sinusoidal disturbance direction must be nonzero")
+
         z_max = float(self.z_max)
         z_des = float(self.z_des)
         if (not isfinite(z_max)) or (not isfinite(z_des)):
@@ -171,6 +212,10 @@ class QuadrotorEnvConfig:
         object.__setattr__(self, "a_cmd_min", a_cmd_min)
         object.__setattr__(self, "a_cmd_max", a_cmd_max)
         object.__setattr__(self, "omega_max", omega_max)
+        object.__setattr__(self, "disturbance_mode", disturbance_mode)
+        object.__setattr__(self, "disturbance_amplitude", disturbance_amplitude)
+        object.__setattr__(self, "disturbance_frequency_hz", disturbance_frequency_hz)
+        object.__setattr__(self, "disturbance_phase", disturbance_phase)
         object.__setattr__(self, "z_max", z_max)
         object.__setattr__(self, "z_des", z_des)
         object.__setattr__(self, "reward_mode", reward_mode)
@@ -209,6 +254,7 @@ class QuadrotorStepInfo(NamedTuple):
     completed_vel_error_norm: Array
     completed_att_error_norm: Array
     completed_hard_deck_margin_min: Array
+    disturbance_accel: Array
 
 
 class QuadrotorEnvFns(NamedTuple):
@@ -251,6 +297,18 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
 
     z_max = jnp.asarray(cfg.z_max, dtype=dtype)
 
+    disturbance_enabled = cfg.disturbance_mode == "sinusoidal"
+    disturbance_params = make_sinusoidal_disturbance_params(
+        amplitude=cfg.disturbance_amplitude if disturbance_enabled else 0.0,
+        frequency_hz=cfg.disturbance_frequency_hz if disturbance_enabled else 0.0,
+        phase=cfg.disturbance_phase,
+        direction=(
+            cfg.disturbance_direction_x,
+            cfg.disturbance_direction_y,
+            cfg.disturbance_direction_z,
+        ) if disturbance_enabled else (1.0, 0.0, 0.0),
+        dtype=dtype,
+    )
 
     w_pos_xy = jnp.asarray(cfg.w_pos_xy, dtype=dtype)
     w_pos_z = jnp.asarray(cfg.w_pos_z, dtype=dtype)
@@ -407,6 +465,9 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
     def env_step(state: QuadrotorEnvState, action: Array, key: Array):
         u = _clip_action(action)
         x_dot = _state_derivative(state.x, u)
+        disturbance_t = state.steps.astype(dtype) * dt
+        d_world = disturbance_value(disturbance_t, disturbance_params)
+        x_dot = x_dot.at[3:6].add(d_world)
         x_next = state.x + dt * x_dot
         x_next = x_next.at[6:10].set(_normalize_quaternion(x_next[6:10]))
 
@@ -485,6 +546,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
             completed_vel_error_norm=completed_vel_error_norm.astype(dtype),
             completed_att_error_norm=completed_att_error_norm.astype(dtype),
             completed_hard_deck_margin_min=completed_hard_deck_margin_min.astype(dtype),
+            disturbance_accel=d_world.astype(dtype),
         )
 
         return state_out, next_obs_true, obs_out, reward.astype(dtype), done, info
