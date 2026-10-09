@@ -1,0 +1,26 @@
+{
+  "1) Stage-1 tracker, no CIL": {
+    "n": 128,
+    "unsafe": 1.0,
+    "landed": 0.0,
+    "min_h": -0.239385724067688,
+    "dist_mean": 0.01471027173101902,
+    "dist_max": 0.034913692623376846
+  },
+  "2) Same tracker + CIL (Phase II start)": {
+    "n": 128,
+    "unsafe": 0.0,
+    "landed": 1.0,
+    "min_h": 0.0018944740295410156,
+    "dist_mean": 0.19872359931468964,
+    "dist_max": 0.2806347906589508
+  },
+  "3) Phase II trained (0.9M steps), through CIL": {
+    "n": 128,
+    "unsafe": 0.0,
+    "landed": 1.0,
+    "min_h": 0.0013382434844970703,
+    "dist_mean": 0.04637250676751137,
+    "dist_max": 0.06847834587097168
+  }
+}
