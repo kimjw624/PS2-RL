@@ -118,7 +118,7 @@ def anywhere_invariance(cfg, c, *, factor=1.0, n=4096, steps=300, seed=0):
     step = step_fn(cfg)
     rng = np.random.default_rng(seed)
     m = 20 * n
-    p = np.stack([rng.uniform(-3.0, 3.0, m), rng.uniform(-0.6, 0.6, m), rng.uniform(cfg.ground_z, cfg.tip_z + 2.5, m)], 1)
+    p = np.stack([rng.uniform(-3.0, 3.0, m), rng.uniform(-0.6, 0.6, m), rng.uniform(cfg.floor_z, cfg.tip_z + 2.5, m)], 1)
     v = rng.normal(0.0, 0.6, (m, 3))
     ang = rng.normal(0.0, 0.15, (m, 3))
     half = 0.5 * ang
@@ -216,15 +216,15 @@ def main(argv=None):
         safe = ConeObstacleSafeSet.from_config(cfg)
         gap = cfg.gap
         zb = cfg.band_height
-        c_geo_band = min(tip - zb, zb - cfg.ground_z) ** 2 / ext7**2
+        c_geo_band = min(tip - zb, zb - cfg.floor_z) ** 2 / ext7**2
         g = {"tip_z": tip, "gap": gap, "band": {"z": zb, "c_geo": c_geo_band, "c_max": min(out["lqr7_band"]["c_max"], c_geo_band)},
              "points": [], "anywhere_min_gap": {}}
-        mid = cfg.ground_z + 0.5 * gap
+        mid = cfg.floor_z + 0.5 * gap
         cands = {"approach_low": (-1.0, 0.0, mid), "approach_beside": (-2.0, 0.0, tip + 0.5),
                  "under_tip": (0.0, 0.0, mid), "far_low": (1.0, 0.0, mid)}
         for name, pt in cands.items():
             d = float(safe.m_distance(jnp.asarray(pt, jnp.float32), m_h, m_v))
-            c_geo = min(d * d, (pt[2] - cfg.ground_z) ** 2 * m_v)
+            c_geo = min(d * d, (pt[2] - cfg.floor_z) ** 2 * m_v)
             g["points"].append({"name": name, "point": list(pt), "c_geo": c_geo, "c_max": min(out["lqr9"]["c_max"], c_geo)})
         for lev in parse_list(a.anywhere_levels):
             g["anywhere_min_gap"][str(lev)] = 2.0 * float(np.sqrt(lev)) * float(np.sqrt(w6[2, 2]))

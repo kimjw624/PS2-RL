@@ -40,7 +40,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cone_obstacle_common import design_config, load_certificate, make_config, parse_list, resolve  # noqa: E402
+from cone_obstacle_common import design_config, load_certificate, load_task, parse_list, resolve, task_config  # noqa: E402
 from landing_reference_candidates import bundle_of, septic_unit  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -54,14 +54,16 @@ SHAPE_NAMES = {"S": "straight line", "E": "early drop (from 50 % of the approach
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--vehicle", default="docker_batch/configs/landing_x500_cone45_r0p3.json")
-    p.add_argument("--certificate", default="outputs/cone_obstacle/certificate.json")
-    p.add_argument("--design", default="points:approach_beside@2", help="base set (see cone_obstacle_common.design_config)")
-    p.add_argument("--tip_z", type=float, default=1.2)
-    p.add_argument("--theta_deg", type=float, default=45.0)
-    p.add_argument("--eps", type=float, default=0.25)
-    p.add_argument("--radius", type=float, default=0.25, help="target cylinder radius [m]")
-    p.add_argument("--top", type=float, default=-1.0, help="target cylinder top [m] (< 0: the tip)")
+    p.add_argument("--task", default="docker_batch/configs/cone_obstacle_x500.json",
+                   help="task file: vehicle, geometry, floor, cylinder, base set, filter (the flags below override it)")
+    p.add_argument("--certificate", default=None)
+    p.add_argument("--design", default=None, help="base set (see cone_obstacle_common.design_config)")
+    p.add_argument("--tip_z", type=float, default=None)
+    p.add_argument("--theta_deg", type=float, default=None)
+    p.add_argument("--eps", type=float, default=None)
+    p.add_argument("--min_altitude", type=float, default=None, help="floor above the ground [m]")
+    p.add_argument("--radius", type=float, default=None, help="target cylinder radius [m]")
+    p.add_argument("--top", type=float, default=None, help="target cylinder top [m] (< 0: the tip)")
     p.add_argument("--end_depth", type=float, default=0.3, help="reference end point below the cylinder top [m]")
     p.add_argument("--shapes", default="E,M,L,S")
     p.add_argument("--x0", default="3", help="start distances from the axis (approach from -x) [m]")
@@ -72,8 +74,8 @@ def parse_args(argv=None):
     p.add_argument("--dt", type=float, default=0.02)
     p.add_argument("--hold", type=float, default=3.0, help="seconds simulated after the reference ends")
     p.add_argument("--max_position_error", type=float, default=1.0, help="tracker position-error cap [m] (0 = off)")
-    p.add_argument("--alpha", type=float, default=10.0)
-    p.add_argument("--alpha_ground", type=float, default=20.0)
+    p.add_argument("--alpha", type=float, default=None)
+    p.add_argument("--alpha_ground", type=float, default=None)
     p.add_argument("--no_sim", action="store_true", help="only build and plot the references")
     p.add_argument("--out", default="outputs/cone_obstacle/ref_candidates")
     p.add_argument("--save", default="", help="candidate ids to write as reference .npz files: a comma list or 'all'")
@@ -214,10 +216,10 @@ def score(cfg, sim, cands, a):
             x = sim[name]["x"][b]
             r = np.hypot(x[:, 0] - cfg.axis_x, x[:, 1] - cfg.axis_y)
             h_c = np.sqrt(r * r + e * e) - e - cfg.tan_theta * (x[:, 2] - cfg.tip_z)
-            h_g = x[:, 2] - cfg.ground_z
+            h_g = x[:, 2] - cfg.floor_z
             bad = (h_c < 0) | (h_g < 0)
             k_bad = int(np.argmax(bad)) if bad.any() else -1
-            hit = (r <= a.radius) & (x[:, 2] <= cfg.cylinder_top) & (x[:, 2] >= cfg.ground_z)
+            hit = (r <= a.radius) & (x[:, 2] <= cfg.cylinder_top) & (x[:, 2] >= cfg.floor_z)
             k_hit = int(np.argmax(hit)) if hit.any() else -1
             ok = k_hit >= 0 and (k_bad < 0 or k_bad > k_hit)
             dev = np.linalg.norm(x[:, 0:3] - sim["x_ref"][b, :, 0:3], axis=1)
@@ -243,6 +245,9 @@ def draw_scene(ax, cfg, base_pt, base_ext, xlim, ylim):
     zw = float(cfg.tip_z) + (np.sqrt(r * r + cfg.cone_eps**2) - cfg.cone_eps) / cfg.tan_theta
     ax.fill_between(np.r_[-r[::-1], r] + cfg.axis_x, np.r_[zw[::-1], zw], ylim[1] + 5, color="0.55", alpha=0.55, lw=0)
     ax.axhline(cfg.ground_z, color="k", lw=0.8)
+    if cfg.floor_z > cfg.ground_z:
+        ax.axhspan(cfg.ground_z, cfg.floor_z, color="0.55", alpha=0.3, lw=0)
+        ax.axhline(cfg.floor_z, color="0.3", lw=0.8, ls="--")
     ax.add_patch(Rectangle((cfg.axis_x - cfg.target_radius, cfg.ground_z), 2 * cfg.target_radius, cfg.cylinder_top - cfg.ground_z,
                            fc="tab:red", ec="tab:red", alpha=0.15, lw=1.0))
     if base_pt is not None:
@@ -280,7 +285,7 @@ def plot_grids(out, cfg, cands, res, sim, a, base_pt, base_ext):
                 ax.set_xlabel(summary_text(c, res.get(cid)), fontsize=6.3)
         fig.suptitle(f"Start {x0:g} m from the axis, {'fast' if fast else 'slow'} approach ({v:g} m/s average) — columns: when the "
                      f"drop starts; rows: start height above the tip ({cfg.tip_z:g} m); end {a.end_depth:g} m inside the cylinder "
-                     f"(red, r {a.radius:g} m)\ndashed: reference (red where it is inside the funnel), dots every 1 s; orange: tracker "
+                     f"(red, r {a.radius:g} m); floor {cfg.floor_z:g} m\ndashed: reference (red where it is inside the funnel), dots every 1 s; orange: tracker "
                      f"without the filter; blue: tracker through the filter; green: base set ({a.design})", fontsize=9.5)
         f = out / f"candidates_x{x0:g}_{'fast' if fast else 'slow'}.png"
         fig.savefig(f, dpi=105)
@@ -326,7 +331,7 @@ def save_reference(path_npz, cid, c, cfg, a, sim_b, r, base_pt, base_ext):
     meta = {"cone_obstacle_reference": {"generator": "scripts/cone_obstacle_reference_candidates.py", "candidate": cid,
                                         "shape": SHAPE_NAMES[c["shape"]], "x0": c["x0"], "dz0": c["dz0"], "v_avg": c["v_avg"],
                                         "drop_speed": a.drop_speed, "end_depth": a.end_depth, "y0": a.y0, "dt": a.dt,
-                                        "start": c["start"], "end": c["end"], "base_set": a.design,
+                                        "start": c["start"], "end": c["end"], "base_set": a.design, "task": a.task,
                                         "scenario": {k: v for k, v in cfg.as_dict().items() if not k.startswith("lqr_")}},
             "stats": {k: c[k] for k in ("duration", "min_h", "depth_in_funnel", "time_in_funnel", "enter_time", "enter_r",
                                         "peak_speed", "peak_tilt", "a_range", "peak_omega", "feasible")},
@@ -365,9 +370,17 @@ def save_reference(path_npz, cid, c, cfg, a, sim_b, r, base_pt, base_ext):
 
 def main(argv=None):
     a = parse_args(argv)
+    task = load_task(a.task)
+    a.design = a.design or task["base_set_design"]
+    a.certificate = a.certificate or task.get("certificate", "outputs/cone_obstacle/certificate.json")
+    a.alpha = task["filter"]["alpha"] if a.alpha is None else a.alpha
+    a.alpha_ground = task["filter"]["alpha_ground"] if a.alpha_ground is None else a.alpha_ground
+    over = {k: v for k, v in (("tip_z", a.tip_z), ("cone_theta_deg", a.theta_deg), ("cone_eps", a.eps),
+                              ("min_altitude", a.min_altitude), ("target_radius", a.radius), ("target_height", a.top))
+            if v is not None}
+    cfg = task_config(task, **over)
+    a.radius = float(cfg.target_radius)
     cert = load_certificate(a.certificate)
-    cfg = make_config(a.vehicle, tip_z=a.tip_z, cone_theta_deg=a.theta_deg, cone_eps=a.eps, target_radius=a.radius,
-                      target_height=a.top)
     cands = {}
     for shape, x0, dz0, v in itertools.product([s for s in a.shapes.split(",") if s], parse_list(a.x0), parse_list(a.dz0),
                                                parse_list(a.speeds)):

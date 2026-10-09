@@ -42,9 +42,19 @@ def resolve(path: str) -> Path:
     return ROOT / path if not Path(path).is_absolute() else Path(path)
 
 
+def load_task(path: str) -> dict[str, Any]:
+    """A task file (e.g. docker_batch/configs/cone_obstacle_x500.json): the vehicle file, the
+    scenario fields (``cone_obstacle``), the base-set design spec and the filter settings."""
+    return json.loads(resolve(path).read_text(encoding="utf-8"))
+
+
+def task_config(task: dict[str, Any], **overrides: Any) -> ConeObstacleConfig:
+    return make_config(task["vehicle"], **{**task.get("cone_obstacle", {}), **overrides})
+
+
 # ------------------------------------------------------------------ base-set designs
 # Named hover points, relative to the geometry: (x offset from the axis [m], height mode,
-# height value). Height modes: "mid" = middle of the ground-tip gap (+ value), "tip" =
+# height value). Height modes: "mid" = middle of the floor-tip gap (+ value), "tip" =
 # tip height + value. The approach comes from -x.
 NAMED_POINTS = {
     "approach_low": (-1.0, "mid", 0.0),       # under the outer wall, on the approach side
@@ -72,7 +82,7 @@ def load_certificate(path: str) -> dict[str, Any]:
 
 def point_xyz(cfg: ConeObstacleConfig, name: str) -> tuple[float, float, float]:
     dx, mode, val = NAMED_POINTS[name]
-    z = (float(cfg.ground_z) + 0.5 * cfg.gap if mode == "mid" else float(cfg.tip_z)) + float(val)
+    z = (cfg.floor_z + 0.5 * cfg.gap if mode == "mid" else float(cfg.tip_z)) + float(val)
     return (float(cfg.axis_x) + float(dx), float(cfg.axis_y), z)
 
 
@@ -84,14 +94,14 @@ def geometric_cap(cfg: ConeObstacleConfig, kind: str, points: tuple, cert: dict[
     if kind == "band":
         ext = float(cert["lqr7_band"]["vertical_half_extent_per_sqrt_c"])
         zb = cfg.band_height
-        return min(float(cfg.tip_z) - zb, zb - float(cfg.ground_z)) ** 2 / ext**2
+        return min(float(cfg.tip_z) - zb, zb - cfg.floor_z) ** 2 / ext**2
     if kind == "points":
         safe = ConeObstacleSafeSet.from_config(cfg)
         m_h, m_v = (float(cert["lqr9"]["metric"][k]) for k in ("m_h", "m_v"))
         caps = []
         for pt in points:
             d = float(safe.m_distance(jnp.asarray(pt, jnp.float32), m_h, m_v))
-            caps.append(min(d * d, (pt[2] - float(cfg.ground_z)) ** 2 * m_v))
+            caps.append(min(d * d, (pt[2] - cfg.floor_z) ** 2 * m_v))
         return min(caps)
     return float("inf")   # anywhere: the clearance scales with the remaining energy
 
@@ -119,4 +129,4 @@ def design_config(cfg: ConeObstacleConfig, spec: str, cert: dict[str, Any], cap_
 
 
 __all__ = ["DEFAULT_DESIGNS", "NAMED_POINTS", "ROOT", "design_config", "geometric_cap", "level_state", "load_certificate",
-           "lqr_cap", "make_config", "parse_list", "point_xyz", "resolve", "vehicle_fields"]
+           "load_task", "lqr_cap", "make_config", "parse_list", "point_xyz", "resolve", "task_config", "vehicle_fields"]

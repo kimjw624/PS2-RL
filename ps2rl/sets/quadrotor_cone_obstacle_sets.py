@@ -2,7 +2,9 @@
 
 Safe set: outside an apex-down funnel and above the ground,
 
-    h_cone   = sqrt(r^2 + eps^2) - eps - tan(theta) (z - tip_z),   h_ground = z - ground_z.
+    h_cone   = sqrt(r^2 + eps^2) - eps - tan(theta) (z - tip_z),   h_ground = z - ground_z,
+
+where ``ground_z`` here is the lower bound: the config's ground plus its ``min_altitude``.
 
 Base sets (see the config's docstring):
 
@@ -60,7 +62,7 @@ class ConeObstacleSafeSet(SafeSet):
     @classmethod
     def from_config(cls, cfg: Any) -> "ConeObstacleSafeSet":
         return cls(axis_x=float(cfg.axis_x), axis_y=float(cfg.axis_y), tip_z=float(cfg.tip_z),
-                   theta_deg=float(cfg.cone_theta_deg), eps=float(cfg.cone_eps), ground_z=float(cfg.ground_z),
+                   theta_deg=float(cfg.cone_theta_deg), eps=float(cfg.cone_eps), ground_z=float(cfg.floor_z),
                    recovery_rate_cone=float(cfg.recovery_rate_cone),
                    recovery_rate_ground=float(cfg.recovery_rate_ground))
 

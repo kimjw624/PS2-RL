@@ -21,6 +21,7 @@
       0.8999999999999999
     ],
     "base_set": "points:approach_beside@2",
+    "task": "docker_batch/configs/cone_obstacle_x500.json",
     "scenario": {
       "dt": 0.02,
       "T": 2.0,
@@ -36,6 +37,7 @@
       "cone_theta_deg": 45.0,
       "cone_eps": 0.25,
       "ground_z": 0.0,
+      "min_altitude": 0.5,
       "recovery_rate_cone": 0.0,
       "recovery_rate_ground": 0.0,
       "base_set": "band",
@@ -77,7 +79,7 @@
     "unfiltered": {
       "unsafe": false,
       "min_h_cone": 0.27706223726272583,
-      "min_h_ground": 0.8903201818466187,
+      "min_h_ground": 0.39032018184661865,
       "touch_time": 2.2,
       "speed_at_touch": 1.1375665664672852,
       "final_dist_to_end": 5.125999968364928e-07,
@@ -86,13 +88,13 @@
     },
     "filtered": {
       "unsafe": false,
-      "min_h_cone": 0.27706223726272583,
-      "min_h_ground": 0.8903201818466187,
+      "min_h_cone": 0.2770622670650482,
+      "min_h_ground": 0.3903200030326843,
       "touch_time": 2.2,
-      "speed_at_touch": 1.1375665664672852,
-      "final_dist_to_end": 5.166255846777225e-07,
+      "speed_at_touch": 1.1375664472579956,
+      "final_dist_to_end": 5.206968327419626e-07,
       "max_dev_from_ref": 0.025116976350545883,
-      "final_speed": 6.744425604665594e-07,
+      "final_speed": 6.719686211908993e-07,
       "filter_active_frac": 0.0,
       "min_safeguard_lambda": 1.0,
       "stalled": false

@@ -2,10 +2,11 @@
 
 A drone flies toward a target that lies under the funnel. The funnel's outer wall faces
 outward and down, so a safety filter that removes the inward part of a command makes the
-vehicle slide down the wall and under the tip. The ground is a second constraint.
+vehicle slide down the wall and under the tip. The ground, raised by ``min_altitude`` (a floor:
+ground effect, altitude-estimate error), is a second constraint.
 
     h_cone(x)   = sqrt(r^2 + eps^2) - eps - tan(theta) (z - tip_z)  >= 0   (outside the funnel)
-    h_ground(x) = z - ground_z                                      >= 0
+    h_ground(x) = z - (ground_z + min_altitude)                     >= 0
 
 r is the horizontal distance from the funnel axis. At r = 0 the boundary is the tip,
 z = tip_z; eps rounds the tip (radius of curvature about eps / tan(theta)^2).
@@ -60,6 +61,7 @@ class ConeObstacleConfig:
     cone_theta_deg: float = 45.0
     cone_eps: float = 0.25
     ground_z: float = 0.0
+    min_altitude: float = 0.0                   # floor above the ground; the safe set's lower bound is ground_z + this
     # Phase-I gentle-recovery envelope G_j = {grad_p h_j . v <= kappa_j h_j} (0 = off)
     recovery_rate_cone: float = 0.0
     recovery_rate_ground: float = 0.0
@@ -106,8 +108,10 @@ class ConeObstacleConfig:
             raise ValueError(f"cone_theta_deg must lie in (0, 90), got {self.cone_theta_deg}")
         if float(self.cone_eps) <= 0.0:
             raise ValueError(f"cone_eps must be > 0 (it rounds the tip), got {self.cone_eps}")
-        if float(self.tip_z) <= float(self.ground_z):
-            raise ValueError(f"tip_z={self.tip_z} must be above ground_z={self.ground_z}")
+        if float(self.min_altitude) < 0.0:
+            raise ValueError(f"min_altitude must be >= 0, got {self.min_altitude}")
+        if float(self.tip_z) <= self.floor_z:
+            raise ValueError(f"tip_z={self.tip_z} must be above the floor ground_z + min_altitude = {self.floor_z}")
         c = float(self.base_set_c)
         if not isfinite(c) or c <= 0.0:
             raise ValueError(f"base_set_c must be positive, got {c}")
@@ -123,8 +127,8 @@ class ConeObstacleConfig:
             if float(getattr(self, name)) < 0.0:
                 raise ValueError(f"{name} must be >= 0, got {getattr(self, name)}")
         h_max = self.funnel_surface_z(self.target_near_r)
-        if float(self.target_height) >= 0.0 and not (float(self.ground_z) < float(self.target_height) <= h_max + 1e-9):
-            raise ValueError(f"target_height={self.target_height} must lie in (ground_z, {h_max:.4f}] (the funnel above the "
+        if float(self.target_height) >= 0.0 and not (self.floor_z < float(self.target_height) <= h_max + 1e-9):
+            raise ValueError(f"target_height={self.target_height} must lie in (floor {self.floor_z:g}, {h_max:.4f}] (the funnel above the "
                              "cylinder), or < 0 for that height")
 
     # ----------------------------------------------------------------- geometry
@@ -133,13 +137,18 @@ class ConeObstacleConfig:
         return tan(radians(float(self.cone_theta_deg)))
 
     @property
+    def floor_z(self) -> float:
+        """Lowest allowed height: the ground plus the minimum altitude."""
+        return float(self.ground_z) + float(self.min_altitude)
+
+    @property
     def gap(self) -> float:
-        """Free height between the ground and the tip."""
-        return float(self.tip_z) - float(self.ground_z)
+        """Free height between the floor and the tip."""
+        return float(self.tip_z) - self.floor_z
 
     @property
     def band_height(self) -> float:
-        return float(self.band_z) if float(self.band_z) >= 0.0 else float(self.ground_z) + 0.5 * self.gap
+        return float(self.band_z) if float(self.band_z) >= 0.0 else self.floor_z + 0.5 * self.gap
 
     def funnel_surface_z(self, r: float) -> float:
         """Height of the funnel's underside at horizontal distance r from the axis."""

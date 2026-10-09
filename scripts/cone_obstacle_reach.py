@@ -59,7 +59,7 @@ def make_starts(cfg, a):
     xs, ps, meta = [], [], []
     cx, cy = float(cfg.axis_x), float(cfg.axis_y)
     tx, ty = cfg.target_center
-    centre = (tx, ty, float(cfg.ground_z) + 0.5 * (cfg.cylinder_top - float(cfg.ground_z)))
+    centre = (tx, ty, cfg.floor_z + 0.5 * (cfg.cylinder_top - cfg.floor_z))
     for nom, y0, dz0, v0 in itertools.product(a.nominals.split(","), parse_list(a.y0), parse_list(a.dz0), parse_list(a.v0)):
         p0 = (cx + a.x0, cy + y0, float(cfg.tip_z) + dz0)
         d = np.asarray([1.0, 0.0, 0.0]) if a.x0 < 0 else np.asarray([-1.0, 0.0, 0.0])
@@ -198,6 +198,8 @@ def plot_geometry(path, cfg, runs, meta, radius):
             ax = axes[i, j]
             ax.fill_between(np.r_[-rr[::-1], rr] + cfg.axis_x, np.r_[zw[::-1], zw], 10, color="#555555", alpha=0.85, lw=0)
             ax.axhline(cfg.ground_z, color="k", lw=0.8)
+            if cfg.floor_z > cfg.ground_z:
+                ax.axhspan(cfg.ground_z, cfg.floor_z, color="0.55", alpha=0.25, lw=0)
             tx = cfg.target_center[0]
             ax.plot([tx - radius, tx - radius, tx + radius, tx + radius],
                     [cfg.ground_z, cfg.cylinder_top, cfg.cylinder_top, cfg.ground_z], color="#d62728", lw=1.0)
