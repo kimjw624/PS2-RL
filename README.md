@@ -119,21 +119,21 @@ python scripts/evaluate_phase2.py --system unicycle [options]
 
 Two convenience entrypoints exist as thin wrappers: `scripts/train_vanilla_tracker.py` (≡ `train_phase2.py --system quadrotor` with the projection disabled — the vanilla tracker used to warm-start the quadrotor) and `scripts/compare_backup_policies.py` (≡ `evaluate_phase1.py --system quadrotor --mode compare`).
 
-1단계: tracker (CIL 없음, QP가 없어 빠름)
+### 1단계: tracker (CIL 없음, QP가 없어 빠름)
 
-bash
+```bash
 JAX_ENABLE_X64=1 nohup python scripts/train_phase2_landing_ue_cached.py \
   --ckpt outputs/landing_phase1_ue/ue_p1_seed0 --env_nominal_controller none \
   --use_projection false --env_terminate_on_unsafe false \
   --seed 0 --total_steps 5000000 --num_envs 64 --update_every 2 --batch_size 256 \
   --replay_size 1000000 --eval_every 250000 --eval_episodes 64 \
   --run_tag land_ue_vanilla_s0 > logs/p2_vanilla.log 2>&1 &
-
+```
 eval의 return이 올라가면 정상입니다. CIL이 없어서 unsafe가 1.0으로 나오는 건 정상이고, 2단계에서 CIL이 막아 줍니다.
 
-2단계: 1단계가 끝난 뒤 warm start로 CIL 포함 Phase II
+### 2단계: 1단계가 끝난 뒤 warm start로 CIL 포함 Phase II
 
-bash
+```bash
 JAX_ENABLE_X64=1 nohup python scripts/train_phase2_landing_ue_cached.py \
   --ckpt outputs/landing_phase1_ue/ue_p1_seed0 --env_nominal_controller none \
   --warm_start_weights outputs/landing_phase2_ue/land_ue_vanilla_s0/best_weights.pkl \
@@ -141,6 +141,7 @@ JAX_ENABLE_X64=1 nohup python scripts/train_phase2_landing_ue_cached.py \
   --seed 0 --total_steps 3000000 --num_envs 64 --update_every 8 --batch_size 256 \
   --rows_keep 203 --project_target_actions true --replay_size 500000 \
   --eval_every 250000 --eval_episodes 64 --run_tag land_ue_p2_warm_s0 > logs/p2_warm.log 2>&1 &
+```
 ## Reproducing the paper
 
 The `slurm_batch/` directory holds the Slurm drivers that reproduce the reported runs (within a tolerance), and each pins the canonical hyperparameters and writes results under `outputs/`.
