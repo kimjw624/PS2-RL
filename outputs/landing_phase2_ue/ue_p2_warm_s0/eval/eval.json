@@ -1,0 +1,52 @@
+{
+  "run": "outputs/landing_phase2_ue/claude_ue_p2_warm_s0",
+  "weights": "best",
+  "ckpt": "outputs/landing_phase1_ue/ue_floor_rec10_td3_h128_seed0",
+  "nominal_ckpt": "checkpoints/landing_phase1/floor_rec10_td3_seed0",
+  "ue": {
+    "delta_d": 0.5,
+    "frequency_hz": 0.05,
+    "delta_v": 0.15707963267948966,
+    "observer_lambda": 20.0,
+    "e_bar": 0.02,
+    "tube_scale": 1.2,
+    "d_hat_max": 0.52,
+    "s_clip": 20.0
+  },
+  "results": {
+    "ue": {
+      "episodes": 128,
+      "unsafe_rate": 0.0,
+      "min_h_cone": 0.0013382434844970703,
+      "min_z": 0.010197136551141739,
+      "h_violation_depth_max": 0.0,
+      "landed_rate": 1.0,
+      "final_dist_mean": 0.04637250676751137,
+      "final_z_mean": 0.013729545287787914,
+      "final_speed_mean": 0.11419723182916641,
+      "return_mean": -75.79649982776027,
+      "cil_correction_mean": 0.035995487576808816,
+      "slack_gt_1e-3_rate": 0.0,
+      "fallback_rate": 0.0,
+      "safeguard_rate": 0.0001875,
+      "max_observer_error": 0.009991203434765339
+    },
+    "none": {
+      "episodes": 128,
+      "unsafe_rate": 1.0,
+      "min_h_cone": -0.016661643981933594,
+      "min_z": -0.004367226734757423,
+      "h_violation_depth_max": 0.016661643981933594,
+      "landed_rate": 0.0,
+      "final_dist_mean": 0.6487545967102051,
+      "final_z_mean": 0.5357541441917419,
+      "final_speed_mean": 0.6038373708724976,
+      "return_mean": -54.00069217773853,
+      "cil_correction_mean": 0.0,
+      "slack_gt_1e-3_rate": 0.0,
+      "fallback_rate": 0.0,
+      "safeguard_rate": 0.0,
+      "max_observer_error": 0.009991203434765339
+    }
+  }
+}
