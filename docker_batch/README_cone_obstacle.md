@@ -18,6 +18,7 @@ QP plus discrete safeguard), with an LQR base controller as the backup (no Phase
 | `scripts/cone_obstacle_geometry.py` | does the funnel stand between the start and the cylinder at all? |
 | `scripts/cone_obstacle_report.py` | markdown tables and success figures |
 | `scripts/test_cone_obstacle_sets.py` | self-checks (B in S, gradients, brake set at rest, filter output) |
+| `scripts/cone_obstacle_reference_candidates.py` | candidate references that run into the funnel and drop onto the cylinder; each flown with and without the filter; `--save <id>` writes one as a reference `.npz` |
 
 Design names (`--designs`): `<kind>[:<point>+<point>]@<level>`, level = a number, `max`
 (0.98 x min(certified LQR level, geometric cap)) or `max/<k>`. Named points (relative to
@@ -35,6 +36,8 @@ python scripts/cone_obstacle_reach.py --tip_z 1.2 --target_offset_x 1.5 --nomina
     --y0 0 --dz0 0.5,1.0 --v0 0,1.0 --duration 10 --top_offsets 0,0.3 --radii 0.25,0.5 --out outputs/cone_obstacle/reach_far
 python scripts/cone_obstacle_geometry.py --out outputs/cone_obstacle/geometry                                    # ~2 min
 python scripts/cone_obstacle_report.py --reach outputs/cone_obstacle/reach/reach.json --out outputs/cone_obstacle/report
+python scripts/cone_obstacle_reference_candidates.py --out outputs/cone_obstacle/ref_candidates                 # ~1 min, 48 candidates
+python scripts/cone_obstacle_reference_candidates.py --save L3-1-f                                              # write one
 ```
 
 The vehicle limits and LQR weights come from the x500 landing config
