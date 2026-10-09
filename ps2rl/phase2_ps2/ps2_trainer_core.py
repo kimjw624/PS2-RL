@@ -236,6 +236,11 @@ class PS2SystemBinding(NamedTuple):
     backup_policy_fn: Callable[..., Any]
     action_bounds_fn: Callable[[jax.Array, Any], Tuple[jax.Array, jax.Array]]
     disable_backup_fallback_fn: Callable[[Any], bool]
+    #: Optional actor action box (low, high). None = the safe-action box (original behaviour).
+    actor_bounds_fn: Callable[[jax.Array, Any], Tuple[jax.Array, jax.Array]] | None = None
+    #: Optional map (obs, actor action) -> reference action u_ref that the CIL filters, e.g. residual
+    #: RL u_ref = u_nom(obs) + a. None = identity (original behaviour).
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None
 
     def projection_ops(self, cbf_cfg: Any, backup_runtime: Any) -> BCBFProjectionOps:
         return make_projection_ops(
@@ -245,6 +250,20 @@ class PS2SystemBinding(NamedTuple):
             project_fn=self.project_fn,
             backup_policy_fn=self.backup_policy_fn,
         )
+
+
+
+def _actor_box_and_reference(action_low, action_high, actor_low, actor_high, reference_action_fn):
+    """Actor sampling box and actor-action -> reference-action map (identity / safe box by default)."""
+    a_low = action_low if actor_low is None else actor_low
+    a_high = action_high if actor_high is None else actor_high
+
+    def to_reference(obs_b: jax.Array, act_b: jax.Array) -> jax.Array:
+        if reference_action_fn is None:
+            return act_b
+        return jnp.clip(reference_action_fn(obs_b, act_b), action_low, action_high)
+
+    return a_low, a_high, to_reference
 
 
 def build_ps2_update_fn(
@@ -258,8 +277,14 @@ def build_ps2_update_fn(
     phys_dim: int,
     disable_backup_fallback: bool = False,
     extended_qp_diagnostics: bool = False,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
     """Create one JITed SAC update step."""
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
 
     def physical_obs(obs_b: jax.Array) -> jax.Array:
         # Safety modules (backup policy / CIL) only use the physical state.
@@ -355,11 +380,12 @@ def build_ps2_update_fn(
                 key_c,
                 action_scale,
                 actor_cfg,
-                action_low=action_low,
-                action_high=action_high,
+                action_low=a_low,
+                action_high=a_high,
             )
             next_raw = jnp.nan_to_num(next_raw, nan=0.0, posinf=0.0, neginf=0.0)
-            next_raw = jnp.clip(next_raw, action_low, action_high)
+            next_raw = jnp.clip(next_raw, a_low, a_high)
+            next_raw = to_reference(batch["next_obs"], next_raw)
             next_logp = jnp.nan_to_num(next_logp, nan=0.0, posinf=10.0, neginf=-10.0)
             next_logp = jnp.clip(next_logp, -20.0, 20.0)
             next_safe, _, target_use_solver, target_finite_info = maybe_project_target(batch["next_obs"], next_raw)
@@ -424,11 +450,12 @@ def build_ps2_update_fn(
                 key_a,
                 action_scale,
                 actor_cfg,
-                action_low=action_low,
-                action_high=action_high,
+                action_low=a_low,
+                action_high=a_high,
             )
             raw_action = jnp.nan_to_num(raw_action, nan=0.0, posinf=0.0, neginf=0.0)
-            raw_action = jnp.clip(raw_action, action_low, action_high)
+            raw_action = jnp.clip(raw_action, a_low, a_high)
+            raw_action = to_reference(batch["obs"], raw_action)
             logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
             logp = jnp.clip(logp, -20.0, 20.0)
             safe_action, slack, actor_use_solver, actor_finite_info = maybe_project_actor(batch["obs"], raw_action)
@@ -557,8 +584,14 @@ def build_ps2_action_fns(
     phys_dim: int,
     disable_backup_fallback: bool = False,
     return_solver_info: bool = False,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
     """Build jitted training/eval policy calls."""
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
 
     def physical_obs(obs_b: jax.Array) -> jax.Array:
         return obs_b[..., :phys_dim]
@@ -588,9 +621,10 @@ def build_ps2_action_fns(
             key,
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
+        raw = to_reference(obs[None, :], raw)
         if return_solver_info:
             safe, slack, use_solver, finite_info = maybe_project(obs[None, :], raw)
         else:
@@ -613,9 +647,10 @@ def build_ps2_action_fns(
             obs[None, :],
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
+        raw = to_reference(obs[None, :], raw)
         if return_solver_info:
             safe, slack, use_solver, finite_info = maybe_project(obs[None, :], raw)
         else:
@@ -643,7 +678,14 @@ def build_ps2_batched_action_fn(
     *,
     phys_dim: int,
     disable_backup_fallback: bool = False,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
+
     @jax.jit
     def sample_action_batch(actor_params: Dict[str, Any], obs_b: jax.Array, key: jax.Array):
         raw, logp, _ = sample_actor_action(
@@ -652,11 +694,12 @@ def build_ps2_batched_action_fn(
             key,
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
         raw = jnp.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0)
-        raw = jnp.clip(raw, action_low, action_high)
+        raw = jnp.clip(raw, a_low, a_high)
+        raw = to_reference(obs_b, raw)
         logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
         logp = jnp.clip(logp, -20.0, 20.0)
 
@@ -695,6 +738,16 @@ def zero_ps2_chunk_metrics(
     return metrics
 
 
+def _binding_actor_kwargs(binding: PS2SystemBinding, action_scale: jax.Array, cbf_cfg: Any) -> Dict[str, Any]:
+    """Optional actor box / reference-action map of a binding (empty for the original systems)."""
+    kw: Dict[str, Any] = {}
+    if getattr(binding, "actor_bounds_fn", None) is not None:
+        kw["actor_low"], kw["actor_high"] = binding.actor_bounds_fn(action_scale, cbf_cfg)
+    if getattr(binding, "reference_action_fn", None) is not None:
+        kw["reference_action_fn"] = binding.reference_action_fn
+    return kw
+
+
 def build_ps2_update_fn_for(
     binding: PS2SystemBinding,
     sac_cfg: Any,
@@ -715,6 +768,7 @@ def build_ps2_update_fn_for(
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
         extended_qp_diagnostics=binding.extended_qp_diagnostics,
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
 
 
@@ -739,6 +793,7 @@ def build_ps2_action_fns_for(
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
         return_solver_info=return_solver_info,
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
 
 
@@ -761,6 +816,7 @@ def build_ps2_batched_action_fn_for(
         binding.projection_ops(cbf_cfg, backup_runtime),
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
     return sample_action_batch, action_low, action_high
 
@@ -870,7 +926,7 @@ def build_ps2_one_vec_step(
                     step_metrics_g = dict(step_metrics_g)
                     step_metrics_g["update_count"] = step_metrics_g["update_count"] + 1.0
                     for sum_name, metric_key in update_metric_pairs:
-                        step_metrics_g[sum_name] = step_metrics_g[sum_name] + upd_metrics[metric_key]
+                        step_metrics_g[sum_name] = step_metrics_g[sum_name] + jnp.asarray(upd_metrics[metric_key]).astype(step_metrics_g[sum_name].dtype)
                     return state_g, replay_g, key_g, updates_g, step_metrics_g
 
                 return jax.lax.fori_loop(

@@ -1,0 +1,209 @@
+{
+  "training_objective": "discounted_safe_arrival_ue_tightened",
+  "task": "runway_retreat_under_disturbance",
+  "sa_backbone": "td3",
+  "seed": 0,
+  "total_steps": 3000000,
+  "updates": 374751,
+  "wall_time_sec": 1100.5355770587921,
+  "jax_backend": "cpu",
+  "final_curriculum_scale": 1.0,
+  "tube_constants": {
+    "gamma": 2.6594662126063606,
+    "l_y": 0.3108301298036844,
+    "l_z": 0.27836633118028437,
+    "kappa_b": 1.000000000000004,
+    "c_b": 10.5
+  },
+  "untrained_val": {
+    "split": "val",
+    "general": {
+      "n": 1024,
+      "m_hat": 0.626953125,
+      "nominal_m_hat": 0.9482421875,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.0537109375,
+      "timeout_rate": 0.3193359375,
+      "mean_arrival_steps": 46.77570093457944,
+      "tube_at_arrival_median": 0.26702216267585754
+    },
+    "edge": {
+      "n": 1024,
+      "m_hat": 0.3203125,
+      "nominal_m_hat": 0.69921875,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.3125,
+      "timeout_rate": 0.3671875,
+      "mean_arrival_steps": 50.14939024390244,
+      "tube_at_arrival_median": 0.3080305755138397
+    },
+    "shell": {
+      "n": 512,
+      "m_hat": 1.0,
+      "nominal_m_hat": 1.0,
+      "hoeffding_halfwidth": 0.060020174457495044,
+      "crash_rate": 0.0,
+      "timeout_rate": 0.0,
+      "mean_arrival_steps": 3.759765625,
+      "tube_at_arrival_median": 0.003712747246026993
+    },
+    "mu_weighted": 0.4639756944444444,
+    "nominal_mu_weighted": 0.7879774305555556,
+    "crash_rate": 0.146484375,
+    "rate_p90": 2.4635231494903564,
+    "rate_p50": 1.2100343704223633
+  },
+  "final_val": {
+    "split": "val",
+    "general": {
+      "n": 1024,
+      "m_hat": 0.8662109375,
+      "nominal_m_hat": 0.9619140625,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.04296875,
+      "timeout_rate": 0.0908203125,
+      "mean_arrival_steps": 40.7564825253664,
+      "tube_at_arrival_median": 0.23351824283599854
+    },
+    "edge": {
+      "n": 1024,
+      "m_hat": 0.5224609375,
+      "nominal_m_hat": 0.7568359375,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.2548828125,
+      "timeout_rate": 0.22265625,
+      "mean_arrival_steps": 44.47102803738318,
+      "tube_at_arrival_median": 0.2677690386772156
+    },
+    "shell": {
+      "n": 512,
+      "m_hat": 1.0,
+      "nominal_m_hat": 1.0,
+      "hoeffding_halfwidth": 0.060020174457495044,
+      "crash_rate": 0.0,
+      "timeout_rate": 0.0,
+      "mean_arrival_steps": 3.103515625,
+      "tube_at_arrival_median": 0.002315292600542307
+    },
+    "mu_weighted": 0.6519097222222222,
+    "nominal_mu_weighted": 0.8294270833333334,
+    "crash_rate": 0.119140625,
+    "rate_p90": 4.911260604858398,
+    "rate_p50": 2.1544973850250244
+  },
+  "best_val": {
+    "split": "val",
+    "general": {
+      "n": 1024,
+      "m_hat": 0.9248046875,
+      "nominal_m_hat": 0.9560546875,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.0478515625,
+      "timeout_rate": 0.02734375,
+      "mean_arrival_steps": 45.6779303062302,
+      "tube_at_arrival_median": 0.261320024728775
+    },
+    "edge": {
+      "n": 1024,
+      "m_hat": 0.6396484375,
+      "nominal_m_hat": 0.7265625,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.2890625,
+      "timeout_rate": 0.0712890625,
+      "mean_arrival_steps": 53.52519083969466,
+      "tube_at_arrival_median": 0.3518892228603363
+    },
+    "shell": {
+      "n": 512,
+      "m_hat": 1.0,
+      "nominal_m_hat": 1.0,
+      "hoeffding_halfwidth": 0.060020174457495044,
+      "crash_rate": 0.0,
+      "timeout_rate": 0.0,
+      "mean_arrival_steps": 3.4609375,
+      "tube_at_arrival_median": 0.003702231217175722
+    },
+    "mu_weighted": 0.7430555555555556,
+    "nominal_mu_weighted": 0.8079427083333334,
+    "crash_rate": 0.134765625,
+    "rate_p90": 3.716933250427246,
+    "rate_p50": 1.402878999710083
+  },
+  "best_eval_step": 1500000,
+  "test_at_best": {
+    "split": "test",
+    "general": {
+      "n": 1024,
+      "m_hat": 0.927734375,
+      "nominal_m_hat": 0.958984375,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.044921875,
+      "timeout_rate": 0.02734375,
+      "mean_arrival_steps": 45.84105263157895,
+      "tube_at_arrival_median": 0.25743764638900757
+    },
+    "edge": {
+      "n": 1024,
+      "m_hat": 0.6220703125,
+      "nominal_m_hat": 0.693359375,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.3193359375,
+      "timeout_rate": 0.05859375,
+      "mean_arrival_steps": 55.22605965463109,
+      "tube_at_arrival_median": 0.3846202492713928
+    },
+    "shell": {
+      "n": 512,
+      "m_hat": 1.0,
+      "nominal_m_hat": 1.0,
+      "hoeffding_halfwidth": 0.060020174457495044,
+      "crash_rate": 0.0,
+      "timeout_rate": 0.0,
+      "mean_arrival_steps": 3.599609375,
+      "tube_at_arrival_median": 0.0037126352544873953
+    },
+    "mu_weighted": 0.7319878472222222,
+    "nominal_mu_weighted": 0.7864583333333334,
+    "crash_rate": 0.145703125,
+    "rate_p90": 3.8738670349121094,
+    "rate_p50": 1.3952629566192627
+  },
+  "test_at_final": {
+    "split": "test",
+    "general": {
+      "n": 1024,
+      "m_hat": 0.8857421875,
+      "nominal_m_hat": 0.966796875,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.0380859375,
+      "timeout_rate": 0.076171875,
+      "mean_arrival_steps": 41.6284454244763,
+      "tube_at_arrival_median": 0.23591934144496918
+    },
+    "edge": {
+      "n": 1024,
+      "m_hat": 0.51171875,
+      "nominal_m_hat": 0.720703125,
+      "hoeffding_halfwidth": 0.04244067236689436,
+      "crash_rate": 0.2890625,
+      "timeout_rate": 0.19921875,
+      "mean_arrival_steps": 46.75763358778626,
+      "tube_at_arrival_median": 0.30638712644577026
+    },
+    "shell": {
+      "n": 512,
+      "m_hat": 1.0,
+      "nominal_m_hat": 1.0,
+      "hoeffding_halfwidth": 0.060020174457495044,
+      "crash_rate": 0.0,
+      "timeout_rate": 0.0,
+      "mean_arrival_steps": 3.119140625,
+      "tube_at_arrival_median": 0.00231748865917325
+    },
+    "mu_weighted": 0.6490885416666666,
+    "nominal_mu_weighted": 0.8064236111111112,
+    "crash_rate": 0.130859375,
+    "rate_p90": 4.993631362915039,
+    "rate_p50": 1.9717986583709717
+  }
+}
