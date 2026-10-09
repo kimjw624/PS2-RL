@@ -118,6 +118,7 @@ python scripts/evaluate_phase2.py --system unicycle [options]
 ```
 
 Two convenience entrypoints exist as thin wrappers: `scripts/train_vanilla_tracker.py` (≡ `train_phase2.py --system quadrotor` with the projection disabled — the vanilla tracker used to warm-start the quadrotor) and `scripts/compare_backup_policies.py` (≡ `evaluate_phase1.py --system quadrotor --mode compare`).
+
 1단계: tracker (CIL 없음, QP가 없어 빠름)
 
 bash
