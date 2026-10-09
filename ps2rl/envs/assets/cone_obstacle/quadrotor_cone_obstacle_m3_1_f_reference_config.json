@@ -1,0 +1,101 @@
+{
+  "cone_obstacle_reference": {
+    "generator": "scripts/cone_obstacle_reference_candidates.py",
+    "candidate": "M3-1-f",
+    "shape": "mid drop (from 75 % of the approach)",
+    "x0": 3.0,
+    "dz0": 1.0,
+    "v_avg": 1.0,
+    "drop_speed": 0.5,
+    "end_depth": 0.3,
+    "y0": 0.0,
+    "dt": 0.02,
+    "start": [
+      -3.0,
+      0.0,
+      2.2
+    ],
+    "end": [
+      0.0,
+      0.0,
+      0.8999999999999999
+    ],
+    "base_set": "points:approach_beside@2",
+    "scenario": {
+      "dt": 0.02,
+      "T": 2.0,
+      "num_steps": 100,
+      "gravity": 9.81,
+      "a_cmd_min": 1.992,
+      "a_cmd_max": 14.945,
+      "omega_max": 3.84,
+      "omega_z_max": 0.203,
+      "axis_x": 0.0,
+      "axis_y": 0.0,
+      "tip_z": 1.2,
+      "cone_theta_deg": 45.0,
+      "cone_eps": 0.25,
+      "ground_z": 0.0,
+      "recovery_rate_cone": 0.0,
+      "recovery_rate_ground": 0.0,
+      "base_set": "band",
+      "base_set_c": 4.0,
+      "base_set_smooth_gain": 20.0,
+      "band_z": -1.0,
+      "anywhere_clearance_factor": 1.0,
+      "hover_points": [
+        [
+          -1.5,
+          0.0,
+          0.8
+        ]
+      ],
+      "target_radius": 0.25,
+      "target_height": -1.0,
+      "target_offset_x": 0.0,
+      "target_offset_y": 0.0
+    }
+  },
+  "stats": {
+    "duration": 4.84,
+    "min_h": -0.9917648138772162,
+    "depth_in_funnel": 0.9917648138772162,
+    "time_in_funnel": 2.2600000000000002,
+    "enter_time": 1.6400000000000001,
+    "enter_r": 1.1964038631126186,
+    "peak_speed": 2.1875,
+    "peak_tilt": 14.317944671611297,
+    "a_range": [
+      8.365586545698864,
+      11.254446696558489
+    ],
+    "peak_omega": 0.5946313285762826,
+    "feasible": true
+  },
+  "cpu_check": {
+    "start_in_CN": true,
+    "unfiltered": {
+      "unsafe": true,
+      "min_h_cone": -0.99168461561203,
+      "min_h_ground": 0.8920859694480896,
+      "touch_time": null,
+      "speed_at_touch": null,
+      "final_dist_to_end": 0.0003258943557740402,
+      "max_dev_from_ref": 0.02402622625231743,
+      "final_speed": 5.787252348454786e-07
+    },
+    "filtered": {
+      "unsafe": false,
+      "min_h_cone": 0.002113819122314453,
+      "min_h_ground": 0.8503056168556213,
+      "touch_time": 3.84,
+      "speed_at_touch": 0.9588615894317627,
+      "final_dist_to_end": 0.0003258347599204215,
+      "max_dev_from_ref": 0.9292130470275879,
+      "final_speed": 5.201034696256102e-07,
+      "filter_active_frac": 0.14,
+      "min_safeguard_lambda": 1.0,
+      "stalled": false
+    }
+  }
+}

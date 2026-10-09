@@ -7,7 +7,8 @@ the tip) and ends in hover inside the target cylinder, ``--end_depth`` below its
 axis. Horizontal and vertical motion are separate smooth septic profiles (zero velocity,
 acceleration and jerk at both ends); when the drop starts sets the shape:
 
-  * S  straight line: both start together and end together;
+  * S  straight line: both start together and end together (a baseline: it never enters
+     the funnel, so the filter has nothing to do);
   * E  early drop: the drop starts halfway through the horizontal approach;
   * M  mid drop:   ... at 75 % of it;
   * L  late drop:  only once the vehicle is over the axis (an L: over the tip, then down).
@@ -22,8 +23,8 @@ without the filter and through the backup-CBF filter with the chosen base set (d
 9-D hover ellipsoid beside the funnel, ``points:approach_beside@2``, with its LQR as the backup).
 
     python scripts/cone_obstacle_reference_candidates.py --out outputs/cone_obstacle/ref_candidates   # grids
-    python scripts/cone_obstacle_reference_candidates.py --save L3-1-f \\
-        --save_path ps2rl/envs/assets/quadrotor_cone_obstacle_l3_1_f_reference.npz                  # one of them
+    python scripts/cone_obstacle_reference_candidates.py --save L3-1-f,M3-1-f    # some of them, or --save all
+        (-> ps2rl/envs/assets/cone_obstacle/quadrotor_cone_obstacle_<id>_reference.{npz,png,_config.json})
 
 IDs: <shape><|x0|>-<dz0>-<s|f> (slow / fast approach), e.g. L3-1-f = late drop, start 3 m from
 the axis and 1 m above the tip, fast.
@@ -63,7 +64,7 @@ def parse_args(argv=None):
     p.add_argument("--top", type=float, default=-1.0, help="target cylinder top [m] (< 0: the tip)")
     p.add_argument("--end_depth", type=float, default=0.3, help="reference end point below the cylinder top [m]")
     p.add_argument("--shapes", default="E,M,L,S")
-    p.add_argument("--x0", default="3,2", help="start distances from the axis (approach from -x) [m]")
+    p.add_argument("--x0", default="3", help="start distances from the axis (approach from -x) [m]")
     p.add_argument("--dz0", default="0.5,1,1.5", help="start heights above the tip [m]")
     p.add_argument("--speeds", default="0.6,1.0", help="average horizontal speeds: slow, fast [m/s]")
     p.add_argument("--drop_speed", type=float, default=0.5, help="average vertical speed of the drop [m/s]")
@@ -75,8 +76,8 @@ def parse_args(argv=None):
     p.add_argument("--alpha_ground", type=float, default=20.0)
     p.add_argument("--no_sim", action="store_true", help="only build and plot the references")
     p.add_argument("--out", default="outputs/cone_obstacle/ref_candidates")
-    p.add_argument("--save", default="", help="candidate id to write as a reference .npz")
-    p.add_argument("--save_path", default="")
+    p.add_argument("--save", default="", help="candidate ids to write as reference .npz files: a comma list or 'all'")
+    p.add_argument("--save_dir", default="ps2rl/envs/assets/cone_obstacle", help="where --save writes")
     return p.parse_args(argv)
 
 
@@ -264,48 +265,102 @@ def plot_grids(out, cfg, cands, res, sim, a, base_pt, base_ext):
     ylim = (cfg.ground_z - 0.1, cfg.tip_z + max(dzs) + 0.4)
     files = []
     idx = {cid: i for i, cid in enumerate(sim["ids"])} if sim else {}
-    for shape in shapes:
-        cols = [(x0, v) for x0 in x0s for v in vs]
-        fig, axs = plt.subplots(len(dzs), len(cols), figsize=(3.5 * len(cols), 3.0 * len(dzs) + 0.9), squeeze=False,
+    for x0, v in itertools.product(x0s, vs):
+        fast = v == max(vs)
+        fig, axs = plt.subplots(len(dzs), len(shapes), figsize=(3.5 * len(shapes), 3.0 * len(dzs) + 0.9), squeeze=False,
                                 constrained_layout=True)
         for i, dz0 in enumerate(dzs):
-            for j, (x0, v) in enumerate(cols):
-                cid = candidate_id(shape, x0, dz0, v == max(vs))
+            for j, shape in enumerate(shapes):
+                cid = candidate_id(shape, x0, dz0, fast)
                 c = cands[cid]
                 ax = axs[i, j]
-                draw_scene(ax, cfg, base_pt, base_ext, xlim, ylim)
-                P = c["P"]
-                inn = c["h"] < 0
-                ax.plot(np.where(~inn, P[:, 0], np.nan), P[:, 2], "--", color="k", lw=1.3)
-                ax.plot(np.where(inn, P[:, 0], np.nan), P[:, 2], "--", color="tab:red", lw=1.6)
-                k = np.arange(0, len(P), int(round(1.0 / a.dt)))
-                ax.plot(P[k, 0], P[k, 2], "o", color="0.25", ms=2.2)
-                ax.plot(P[0, 0], P[0, 2], "o", color="tab:blue", ms=5)
-                txt = (f"ref: {c['duration']:.1f} s, peak {c['peak_speed']:.1f} m/s, tilt {c['peak_tilt']:.0f}°, "
-                       f"{'' if c['feasible'] else 'OUT OF BOX, '}in funnel {c['time_in_funnel']:.1f} s / {100 * c['depth_in_funnel']:.0f} cm")
-                if sim:
-                    b = idx[cid]
-                    xu, xf = sim["unfiltered"]["x"][b], sim["filtered"]["x"][b]
-                    ax.plot(xu[:, 0], xu[:, 2], color="tab:orange", lw=1.0, alpha=0.9)
-                    ax.plot(xf[:, 0], xf[:, 2], color="tab:blue", lw=1.6)
-                    rf, ru = res[cid]["filtered"], res[cid]["unfiltered"]
-                    tt = "–" if rf["touch_time"] is None else f"{rf['touch_time']:.1f} s"
-                    txt += (f"\nno filter: {'COLLIDES' if ru['unsafe'] else 'safe'} (min h {100 * ru['min_h_cone']:+.0f} cm) | "
-                            f"filter: {'UNSAFE' if rf['unsafe'] else 'safe'}, touch {tt}"
-                            f"{', stalls' if rf['stalled'] else ''}, active {100 * rf['filter_active_frac']:.0f} %"
-                            f"{'' if res[cid]['start_in_CN'] else ', start not in C_N'}")
-                ax.set_title(f"{cid}   (x0 {x0:g} m, +{dz0:g} m, {'fast' if v == max(vs) else 'slow'} {v:g} m/s)",
-                             fontsize=9, fontweight="bold")
-                ax.set_xlabel(txt, fontsize=6.3)
-        fig.suptitle(f"Shape {shape}: {SHAPE_NAMES[shape]} — end {a.end_depth:g} m inside the cylinder (red, r {a.radius:g} m); "
-                     f"tip {cfg.tip_z:g} m, θ {cfg.cone_theta_deg:g}°, ε {cfg.cone_eps:g}\n"
-                     "dashed: reference (red where it is inside the funnel), dots every 1 s; orange: tracker without the filter; "
-                     f"blue: tracker through the filter; green: base set ({a.design})", fontsize=9.5)
-        f = out / f"candidates_{shape}.png"
+                draw_reference(ax, cfg, c, sim["unfiltered"]["x"][idx[cid]] if sim else None,
+                               sim["filtered"]["x"][idx[cid]] if sim else None, a, base_pt, base_ext, xlim, ylim)
+                ax.set_title(f"{cid}   ({SHAPE_NAMES[shape].split(' (')[0]}, +{dz0:g} m)", fontsize=9, fontweight="bold")
+                ax.set_xlabel(summary_text(c, res.get(cid)), fontsize=6.3)
+        fig.suptitle(f"Start {x0:g} m from the axis, {'fast' if fast else 'slow'} approach ({v:g} m/s average) — columns: when the "
+                     f"drop starts; rows: start height above the tip ({cfg.tip_z:g} m); end {a.end_depth:g} m inside the cylinder "
+                     f"(red, r {a.radius:g} m)\ndashed: reference (red where it is inside the funnel), dots every 1 s; orange: tracker "
+                     f"without the filter; blue: tracker through the filter; green: base set ({a.design})", fontsize=9.5)
+        f = out / f"candidates_x{x0:g}_{'fast' if fast else 'slow'}.png"
         fig.savefig(f, dpi=105)
         plt.close(fig)
         files.append(str(f))
     return files
+
+
+def draw_reference(ax, cfg, c, xu, xf, a, base_pt, base_ext, xlim, ylim):
+    draw_scene(ax, cfg, base_pt, base_ext, xlim, ylim)
+    P = c["P"]
+    inn = c["h"] < 0
+    ax.plot(np.where(~inn, P[:, 0], np.nan), P[:, 2], "--", color="k", lw=1.3)
+    ax.plot(np.where(inn, P[:, 0], np.nan), P[:, 2], "--", color="tab:red", lw=1.6)
+    k = np.arange(0, len(P), int(round(1.0 / a.dt)))
+    ax.plot(P[k, 0], P[k, 2], "o", color="0.25", ms=2.2)
+    ax.plot(P[0, 0], P[0, 2], "o", color="tab:blue", ms=5)
+    if xu is not None:
+        ax.plot(xu[:, 0], xu[:, 2], color="tab:orange", lw=1.0, alpha=0.9)
+        ax.plot(xf[:, 0], xf[:, 2], color="tab:blue", lw=1.6)
+
+
+def summary_text(c, r):
+    txt = (f"ref: {c['duration']:.1f} s, peak {c['peak_speed']:.1f} m/s, tilt {c['peak_tilt']:.0f}°, "
+           f"{'' if c['feasible'] else 'OUT OF BOX, '}in funnel {c['time_in_funnel']:.1f} s / {100 * c['depth_in_funnel']:.0f} cm")
+    if r:
+        rf, ru = r["filtered"], r["unfiltered"]
+        tt = "–" if rf["touch_time"] is None else f"{rf['touch_time']:.1f} s"
+        txt += (f"\nno filter: {'COLLIDES' if ru['unsafe'] else 'safe'} (min h {100 * ru['min_h_cone']:+.0f} cm) | "
+                f"filter: {'UNSAFE' if rf['unsafe'] else 'safe'}, touch {tt}"
+                f"{', stalls' if rf['stalled'] else ''}, active {100 * rf['filter_active_frac']:.0f} %"
+                f"{'' if r['start_in_CN'] else ', start not in C_N'}")
+    return txt
+
+
+def save_reference(path_npz, cid, c, cfg, a, sim_b, r, base_pt, base_ext):
+    """Reference .npz (landing-reference format), _config.json and a figure with the two runs."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    np.savez(path_npz, **bundle_of(c))
+    meta = {"cone_obstacle_reference": {"generator": "scripts/cone_obstacle_reference_candidates.py", "candidate": cid,
+                                        "shape": SHAPE_NAMES[c["shape"]], "x0": c["x0"], "dz0": c["dz0"], "v_avg": c["v_avg"],
+                                        "drop_speed": a.drop_speed, "end_depth": a.end_depth, "y0": a.y0, "dt": a.dt,
+                                        "start": c["start"], "end": c["end"], "base_set": a.design,
+                                        "scenario": {k: v for k, v in cfg.as_dict().items() if not k.startswith("lqr_")}},
+            "stats": {k: c[k] for k in ("duration", "min_h", "depth_in_funnel", "time_in_funnel", "enter_time", "enter_r",
+                                        "peak_speed", "peak_tilt", "a_range", "peak_omega", "feasible")},
+            "cpu_check": r}
+    path_npz.with_name(path_npz.stem + "_config.json").write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
+
+    fig = plt.figure(figsize=(12, 6.2), constrained_layout=True)
+    gs = fig.add_gridspec(3, 2, width_ratios=(1.25, 1.0))
+    ax = fig.add_subplot(gs[:, 0])
+    xlim = (cfg.axis_x - c["x0"] - 0.4, cfg.axis_x + 1.0)
+    ylim = (cfg.ground_z - 0.1, c["start"][2] + 0.4)
+    draw_reference(ax, cfg, c, None if sim_b is None else sim_b[0], None if sim_b is None else sim_b[1], a, base_pt, base_ext,
+                   xlim, ylim)
+    ax.set_title(f"{cid}: {SHAPE_NAMES[c['shape']]}, start +{c['dz0']:g} m, {c['v_avg']:g} m/s", fontsize=10, fontweight="bold")
+    ax.set_xlabel(summary_text(c, r), fontsize=7.5)
+    lo, hi = cfg.action_low, cfg.action_high
+    t = c["t"]
+    for k, (yy, lab, lims) in enumerate(((c["a_cmd"], "thrust [m/s²]", (lo[0], hi[0])),
+                                         (c["omega"][:, 0:2], "roll / pitch rate [rad/s]", (lo[1], hi[1])),
+                                         (c["h"], "funnel barrier h [m]", None))):
+        axk = fig.add_subplot(gs[k, 1])
+        axk.plot(t, yy, lw=1.2)
+        if lims is not None:
+            for v in lims:
+                axk.axhline(v, color="tab:red", ls=":", lw=1)
+        else:
+            axk.axhline(0.0, color="tab:red", ls=":", lw=1)
+            axk.fill_between(t, np.minimum(yy, 0), 0, color="tab:red", alpha=0.2)
+        axk.set_ylabel(lab, fontsize=8)
+        axk.grid(alpha=0.25)
+        axk.tick_params(labelsize=7)
+    axk.set_xlabel("t [s]", fontsize=8)
+    fig.savefig(path_npz.with_suffix(".png"), dpi=100)
+    plt.close(fig)
 
 
 def main(argv=None):
@@ -317,23 +372,6 @@ def main(argv=None):
     for shape, x0, dz0, v in itertools.product([s for s in a.shapes.split(",") if s], parse_list(a.x0), parse_list(a.dz0),
                                                parse_list(a.speeds)):
         cands[candidate_id(shape, x0, dz0, v == max(parse_list(a.speeds)))] = build_candidate(cfg, a, shape, x0, dz0, v)
-
-    if a.save:
-        if a.save not in cands:
-            raise SystemExit(f"unknown candidate {a.save}; ids: {', '.join(cands)}")
-        c = cands[a.save]
-        path = resolve(a.save_path or f"ps2rl/envs/assets/quadrotor_cone_obstacle_{a.save.replace('-', '_').replace('.', 'p').lower()}_reference.npz")
-        b = bundle_of(c)
-        np.savez(path, **b)
-        meta = {"cone_obstacle_reference": {"generator": "scripts/cone_obstacle_reference_candidates.py", "candidate": a.save,
-                                            "shape": SHAPE_NAMES[c["shape"]], "x0": c["x0"], "dz0": c["dz0"], "v_avg": c["v_avg"],
-                                            "drop_speed": a.drop_speed, "y0": a.y0, "dt": a.dt, "start": c["start"], "end": c["end"],
-                                            "scenario": {k: v for k, v in cfg.as_dict().items() if not k.startswith("lqr_")}},
-                "stats": {k: c[k] for k in ("duration", "min_h", "depth_in_funnel", "time_in_funnel", "enter_time", "enter_r",
-                                            "peak_speed", "peak_tilt", "a_range", "peak_omega", "feasible")}}
-        path.with_name(path.stem + "_config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        print(f"saved {a.save} -> {path} (+ _config.json)")
-        return
 
     out = resolve(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -349,6 +387,20 @@ def main(argv=None):
         sim = simulate(cfg_d, cands, a)
         res = score(cfg, sim, cands, a)
     files = plot_grids(out, cfg, cands, res, sim, a, base_pt, base_ext)
+
+    if a.save:
+        ids = list(cands) if a.save.strip() == "all" else [v.strip() for v in a.save.split(",") if v.strip()]
+        unknown = [v for v in ids if v not in cands]
+        if unknown:
+            raise SystemExit(f"unknown candidate(s) {unknown}; ids: {', '.join(cands)}")
+        save_dir = resolve(a.save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        idx = {cid: i for i, cid in enumerate(sim["ids"])} if sim else {}
+        for cid in ids:
+            path = save_dir / f"quadrotor_cone_obstacle_{cid.replace('-', '_').replace('.', 'p').lower()}_reference.npz"
+            sim_b = (sim["unfiltered"]["x"][idx[cid]], sim["filtered"]["x"][idx[cid]]) if sim else None
+            save_reference(path, cid, cands[cid], cfg, a, sim_b, res.get(cid), base_pt, base_ext)
+        print(f"saved {len(ids)} reference(s) to {save_dir} (.npz, _config.json, .png)")
 
     rows = ["| id | shape | start x0 / +z [m] | speed [m/s] | duration [s] | in funnel [s] / depth [cm] | peak speed [m/s] / tilt [°] | "
             "in box | no filter | filter: safe | filter: touch [s] | filter: stalls | filter active | start in C_N |",

@@ -36,8 +36,8 @@ python scripts/cone_obstacle_reach.py --tip_z 1.2 --target_offset_x 1.5 --nomina
     --y0 0 --dz0 0.5,1.0 --v0 0,1.0 --duration 10 --top_offsets 0,0.3 --radii 0.25,0.5 --out outputs/cone_obstacle/reach_far
 python scripts/cone_obstacle_geometry.py --out outputs/cone_obstacle/geometry                                    # ~2 min
 python scripts/cone_obstacle_report.py --reach outputs/cone_obstacle/reach/reach.json --out outputs/cone_obstacle/report
-python scripts/cone_obstacle_reference_candidates.py --out outputs/cone_obstacle/ref_candidates                 # ~1 min, 48 candidates
-python scripts/cone_obstacle_reference_candidates.py --save L3-1-f                                              # write one
+python scripts/cone_obstacle_reference_candidates.py --out outputs/cone_obstacle/ref_candidates                 # ~1 min, 24 candidates
+python scripts/cone_obstacle_reference_candidates.py --save all          # -> ps2rl/envs/assets/cone_obstacle/
 ```
 
 The vehicle limits and LQR weights come from the x500 landing config
