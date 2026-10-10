@@ -36,38 +36,54 @@ from ps2rl.deploy.landing_flight import CSV_COLUMNS, Command, FlightConfig, Land
 CONE_CSV_COLUMNS = CSV_COLUMNS + ["dhat_x", "dhat_y", "dhat_z", "touch"]
 
 
-def fit_rate_response(cmd: np.ndarray, meas: np.ndarray, dt: float, max_delay_steps: int = 5) -> dict | None:
-    """Fit the measured roll/pitch rates to a delayed first-order response of the commanded ones,
+def fit_rate_response(t: np.ndarray, cmd: np.ndarray, meas: np.ndarray, *, max_delay: float = 0.10,
+                      max_tau: float = 0.30) -> dict | None:
+    """Fit the measured roll/pitch rates to a delayed first-order response of the commanded ones.
 
-        meas[k+1] = meas[k] + a (cmd[k-n] - meas[k]),   a = 1 - exp(-dt / tau),
-
-    for n = 0..max_delay_steps (least squares in a, the n with the smallest residual kept). Returns the
-    delay n dt, the time constant tau and their sum (the effective delay, what ``predict_ahead`` should
-    roughly be), or None when there are too few steps or the commands hardly vary."""
+    A command issued at t_j acts from t_j + delay on (until the next one acts); the rate follows it
+    as d omega/dt = (command - omega) / tau. Each control interval is predicted from the measured rate
+    at its start (one step ahead, the real sample times), and (delay, tau) is picked on a grid
+    (5 ms x 4 ms) by the smallest squared error. delay + tau ("effective delay") is roughly what
+    ``predict_ahead`` should be. None when there are too few steps or the commands hardly vary."""
+    t = np.asarray(t, np.float64)
     cmd = np.asarray(cmd, np.float64)[:, 0:2]
     meas = np.asarray(meas, np.float64)[:, 0:2]
+    n = len(t)
     ok = np.all(np.isfinite(meas), axis=1) & np.all(np.isfinite(cmd), axis=1)
-    if ok.sum() < 30 or np.std(cmd[ok]) < 0.05:
+    if n < 30 or ok.sum() < 30 or np.std(cmd[ok]) < 0.05 or np.any(np.diff(t) <= 0):
         return None
+    k = np.arange(n - 1)
+    y = meas[k + 1]
     best = None
-    for n in range(max_delay_steps + 1):
-        k = np.arange(n, len(cmd) - 1)
-        k = k[ok[k] & ok[k + 1] & ok[k - n]]
-        if k.size < 20:
+    for d in np.arange(0.0, max_delay + 1e-9, 0.005):
+        j0 = np.searchsorted(t, t[k] - d + 1e-9, side="right") - 1          # acting at the start of interval k
+        j1 = np.searchsorted(t, t[k + 1] - 1e-6 - d + 1e-9, side="right") - 1  # acting at its end
+        valid = (j0 >= 0) & (j1 - j0 <= 2) & ok[k] & ok[k + 1]
+        if valid.sum() < 20:
             continue
-        y = (meas[k + 1] - meas[k]).ravel()
-        x = (cmd[k - n] - meas[k]).ravel()
-        if float(x @ x) <= 1e-12:
-            continue
-        a = float(np.clip((x @ y) / (x @ x), 1e-6, 1.0))
-        res = float(np.mean((y - a * x) ** 2))
-        if best is None or res < best[0]:
-            best = (res, n, a)
+        start = t[k].copy()
+        cur = cmd[np.clip(j0, 0, None)].copy()
+        parts = []
+        for step in (1, 2):                    # up to two new commands take effect inside one interval
+            jj = j0 + step
+            has = valid & (jj <= j1)
+            b = np.where(has, t[np.clip(jj, 0, n - 1)] + d, start)
+            parts.append((np.maximum(b - start, 0.0), cur.copy()))
+            start = b
+            cur = np.where(has[:, None], cmd[np.clip(jj, 0, n - 1)], cur)
+        parts.append((np.maximum(t[k + 1] - start, 0.0), cur))
+        for tau in np.r_[0.0, np.arange(0.004, max_tau + 1e-9, 0.004)]:
+            w = meas[k].copy()
+            for length, c in parts:
+                e = np.where(length > 0, np.exp(-length / tau) if tau > 0 else 0.0, 1.0)
+                w = c + (w - c) * e[:, None]
+            res = float(np.mean((y - w)[valid] ** 2))
+            if best is None or res < best[0]:
+                best = (res, float(d), float(tau), int(valid.sum()))
     if best is None:
         return None
-    _, n, a = best
-    tau = 0.0 if a >= 1.0 - 1e-9 else float(-dt / np.log(1.0 - a))
-    return {"delay_s": n * dt, "tau_s": tau, "effective_delay_s": n * dt + tau, "steps": int(ok.sum())}
+    res, d, tau, used = best
+    return {"delay_s": d, "tau_s": tau, "effective_delay_s": d + tau, "rms_rad_s": float(np.sqrt(res)), "steps": used}
 
 
 @dataclass
@@ -89,7 +105,7 @@ class ConeObstacleFlight(LandingFlight):
         self._hold_time = float(cfg.recover_time)
         self._t_obs: float | None = None
         self._first_touch: float | None = None
-        self._rec.update({"touch": [], "dhat": [], "tilt": [], "u": [], "omega": []})
+        self._rec.update({"touch": [], "dhat": [], "tilt": [], "u": [], "omega": [], "t": []})
         if cfg.log_dir:
             Path(cfg.log_dir).mkdir(parents=True, exist_ok=True)
             self._csv_file = open(Path(cfg.log_dir) / "flight.csv", "w", newline="", encoding="utf-8")
@@ -148,6 +164,7 @@ class ConeObstacleFlight(LandingFlight):
         r["touch"].append(bool(out.info.get("touch", False))); r["dhat"].append(np.asarray(out.info.get("d_hat", np.zeros(3))))
         r["tilt"].append(tilt); r["u"].append(np.asarray(out.u))
         r["omega"].append(np.full(3, np.nan) if omega_meas is None else np.asarray(omega_meas, dtype=np.float64))
+        r["t"].append(float(t))
         if omega_meas is not None and np.all(np.isfinite(omega_meas)):
             r["rate_err"].append(np.asarray(out.u[1:4]) - np.asarray(omega_meas, dtype=np.float64))
         if a_meas is not None and np.isfinite(a_meas):
@@ -199,8 +216,6 @@ class ConeObstacleFlight(LandingFlight):
         })
         if self._rows_last_x is not None:
             s["final_distance_to_reference_end_m"] = float(np.linalg.norm(self._rows_last_x[0:3] - end))
-        fit = fit_rate_response(u[:, 1:4], np.asarray(r["omega"]), self.rt.dt)
-        s["rate_response"] = fit
         s["predict_ahead_s"] = float(self.rt.cfg.predict_ahead)
         return s
 
@@ -220,11 +235,6 @@ class ConeObstacleFlight(LandingFlight):
             f"{s['max_tilt_deg']:.0f} deg; disturbance estimate at the end {np.round(s['d_hat_final'], 2).tolist()} m/s^2 "
             f"(largest |d_hat| {s['d_hat_max_norm']:.2f})",
         ]
-        fit = s.get("rate_response")
-        if fit:
-            lines.append(f"  roll/pitch rate response: delay {fit['delay_s'] * 1e3:.0f} ms + first-order lag {fit['tau_s'] * 1e3:.0f} ms "
-                         f"= effective delay {fit['effective_delay_s'] * 1e3:.0f} ms (delay compensation in this flight: "
-                         f"{s['predict_ahead_s'] * 1e3:.0f} ms; set predict_ahead to about the effective delay)")
         if "rate_tracking_rms_rad_s" in s:
             e = s["rate_tracking_rms_rad_s"]
             lines.append(f"  rate tracking error (commanded - measured, RMS): roll {e[0]:.2f}, pitch {e[1]:.2f}, yaw {e[2]:.2f} rad/s"
@@ -251,8 +261,25 @@ class ConeObstacleFlight(LandingFlight):
             row += [f"{v:.6f}" for v in out.info.get("d_hat", np.zeros(3))] + [int(bool(out.info.get("touch", False)))]
         self._csv.writerow(row)
 
+    def _rate_response(self) -> None:
+        """Fit of the vehicle's rate response, once the vehicle is down (it takes ~0.2 s)."""
+        r, s = self._rec, self.stats
+        if not s.get("steps") or "rate_response" in s or len(r["t"]) < 30:
+            return
+        fit = fit_rate_response(np.asarray(r["t"]), np.asarray(r["u"])[:, 1:4], np.asarray(r["omega"]))
+        s["rate_response"] = fit
+        if fit:
+            self._info(f"roll/pitch rate response: delay {fit['delay_s'] * 1e3:.0f} ms + first-order lag {fit['tau_s'] * 1e3:.0f} ms "
+                       f"= effective delay {fit['effective_delay_s'] * 1e3:.0f} ms (fit error {fit['rms_rad_s']:.2f} rad/s RMS); "
+                       f"delay compensation in this flight {s.get('predict_ahead_s', 0.0) * 1e3:.0f} ms - set predict_ahead to "
+                       f"about the effective delay")
+
     def _write_summary(self, now: float, x_local) -> None:
         sc = self.rt.scenario
+        try:
+            self._rate_response()
+        except Exception as exc:   # a diagnostic; never let it break the records
+            self._warn(f"rate-response fit failed: {exc!r}")
         summary = {
             "outcome": self.outcome or "ended before the policy episode",
             "policy": self.stats,
