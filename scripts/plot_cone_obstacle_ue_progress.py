@@ -216,8 +216,8 @@ def main(argv=None):
         ax.set_xlabel("x [m]")
         if j == 0:
             ax.set_ylabel("y [m]")
-        tt = f", mean time {st['t_touch']:.1f} s" if st["touched"] > 0 else ""
-        ax.set_title(f"reached the target {st['touched']:.0%}{tt}; safe and reached {st['touched_safe']:.0%}", color=INK,
+        tt = f", at {st['t_touch']:.1f} s" if st["touched"] > 0 else ""
+        ax.set_title(f"touched {st['touched']:.0%}{tt}; safe and touched {st['touched_safe']:.0%}", color=INK,
                      loc="left", fontsize=10)
 
     handles = [Line2D([], [], color=REF, lw=1.3, ls=(0, (5, 3)), label="reference (runs into the funnel)"),
