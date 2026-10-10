@@ -6,7 +6,9 @@
 #   P  PS2               (SAC through the UE-bCBF CIL, warm-started from V; backup from chosen_backup.json)
 #   E  evaluation        (vanilla: none / ue / nominal; PS2: ue / none; same starts and disturbance draws)
 #   F  figures           (3-column progress figure like the UE-landing one, a 4-column one with the nominal
-#                         BCBF, side-view GIF of all columns and a 3-D GIF of the final policy)
+#                         BCBF, side-view GIF of all columns, and a multi-view GIF/MP4 (3-D, side (r, z), top view
+#                         with the funnel ring at each drone's height, barrier traces) of the tracker without CIL
+#                         vs the Phase II policy; PLOT_ARGS="--gif_rows 0,1,2" adds the tracker + UE-CIL row)
 #
 #   docker exec -d px4sitl bash -c "bash ~/ws_shared/PS2-RL/docker_batch/run_cone_obstacle_ue.sh \
 #       > ~/ws_shared/PS2-RL/outputs/cone_obstacle_ue.out 2>&1"
@@ -168,7 +170,7 @@ if has_stage F; then
             --panel "Stage 1 tracker, no CIL=${V_EV}:none" \
             --panel "Stage 1 tracker + UE-CIL (Phase II start)=${V_EV}:ue" \
             --panel "Phase II trained through UE-CIL=${P_EV}:ue" \
-            --out "${OUT}/cone_ue_progress.png" --gif --gif3d ${PLOT_ARGS} 2>&1 | tee "${OUT}/logs/plot.log"
+            --out "${OUT}/cone_ue_progress.png" --gif --gif3d --mp4 ${PLOT_ARGS} 2>&1 | tee "${OUT}/logs/plot.log"
         # shellcheck disable=SC2086
         python scripts/plot_cone_obstacle_ue_progress.py \
             --panel "Stage 1 tracker, no CIL=${V_EV}:none" \

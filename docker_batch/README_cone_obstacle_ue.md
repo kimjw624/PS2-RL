@@ -59,7 +59,9 @@ warm-started from V with the same reward scale (1M steps, UE-landing stage-2 set
 evaluation (128 episodes, same starts and disturbance draws), F figures:
 `outputs/cone_obstacle_phase2_ue/cone_ue_progress.png` (tracker without CIL / tracker + UE-CIL /
 Phase II), `cone_ue_progress_with_nominal.png` (adds the nominal bCBF), `cone_ue_progress_side.gif`,
-`cone_ue_progress_3d.gif`. Stage V does not need Phase I and can start right away (`STAGES=V`).
+`cone_ue_progress_views.gif` / `.mp4` (rows: tracker without CIL, Phase II; columns: 3-D view with the
+funnel's ring at each drone's height, exact side view (r, z), top view with the same rings, barrier
+traces h_cone(t) and floor margin(t); a drone in the keep-out set is marked x). Stage V does not need Phase I and can start right away (`STAGES=V`).
 
 Disturbance per episode: d(t) = A n sin(2 pi f t + phi), n uniform on the unit sphere,
 A ~ U[0, delta_d], f log-uniform in [0.02 Hz, min(1 Hz, delta_v / (2 pi A))], so ||d|| <= delta_d
