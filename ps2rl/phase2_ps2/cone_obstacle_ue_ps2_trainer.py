@@ -82,6 +82,11 @@ class ConeUEPS2Config:
     warm_start_critic: bool = True     # landing recipe: actor, critics and alpha from the warm start
     actor_start_update: int = 0        # no actor (and alpha) updates before this many critic updates
     select_touch_weight: float = 1000.0
+    # the critics learn reward_scale * r (returns are logged in the environment's units). Our tracking cost
+    # is ~2-50 per step over 380 steps, so unscaled values reach -5000 and Adam moves the critic's output
+    # too slowly to follow; 0.01 brings them to the UE-landing range (~-10..-50). Use the same value in both
+    # stages (the warm-started critic carries it).
+    reward_scale: float = 1.0
 
     @classmethod
     def from_dict(cls, d):
@@ -194,7 +199,7 @@ def run_cone_obstacle_ue_ps2(cfg: ConeUEPS2Config, task: dict, env_cfg: ConeObst
         else:
             ns, nused = nr, jnp.ones(nr.shape[0], bool)
         tq = jnp.minimum(q_value(st["tq1"], b["next_obs"], ns), q_value(st["tq2"], b["next_obs"], ns)) - alpha * nlp
-        y = jax.lax.stop_gradient(clipq(b["rew"] + cfg.gamma * (1.0 - b["done"]) * clipq(tq)))
+        y = jax.lax.stop_gradient(clipq(float(cfg.reward_scale) * b["rew"] + cfg.gamma * (1.0 - b["done"]) * clipq(tq)))
 
         def closs(p1, p2):
             return jnp.mean((clipq(q_value(p1, b["obs"], b["act"])) - y) ** 2) + jnp.mean(

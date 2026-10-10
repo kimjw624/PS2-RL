@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Outside-cone task under a disturbance (cone-obstacle UE-bCBF), two-stage Phase II on the GPU:
-#   V  vanilla tracker   (SAC, no CIL, episodes not cut at a violation; the warm-start source)
+#   V  vanilla tracker   (SAC, no CIL, episodes not cut at a violation; the warm-start source). One run per
+#                        critic reward scale in VANILLA_SCALES, in parallel on the GPU; the one with the best
+#                        evaluation return (environment units) is the warm start (OUT/vanilla_choice.json)
 #   P  PS2               (SAC through the UE-bCBF CIL, warm-started from V; backup from chosen_backup.json)
 #   E  evaluation        (vanilla: none / ue / nominal; PS2: ue / none; same starts and disturbance draws)
 #   F  figures           (3-column progress figure like the UE-landing one, a 4-column one with the nominal
@@ -22,6 +24,9 @@
 #                  (the last reward then carries the discounted floor reward of the remaining steps, so
 #                  ending early never pays; without it the unfiltered tracker flies hundreds of metres away
 #                  where the floored reward is flat and stops learning)
+#   VANILLA_SCALES critic reward scales tried in stage V          ("0.01 1")
+#                  (tracking returns reach about -5000 unscaled; 0.01 brings the critic's values to the
+#                  UE-landing range. Stage P uses the chosen run's scale.)
 #   PS2_STEPS      stage P steps                                 (1000000)
 #   EPISODES       evaluation episodes                           (128)
 #   STAGES         subset of "V P E F"                           (all)
@@ -38,6 +43,7 @@ BACKUP_JSON="${BACKUP_JSON:-outputs/cone_obstacle_phase1/compare/chosen_backup.j
 SEED="${SEED:-0}"
 VANILLA_STEPS="${VANILLA_STEPS:-3000000}"
 VANILLA_LOST="${VANILLA_LOST:-2.0}"
+VANILLA_SCALES="${VANILLA_SCALES:-0.01 1}"
 PS2_STEPS="${PS2_STEPS:-1000000}"
 EPISODES="${EPISODES:-128}"
 STAGES="${STAGES:-V P E F}"
@@ -47,37 +53,82 @@ EVAL_ARGS="${EVAL_ARGS:-}"
 PLOT_ARGS="${PLOT_ARGS:-}"
 mkdir -p "${OUT}/logs"
 has_stage() { [[ " ${STAGES} " == *" $1 "* ]]; }
+any_alive() { for p_ in "$@"; do kill -0 "${p_}" 2>/dev/null && return 0; done; return 1; }
 
 ps2rl_gpu_check || { echo "[cone-ue] GPU check failed (set PS2RL_ALLOW_CPU=1 JAX_PLATFORMS=cpu to force CPU)"; exit 1; }
-V_TAG="cone_ue_vanilla_s${SEED}"
+V_BASE="cone_ue_vanilla_s${SEED}"
 P_TAG="cone_ue_ps2_s${SEED}"
+V_CHOICE="${OUT}/vanilla_choice.json"
+scale_tag() { echo "${V_BASE}_rs$(echo "$1" | tr '.' 'p')"; }
 echo "[cone-ue] $(date '+%F %T') OUT=${OUT} TASK=${TASK} SEED=${SEED} stages ${STAGES}"
 
 if has_stage V; then
-    if [ -f "${OUT}/${V_TAG}/summary.json" ]; then
-        echo "[cone-ue] V: ${OUT}/${V_TAG} done, skipped"
-    else
-        echo "[cone-ue] V: vanilla tracker, ${VANILLA_STEPS} steps -> ${OUT}/${V_TAG}"
+    pids=()
+    for rs in ${VANILLA_SCALES}; do
+        tag="$(scale_tag "${rs}")"
+        if [ -f "${OUT}/${tag}/summary.json" ]; then
+            echo "[cone-ue] V: ${OUT}/${tag} done, skipped"
+            continue
+        fi
+        echo "[cone-ue] V: vanilla tracker, reward scale ${rs}, ${VANILLA_STEPS} steps -> ${OUT}/${tag} (log ${OUT}/logs/${tag}.log)"
         # shellcheck disable=SC2086
-        python scripts/train_phase2_cone_obstacle_ue.py --task "${TASK}" --output_root "${OUT}" --run_tag "${V_TAG}" \
+        python scripts/train_phase2_cone_obstacle_ue.py --task "${TASK}" --output_root "${OUT}" --run_tag "${tag}" \
             --seed "${SEED}" --use_projection false --env_terminate_on_unsafe false --env_terminate_pos_error "${VANILLA_LOST}" \
-            --total_steps "${VANILLA_STEPS}" \
+            --reward_scale "${rs}" --total_steps "${VANILLA_STEPS}" \
             --num_envs 64 --update_every 2 --replay_size 1000000 --eval_every 100352 ${VANILLA_ARGS} \
-            2>&1 | tee "${OUT}/logs/${V_TAG}.log"
-        [ -f "${OUT}/${V_TAG}/summary.json" ] || { echo "[cone-ue] V failed"; exit 1; }
+            > "${OUT}/logs/${tag}.log" 2>&1 &
+        pids+=($!)
+        sleep 20
+    done
+    if [ "${#pids[@]}" -gt 0 ]; then
+        # progress: the latest eval line of every run, every 5 minutes
+        while any_alive "${pids[@]}"; do
+            sleep "${V_REPORT_EVERY:-300}"
+            for rs in ${VANILLA_SCALES}; do
+                tag="$(scale_tag "${rs}")"
+                echo "[cone-ue] V $(date '+%T') ${tag}: $(grep -E '^\s*\[eval' "${OUT}/logs/${tag}.log" 2>/dev/null | tail -1 | cut -c1-170)"
+            done
+        done
+        wait
     fi
+    python - "${OUT}" "${V_CHOICE}" "${V_BASE}" ${VANILLA_SCALES} <<'PY'
+import json, sys
+from pathlib import Path
+out, choice, v_base, scales = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4:]
+rows = []
+for rs in scales:
+    tag = f"{v_base}_rs{rs.replace('.', 'p')}"
+    sp = out / tag / "summary.json"
+    if not sp.exists():
+        print(f"[cone-ue] V: {tag} has no summary (failed?)"); continue
+    ev = json.loads(sp.read_text())["best_eval"]
+    rows.append((ev["return_mean"], tag, float(rs), ev))
+    print(f"[cone-ue] V: {tag}: best return {ev['return_mean']:.1f} pos_err {ev['pos_err_mean']:.3f} "
+          f"final dist {ev['final_dist_mean']:.3f} unsafe {ev['unsafe_rate']:.2f}")
+if not rows:
+    sys.exit("[cone-ue] V: no vanilla run finished")
+ret, tag, rs, ev = max(rows)
+choice.write_text(json.dumps({"tag": tag, "reward_scale": rs, "best_eval": ev}, indent=2))
+print(f"[cone-ue] V: warm start = {tag} (reward scale {rs})")
+PY
+    [ -f "${V_CHOICE}" ] || { echo "[cone-ue] V failed"; exit 1; }
 fi
+
+[ -f "${V_CHOICE}" ] && V_TAG="$(python -c "import json;print(json.load(open('${V_CHOICE}'))['tag'])")" \
+    && V_RS="$(python -c "import json;print(json.load(open('${V_CHOICE}'))['reward_scale'])")"
+V_TAG="${V_TAG:-$(scale_tag "$(echo ${VANILLA_SCALES} | cut -d' ' -f1)")}"
+V_RS="${V_RS:-$(echo ${VANILLA_SCALES} | cut -d' ' -f1)}"
 
 if has_stage P; then
     if [ -f "${OUT}/${P_TAG}/summary.json" ]; then
         echo "[cone-ue] P: ${OUT}/${P_TAG} done, skipped"
     else
         [ -f "${BACKUP_JSON}" ] || { echo "[cone-ue] P: ${BACKUP_JSON} not found (Phase-I comparison); set BACKUP_JSON"; exit 1; }
-        echo "[cone-ue] P: PS2 through the UE-bCBF CIL, ${PS2_STEPS} steps, backup $(python -c "import json;d=json.load(open('${BACKUP_JSON}'));print(d['name'], d['backup_path'])")"
+        echo "[cone-ue] P: warm start ${V_TAG} (reward scale ${V_RS}); PS2 through the UE-bCBF CIL, ${PS2_STEPS} steps, backup $(python -c "import json;d=json.load(open('${BACKUP_JSON}'));print(d['name'], d['backup_path'])")"
         # landing-ue stage-2 recipe (outputs/landing_phase2_ue/ue_p2_warm_s0/configs.json)
         # shellcheck disable=SC2086
         JAX_ENABLE_X64=1 python scripts/train_phase2_cone_obstacle_ue.py --task "${TASK}" --output_root "${OUT}" \
-            --run_tag "${P_TAG}" --seed "${SEED}" --backup_from "${BACKUP_JSON}" \
+            --run_tag "${P_TAG}" --seed "${SEED}" --backup_from "${BACKUP_JSON}" --reward_scale "${V_RS}" \
             --warm_start_weights "${OUT}/${V_TAG}/best_weights.pkl" --total_steps "${PS2_STEPS}" \
             --start_steps 0 --update_after 16384 --update_every 8 --replay_size 500000 --num_envs 64 \
             --actor_lr 5e-5 --critic_lr 1e-4 --alpha_lr 5e-5 --project_target_actions true --rows_keep 32 \

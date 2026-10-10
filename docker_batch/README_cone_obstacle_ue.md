@@ -51,8 +51,11 @@ docker exec -it px4sitl bash -c "tail -F ~/ws_shared/PS2-RL/outputs/cone_obstacl
 Stages (`STAGES="V P E F"`): V vanilla tracker (no CIL, 3M steps; episodes end once the position error
 exceeds 2 m, `VANILLA_LOST`, with the discounted floor reward of the remaining steps as the last reward,
 so ending early never pays; without it the unfiltered tracker flew hundreds of metres away in a CPU
-check, where the floored reward is flat), P PS2 through the UE-bCBF CIL
-warm-started from V (1M steps, UE-landing stage-2 settings, backup from `chosen_backup.json`), E
+check, where the floored reward is flat). Stage V trains one tracker per critic reward scale in
+`VANILLA_SCALES` ("0.01 1", in parallel; unscaled tracking returns reach about -5000, 0.01 brings
+the critic to the UE-landing range) and keeps the one with the best evaluation return
+(`outputs/cone_obstacle_phase2_ue/vanilla_choice.json`). P PS2 through the UE-bCBF CIL
+warm-started from V with the same reward scale (1M steps, UE-landing stage-2 settings, backup from `chosen_backup.json`), E
 evaluation (128 episodes, same starts and disturbance draws), F figures:
 `outputs/cone_obstacle_phase2_ue/cone_ue_progress.png` (tracker without CIL / tracker + UE-CIL /
 Phase II), `cone_ue_progress_with_nominal.png` (adds the nominal bCBF), `cone_ue_progress_side.gif`,
