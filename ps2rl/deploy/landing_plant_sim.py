@@ -57,6 +57,12 @@ class PlantConfig:
     mode_delay: float = 0.2             # request -> armed / offboard / land [s]
     disarm_after_land: float = 1.0
     seed: int = 0
+    # external translational disturbance (an acceleration, z-up local frame) applied while airborne:
+    # constant part + a sinusoid along ext_dir with amplitude ext_amp at ext_freq_hz (all off by default)
+    ext_accel: tuple = (0.0, 0.0, 0.0)
+    ext_amp: float = 0.0
+    ext_freq_hz: float = 0.0
+    ext_dir: tuple = (1.0, 0.0, 0.0)
 
 
 def _quat_mul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -127,6 +133,15 @@ class FakeVehicle:
         for _ in range(n):
             self._substep()
 
+    def external_accel(self) -> np.ndarray:
+        """The external disturbance acting now (zero unless ext_* are set)."""
+        c = self.cfg
+        d = np.asarray(c.ext_accel, dtype=np.float64).copy()
+        if c.ext_amp:
+            n = np.asarray(c.ext_dir, dtype=np.float64)
+            d += c.ext_amp * math.sin(2.0 * math.pi * c.ext_freq_hz * self.t) * n / max(float(np.linalg.norm(n)), 1e-9)
+        return d
+
     # ------------------------------------------------------------------ internals
     def _modes(self) -> None:
         for item in [it for it in self._pending if it[0] <= self.t]:
@@ -193,6 +208,8 @@ class FakeVehicle:
 
         r = _rot(self.q)
         acc = self.a * r[:, 2] - np.array([0.0, 0.0, c.gravity])
+        if not self.on_ground:
+            acc = acc + self.external_accel()
         if self.on_ground:
             if acc[2] > 0.0 and self.armed:           # lift-off
                 self.on_ground = False

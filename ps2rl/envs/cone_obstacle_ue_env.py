@@ -60,7 +60,12 @@ class ConeObstacleUEEnvConfig:
     bank_size: int = 4096
     bank_seed: int = 12345
     disturbance: bool = True
-    disturbance_mode: str = "random"        # "random": A, f drawn per episode within the bounds; "fixed": A = delta_d, f = design
+    disturbance_mode: str = "random"        # "random": A, f drawn per episode within the bounds; "fixed": A = delta_d, f = design;
+                                            # "constant": d = A n held for the whole episode (A = delta_d: the strongest push within
+                                            # the bounds, ||d_dot|| = 0)
+    amp_scale: float = 1.0                  # A (and the frequency cap) scaled by this; > 1 = beyond the filter's design bound
+                                            # (evaluation of robustness only; training stays at 1)
+    disturbance_dir: str = ""               # "" = random unit direction per episode; "x,y,z" = this direction (normalised)
     amp_min_frac: float = 0.0               # A ~ U[amp_min_frac, 1] * delta_d
     freq_min_hz: float = 0.02               # f ~ log-U[freq_min, min(freq_max, delta_v / (2 pi A))]
     freq_max_hz: float = 1.0
@@ -96,8 +101,12 @@ class ConeObstacleUEEnvConfig:
     terminal_gamma: float = 0.99
 
     def __post_init__(self) -> None:
-        if self.disturbance_mode not in ("random", "fixed"):
-            raise ValueError(f"disturbance_mode must be 'random' or 'fixed', got {self.disturbance_mode!r}")
+        if self.disturbance_mode not in ("random", "fixed", "constant"):
+            raise ValueError(f"disturbance_mode must be 'random', 'fixed' or 'constant', got {self.disturbance_mode!r}")
+        if float(self.amp_scale) < 0.0:
+            raise ValueError("amp_scale must be >= 0")
+        if self.disturbance_dir and len([v for v in str(self.disturbance_dir).split(",") if v.strip()]) != 3:
+            raise ValueError("disturbance_dir must be '' or 'x,y,z'")
         if not (0.0 <= float(self.amp_min_frac) <= 1.0):
             raise ValueError("amp_min_frac must lie in [0, 1]")
         if not (0.0 < float(self.freq_min_hz) <= float(self.freq_max_hz)):
@@ -162,16 +171,22 @@ class ConeObstacleUEEnvFns(NamedTuple):
 
 
 def sample_disturbance(key, ue, env_cfg: ConeObstacleUEEnvConfig, dtype=jnp.float32):
-    """(n, phase, A, omega) for one episode, within ||d|| <= delta_d and ||d_dot|| <= delta_v."""
+    """(n, phase, A, omega) for one episode, within ||d|| <= amp_scale delta_d and ||d_dot|| <= amp_scale delta_v."""
     k_n, k_p, k_a, k_f = jax.random.split(key, 4)
-    n = jax.random.normal(k_n, (3,), dtype)
+    if env_cfg.disturbance_dir:
+        n = jnp.asarray([float(v) for v in str(env_cfg.disturbance_dir).split(",")], dtype)
+    else:
+        n = jax.random.normal(k_n, (3,), dtype)
     n = n / jnp.maximum(jnp.linalg.norm(n), 1e-9)
     phase = jax.random.uniform(k_p, (), dtype, 0.0, 2.0 * np.pi)
-    dd, dv = float(ue.delta_d), float(ue.delta_v)
+    k = float(env_cfg.amp_scale)
+    dd, dv = k * float(ue.delta_d), k * float(ue.delta_v)
     if not env_cfg.disturbance:
         return n, phase, jnp.asarray(0.0, dtype), jnp.asarray(2.0 * np.pi * float(ue.frequency_hz), dtype)
     if env_cfg.disturbance_mode == "fixed":
         return n, phase, jnp.asarray(dd, dtype), jnp.asarray(2.0 * np.pi * float(ue.frequency_hz), dtype)
+    if env_cfg.disturbance_mode == "constant":   # sin(0 t + pi/2) = 1
+        return n, jnp.asarray(0.5 * np.pi, dtype), jnp.asarray(dd, dtype), jnp.asarray(0.0, dtype)
     amp = dd * jax.random.uniform(k_a, (), dtype, float(env_cfg.amp_min_frac), 1.0)
     f_cap = jnp.minimum(float(env_cfg.freq_max_hz), dv / (2.0 * np.pi * jnp.maximum(amp, 1e-9)))
     f_lo = jnp.minimum(float(env_cfg.freq_min_hz), f_cap)

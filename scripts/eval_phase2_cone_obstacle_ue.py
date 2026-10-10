@@ -80,7 +80,10 @@ def main(argv=None):
     p.add_argument("--modes", default="ue,none", help=f"comma list of {MODES}")
     p.add_argument("--backup", default="", choices=("", "lqr", "learned"), help="override the run's backup for 'ue'")
     p.add_argument("--backup_path", default="")
-    p.add_argument("--disturbance_mode", default="", choices=("", "random", "fixed"), help="override the run's")
+    p.add_argument("--disturbance_mode", default="", choices=("", "random", "fixed", "constant"), help="override the run's")
+    p.add_argument("--amp_scale", type=float, default=-1.0,
+                   help="scale the disturbance amplitude (and its rate) by this; > 1 = beyond the filter's design bound")
+    p.add_argument("--disturbance_dir", default=None, help="'x,y,z' fixed disturbance direction ('' = random)")
     p.add_argument("--keep_lost_termination", action="store_true",
                    help="keep the run's terminate_pos_error (default: evaluate full episodes)")
     p.add_argument("--keep_unsafe_termination", action="store_true",
@@ -102,6 +105,10 @@ def main(argv=None):
         env_cfg = dataclasses.replace(env_cfg, terminate_on_unsafe=False)
     if a.disturbance_mode:
         env_cfg = dataclasses.replace(env_cfg, disturbance_mode=a.disturbance_mode)
+    if a.amp_scale >= 0:
+        env_cfg = dataclasses.replace(env_cfg, amp_scale=float(a.amp_scale))
+    if a.disturbance_dir is not None:
+        env_cfg = dataclasses.replace(env_cfg, disturbance_dir=str(a.disturbance_dir))
     env = build_cone_obstacle_ue_env(env_cfg, cbf, rt, cu.make_recoverability_fn_ue(cbf, rt))
     sc = cbf.scenario
     e_bar = jnp.asarray(float(cbf.ue.e_bar), jnp.float32)
