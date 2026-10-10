@@ -15,6 +15,8 @@ sinusoidal disturbance with amplitude/frequency drawn within delta_d / delta_v) 
 metrics differ. Two options from the runway trainer are available (defaults = landing recipe):
 ``warm_start_critic`` and ``actor_start_update``.
 
+``touch <run_dir>/STOP`` ends a run early; it finishes normally (final evaluation, weights, summary).
+
 Evaluation: return, unsafe episodes (inside the funnel or below the floor), min h_cone / floor
 margin, touched (the vehicle reached the target cylinder under the tip), first-touch time,
 final distance to the reference's end point, CIL statistics. The best checkpoint maximises
@@ -418,7 +420,11 @@ def run_cone_obstacle_ue_ps2(cfg: ConeUEPS2Config, task: dict, env_cfg: ConeObst
     except Exception:
         pass
     done_steps = 0
+    stop_file = out_dir / "STOP"   # `touch <run>/STOP`: finish now (final evaluation, weights, summary)
     while done_steps < total:
+        if stop_file.exists():
+            print(f"[stop] {stop_file} found at step {done_steps}: finishing", flush=True)
+            break
         carry, (mu, sm, em) = chunk_c(carry)
         done_steps += per_chunk
         mu, sm, em = jax.device_get((mu, sm, em))

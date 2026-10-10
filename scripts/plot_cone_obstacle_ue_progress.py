@@ -60,6 +60,7 @@ class Geometry:
         self.tx, self.ty = (float(v) for v in sc.target_center)
         self.hover = np.asarray(sc.hover_points[0], float)
         self.dt = float(sc.dt)
+        self.scale = np.asarray(sc.action_scale, float)
 
     def surface_z(self, r):
         return self.tip + (np.sqrt(np.asarray(r) ** 2 + self.eps ** 2) - self.eps) / self.tt
@@ -94,7 +95,10 @@ def stats(tr, geo: Geometry):
     last = np.maximum(al.sum(0) - 1, 0)
     idx = np.where(touched, k_touch, last)
     pts = tr["x"][idx, np.arange(al.shape[1])]
-    return {"n": int(al.shape[1]), "unsafe": float(unsafe.mean()), "touched": float(touched.mean()),
+    alf = al.astype(float)
+    corr = np.linalg.norm((tr["u"] - tr["raw"]) / geo.scale, axis=-1)          # how much the filter changed the command
+    return {"corr": float((corr * alf).sum() / max(alf.sum(), 1.0)), "return": float((tr["rew"] * alf).sum(0).mean()),
+            "n": int(al.shape[1]), "unsafe": float(unsafe.mean()), "touched": float(touched.mean()),
             "touched_safe": float((touched & ~unsafe).mean()), "min_h": float(h.min()), "min_z": float(z.min()),
             "t_touch": float(((k_touch + 1) * geo.dt)[touched].mean()) if touched.any() else float("nan"),
             "pts": pts, "touched_mask": touched, "unsafe_mask": unsafe}
@@ -192,9 +196,10 @@ def main(argv=None):
             verdict = f"{st['unsafe']:.0%} of episodes enter the funnel / floor (deepest {max(-st['min_h'], -st['min_z']):.2f} m)"
         else:
             verdict = f"0 of {st['n']} episodes enter the funnel / floor"
+        verdict += f"\nreturn {st['return']:.0f}" + (f", filter correction {st['corr']:.2f}" if mode != "none" else "")
         ax.text(0.02, 0.98, verdict, transform=ax.transAxes, va="top", ha="left", fontsize=9, color=INK,
                 bbox={"fc": SURF, "ec": "none", "pad": 1.0}, zorder=8)
-        ax.text(0.08, a.z_max - 0.3, "inside the funnel\n(keep-out)", fontsize=8.5, color=KEEP_OUT_EDGE, va="top",
+        ax.text(0.08, a.z_max - 0.55, "inside the funnel\n(keep-out)", fontsize=8.5, color=KEEP_OUT_EDGE, va="top",
                 bbox={"fc": KEEP_OUT, "ec": "none", "pad": 0.5}, zorder=7)
         ax.text(a.r_max - 0.1, geo.floor - 0.22, "below the floor (keep-out)", fontsize=8, color=KEEP_OUT_EDGE, ha="right",
                 va="center")
@@ -252,7 +257,7 @@ def main(argv=None):
     out.with_suffix(".json").write_text(json.dumps(summary, indent=2))
     for k, v in summary.items():
         print(f"{k}: unsafe {v['unsafe']:.3f} (min h {v['min_h']:+.3f}, min floor {v['min_z']:+.3f}) touched {v['touched']:.3f} "
-              f"(safe {v['touched_safe']:.3f}) t_touch {v['t_touch']:.2f}")
+              f"(safe {v['touched_safe']:.3f}) t_touch {v['t_touch']:.2f} return {v['return']:.1f} filter correction {v['corr']:.3f}")
     print(f"wrote {out}")
     if a.gif:
         side_gif(panels, geo, ref, a, out.with_name(out.stem + "_side.gif"))
