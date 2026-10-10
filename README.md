@@ -215,3 +215,7 @@ If you use this code, please cite the paper:
 
 Released under the [MIT License](LICENSE) — © 2026 Azizan Lab, Massachusetts Institute of
 Technology.
+
+## Disturbance-aware tasks (UE-bCBF)
+
+Landing under a bounded disturbance with a disturbance observer, and runway bird deterrence: see `RUNWAY_UE_README.md` (code under `ps2rl/uncertainty/`, `ps2rl/cil/quadrotor_landing_ue_bcbf.py`, `ps2rl/cil/quadrotor_runway_ue_bcbf.py`).

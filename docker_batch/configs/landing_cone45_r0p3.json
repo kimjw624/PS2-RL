@@ -1,0 +1,44 @@
+{
+  "landing": {
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "pad_z": 0.0,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "dt": 0.02,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "num_steps": 100,
+    "z_des": 1.25
+  },
+  "region": {
+    "v_max": 4.0
+  },
+  "provenance": {
+    "what": "Base Phase-I config for the 45 deg approach cone with pad radius r0 = 0.3 m. docker_batch/run_landing_floor_overnight.sh adds the floor and gentle-recovery options on top of it.",
+    "region_reasons": {
+      "zeta_max": "kept 3.0 (task needs 2.5)",
+      "v_max": "widened 2.0 -> 4.0 to cover the reference envelope + initial perturbation",
+      "tilt_max_deg": "kept 35.0 (task needs 35.0)",
+      "yaw_max_deg": "kept 45.0 (task needs 0.0)"
+    },
+    "task_envelope": {
+      "speed_max": 3.3125953818613563,
+      "speed_margin": 0.5,
+      "tilt_max_deg": 24.768151074595007,
+      "zeta_max": 2.0
+    },
+    "base_set_check": {
+      "z_des": 1.25,
+      "moved_from": null,
+      "c_B": 12.0,
+      "c_U": 17.881373955059992,
+      "c_chart": 23.17844680381027,
+      "c_cone": 31.825253831304792,
+      "c_ground": 18.71050105140306
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "seed": 2026,
+  "results": {
+    "RL chaser alone (no CIL)": {
+      "episodes": 128,
+      "unsafe_rate": 0.8671875,
+      "runway_incursion_rate": 0.75,
+      "ceiling_excess_rate": 0.2265625,
+      "max_runway_incursion_m": 20.668018341064453,
+      "max_ceiling_excess_m": 6.517524719238281,
+      "mean_dist_to_bird": 0.785140625,
+      "return_mean": -34.652992248535156,
+      "cil_correction_mean": 0.0,
+      "slack_gt_1e-3_rate": 0.0,
+      "safeguard_rate": 0.0,
+      "run": "checkpoints/runway_ue/chaser_vanilla_seed0",
+      "mode": "none"
+    },
+    "same chaser + runway UE-bCBF CIL": {
+      "episodes": 128,
+      "unsafe_rate": 0.0,
+      "runway_incursion_rate": 0.0,
+      "ceiling_excess_rate": 0.0,
+      "max_runway_incursion_m": 0.0,
+      "max_ceiling_excess_m": 0.0,
+      "mean_dist_to_bird": 5.91543994140625,
+      "return_mean": -1473.03076171875,
+      "cil_correction_mean": 1.0272733154296876,
+      "slack_gt_1e-3_rate": 0.28703125,
+      "safeguard_rate": 0.018375,
+      "run": "checkpoints/runway_ue/chaser_vanilla_seed0",
+      "mode": "ue"
+    }
+  }
+}

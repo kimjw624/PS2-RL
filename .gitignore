@@ -31,6 +31,8 @@ matplotlib-cache/
 /checkpoints/*
 # Landing Phase-I safe-arrival backup consumed by the landing CIL (see LANDING_HANDOFF.md).
 !/checkpoints/landing_phase1/
+# Runway bird-deterrence UE: Phase-I backup and the RL chaser (see RUNWAY_UE_README.md).
+!/checkpoints/runway_ue/
 !/checkpoints/sitl_delay_comparison/
 /checkpoints/sitl_delay_comparison/*
 !/checkpoints/sitl_delay_comparison/policies/
