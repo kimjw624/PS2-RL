@@ -83,6 +83,9 @@ def main(argv=None):
     p.add_argument("--disturbance_mode", default="", choices=("", "random", "fixed"), help="override the run's")
     p.add_argument("--keep_lost_termination", action="store_true",
                    help="keep the run's terminate_pos_error (default: evaluate full episodes)")
+    p.add_argument("--keep_unsafe_termination", action="store_true",
+                   help="keep the run's terminate_on_unsafe (default: full episodes, so an unfiltered policy's whole "
+                        "path is shown; a stage-2 run otherwise ends 'none' episodes at the first violation)")
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--out", default="")
     a = p.parse_args(argv)
@@ -95,6 +98,8 @@ def main(argv=None):
     env_cfg = dataclasses.replace(rc["env_cfg"], bank_seed=int(a.seed))
     if not a.keep_lost_termination:
         env_cfg = dataclasses.replace(env_cfg, terminate_pos_error=0.0)
+    if not a.keep_unsafe_termination:
+        env_cfg = dataclasses.replace(env_cfg, terminate_on_unsafe=False)
     if a.disturbance_mode:
         env_cfg = dataclasses.replace(env_cfg, disturbance_mode=a.disturbance_mode)
     env = build_cone_obstacle_ue_env(env_cfg, cbf, rt, cu.make_recoverability_fn_ue(cbf, rt))
@@ -104,7 +109,8 @@ def main(argv=None):
     scale = jnp.asarray(cbf.action_scale, jnp.float32)
     qp_dtype = jnp.float64 if (rc["ps2"].qp_float64 and jax.config.jax_enable_x64) else None
     nom = ncbf.ConeObstacleBCBFConfig(scenario=task_config(rc["task"]), alpha=cbf.alpha, alpha_ground=cbf.alpha_ground,
-                                      base_alpha=cbf.base_alpha)
+                                      base_alpha=cbf.base_alpha,
+                                      qp_solve_dtype="float64" if qp_dtype is not None else "float32")  # same QP precision as 'ue'
     nom_rt = ncbf.get_cached_runtime(nom)
 
     def policy(obs):
