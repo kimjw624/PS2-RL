@@ -88,6 +88,12 @@ class ConeObstacleUEEnvConfig:
     w_touch: float = 0.0                    # optional one-time bonus for touching the cylinder (0 = tracking only)
     delta: float = 0.1
     floor: float = 50.0
+    # optional: end the episode once the position error exceeds this [m] (0 = off). The last reward then
+    # includes the discounted floor reward of the remaining steps, -floor (1 - g^rem) / (1 - g) with
+    # g = terminal_gamma (the trainer's discount), so ending early is never better than staying at the floor;
+    # it only stops collecting samples far from the reference where the reward is flat.
+    terminate_pos_error: float = 0.0
+    terminal_gamma: float = 0.99
 
     def __post_init__(self) -> None:
         if self.disturbance_mode not in ("random", "fixed"):
@@ -315,7 +321,12 @@ def build_cone_obstacle_ue_env(env_cfg: ConeObstacleUEEnvConfig, cbf_cfg: Any, r
         rs, ro = reference(k1)
         rew, pe, ve, ae, we = (v.astype(dtype) for v in reward(x_next, u, rs, ro))
         rew = rew + float(env_cfg.w_touch) * first_touch.astype(dtype)
-        done = ((~safe) & bool(env_cfg.terminate_on_unsafe)) | (k1 >= max_steps)
+        timeout = k1 >= max_steps
+        lost = (pe > float(env_cfg.terminate_pos_error)) & (float(env_cfg.terminate_pos_error) > 0.0) & ~timeout
+        gt = float(env_cfg.terminal_gamma)
+        rem = (max_steps - k1).astype(dtype)
+        rew = rew - jnp.where(lost, float(env_cfg.floor) * (1.0 - gt ** rem) / (1.0 - gt), 0.0).astype(dtype)
+        done = ((~safe) & bool(env_cfg.terminate_on_unsafe)) | timeout | lost
         ep_return = state.ep_return + rew
         ep_len = state.ep_len + 1
         ep_min_h = jnp.minimum(state.ep_min_h, hc)

@@ -81,6 +81,8 @@ def main(argv=None):
     p.add_argument("--backup", default="", choices=("", "lqr", "learned"), help="override the run's backup for 'ue'")
     p.add_argument("--backup_path", default="")
     p.add_argument("--disturbance_mode", default="", choices=("", "random", "fixed"), help="override the run's")
+    p.add_argument("--keep_lost_termination", action="store_true",
+                   help="keep the run's terminate_pos_error (default: evaluate full episodes)")
     p.add_argument("--seed", type=int, default=2026)
     p.add_argument("--out", default="")
     a = p.parse_args(argv)
@@ -91,6 +93,8 @@ def main(argv=None):
     cbf = filter_config(rc["ps2"], rc["task"])
     rt = cu.make_ue_runtime(cbf)
     env_cfg = dataclasses.replace(rc["env_cfg"], bank_seed=int(a.seed))
+    if not a.keep_lost_termination:
+        env_cfg = dataclasses.replace(env_cfg, terminate_pos_error=0.0)
     if a.disturbance_mode:
         env_cfg = dataclasses.replace(env_cfg, disturbance_mode=a.disturbance_mode)
     env = build_cone_obstacle_ue_env(env_cfg, cbf, rt, cu.make_recoverability_fn_ue(cbf, rt))

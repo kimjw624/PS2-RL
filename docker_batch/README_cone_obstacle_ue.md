@@ -48,7 +48,10 @@ docker exec -d px4sitl bash -c "bash ~/ws_shared/PS2-RL/docker_batch/run_cone_ob
 docker exec -it px4sitl bash -c "tail -F ~/ws_shared/PS2-RL/outputs/cone_obstacle_ue.out"
 ```
 
-Stages (`STAGES="V P E F"`): V vanilla tracker (no CIL, 3M steps), P PS2 through the UE-bCBF CIL
+Stages (`STAGES="V P E F"`): V vanilla tracker (no CIL, 3M steps; episodes end once the position error
+exceeds 2 m, `VANILLA_LOST`, with the discounted floor reward of the remaining steps as the last reward,
+so ending early never pays; without it the unfiltered tracker flew hundreds of metres away in a CPU
+check, where the floored reward is flat), P PS2 through the UE-bCBF CIL
 warm-started from V (1M steps, UE-landing stage-2 settings, backup from `chosen_backup.json`), E
 evaluation (128 episodes, same starts and disturbance draws), F figures:
 `outputs/cone_obstacle_phase2_ue/cone_ue_progress.png` (tracker without CIL / tracker + UE-CIL /

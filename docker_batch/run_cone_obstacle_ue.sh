@@ -18,6 +18,10 @@
 #                                                                (outputs/cone_obstacle_phase1/compare/chosen_backup.json)
 #   SEED           seed of both stages                           (0)
 #   VANILLA_STEPS  stage V steps                                 (3000000)
+#   VANILLA_LOST   stage V: end an episode once the position error exceeds this [m]  (2.0)
+#                  (the last reward then carries the discounted floor reward of the remaining steps, so
+#                  ending early never pays; without it the unfiltered tracker flies hundreds of metres away
+#                  where the floored reward is flat and stops learning)
 #   PS2_STEPS      stage P steps                                 (1000000)
 #   EPISODES       evaluation episodes                           (128)
 #   STAGES         subset of "V P E F"                           (all)
@@ -33,6 +37,7 @@ TASK="${TASK:-docker_batch/configs/cone_obstacle_ue.json}"
 BACKUP_JSON="${BACKUP_JSON:-outputs/cone_obstacle_phase1/compare/chosen_backup.json}"
 SEED="${SEED:-0}"
 VANILLA_STEPS="${VANILLA_STEPS:-3000000}"
+VANILLA_LOST="${VANILLA_LOST:-2.0}"
 PS2_STEPS="${PS2_STEPS:-1000000}"
 EPISODES="${EPISODES:-128}"
 STAGES="${STAGES:-V P E F}"
@@ -55,7 +60,8 @@ if has_stage V; then
         echo "[cone-ue] V: vanilla tracker, ${VANILLA_STEPS} steps -> ${OUT}/${V_TAG}"
         # shellcheck disable=SC2086
         python scripts/train_phase2_cone_obstacle_ue.py --task "${TASK}" --output_root "${OUT}" --run_tag "${V_TAG}" \
-            --seed "${SEED}" --use_projection false --env_terminate_on_unsafe false --total_steps "${VANILLA_STEPS}" \
+            --seed "${SEED}" --use_projection false --env_terminate_on_unsafe false --env_terminate_pos_error "${VANILLA_LOST}" \
+            --total_steps "${VANILLA_STEPS}" \
             --num_envs 64 --update_every 2 --replay_size 1000000 --eval_every 100352 ${VANILLA_ARGS} \
             2>&1 | tee "${OUT}/logs/${V_TAG}.log"
         [ -f "${OUT}/${V_TAG}/summary.json" ] || { echo "[cone-ue] V failed"; exit 1; }
