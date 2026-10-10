@@ -178,6 +178,8 @@ if has_stage F; then
             --panel "Stage 1 tracker + UE-CIL=${V_EV}:ue" \
             --panel "Phase II trained through UE-CIL=${P_EV}:ue" \
             --out "${OUT}/cone_ue_progress_with_nominal.png" ${PLOT_ARGS} 2>&1 | tee -a "${OUT}/logs/plot.log"
+        python scripts/plot_cone_obstacle_ue_curves.py --root "${OUT}" --ps2 "${P_TAG}" --out "${OUT}/cone_ue_curves.png" \
+            2>&1 | tee -a "${OUT}/logs/plot.log"
     else
         echo "[cone-ue] F: evaluations missing, skipped"
     fi
