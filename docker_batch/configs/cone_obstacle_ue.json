@@ -1,0 +1,19 @@
+{
+  "_comment": "Outside-cone task under a bounded disturbance (UE-bCBF), with the ue-landing actuator limits (thrust 0-39.24 m/s^2, body rates +-18 rad/s). Base set: the 9-D hover ellipsoid beside the funnel at c = 12, large enough for the UE tube (shrunk level ~7.4 at the end of the 2 s rollout). Read by scripts/train_phase1_cone_obstacle_ue.py, scripts/compare_phase1_cone_obstacle.py and the Phase-II scripts.",
+  "vehicle": "docker_batch/configs/landing_cone45_r0p3.json",
+  "cone_obstacle": {
+    "tip_z": 1.2,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.25,
+    "ground_z": 0.0,
+    "min_altitude": 0.5,
+    "target_radius": 0.25,
+    "target_height": -1.0,
+    "base_set": "points",
+    "base_set_c": 12.0,
+    "hover_points": [[-2.0, 0.0, 1.7]]
+  },
+  "ue": {"delta_d": 0.5, "frequency_hz": 0.05, "observer_lambda": 20.0, "e_bar": 0.02, "tube_scale": 1.2},
+  "filter": {"alpha": 10.0, "alpha_ground": 20.0, "base_alpha": 2.0},
+  "reference": "ps2rl/envs/assets/cone_obstacle/quadrotor_cone_obstacle_l3_1_f_reference.npz"
+}
