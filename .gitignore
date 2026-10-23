@@ -33,6 +33,8 @@ matplotlib-cache/
 !/checkpoints/landing_phase1/
 # Runway bird-deterrence UE: Phase-I backup and the RL chaser (see RUNWAY_UE_README.md).
 !/checkpoints/runway_ue/
+# Strike task, reduced arena: reference Phase-I backup and strikers (see STRIKE_HANDOFF.md).
+!/checkpoints/strike_reduced/
 !/checkpoints/sitl_delay_comparison/
 /checkpoints/sitl_delay_comparison/*
 !/checkpoints/sitl_delay_comparison/policies/

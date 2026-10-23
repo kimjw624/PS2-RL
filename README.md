@@ -219,3 +219,9 @@ Technology.
 ## Disturbance-aware tasks (UE-bCBF)
 
 Landing under a bounded disturbance with a disturbance observer, and runway bird deterrence: see `RUNWAY_UE_README.md` (code under `ps2rl/uncertainty/`, `ps2rl/cil/quadrotor_landing_ue_bcbf.py`, `ps2rl/cil/quadrotor_runway_ue_bcbf.py`).
+
+## Strike task (reduced arena)
+
+Low-altitude strike of a moving target among tall obstacles and a pursuing chaser: Phase-I backup, discrete backup-set
+filter with a guidance-law escape margin and escape variants, residual striker trained through the filter (PS2). Start
+with `STRIKE_HANDOFF.md`; method write-up in `docs/strike/strike_method.pdf`; how to run in `docker_batch/README_strike.md`.
