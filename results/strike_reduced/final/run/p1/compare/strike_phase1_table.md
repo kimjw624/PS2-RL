@@ -1,0 +1,9 @@
+Recovered fraction (base set reached within T = 1.5 s, no contact), test scenes (general 2000, blocked 2000, chaser 2000, shell 2000, escape 2000); 95 % Hoeffding half-width per region 0.030, 0.030, 0.030, 0.030, 0.030.
+
+| backup | general | blocked | chaser | shell | escape | weighted |
+|---|---|---|---|---|---|---|
+| hover LQR | 0.556 | 0.001 | 0.079 | 1.000 | 0.314 | 0.438 |
+| td3_a0p2_seed0 | 0.843 | 0.342 | 0.458 | 1.000 | 0.880 | 0.697 |
+| td3_a0p2_seed1 | 0.837 | 0.370 | 0.464 | 1.000 | 0.869 | 0.701 |
+| td3_a0p2_seed2 | 0.844 | 0.358 | 0.475 | 1.000 | 0.870 | 0.704 |
+| learned, mean ± std (n = 3) | 0.841 ± 0.003 | 0.357 ± 0.012 | 0.466 ± 0.007 | 1.000 ± 0.000 | 0.873 ± 0.005 | 0.701 ± 0.003 |

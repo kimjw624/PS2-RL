@@ -1,0 +1,24 @@
+[scenes] 1000 evaluation scenes (seed 9001) in 1 s
+[backup input] obstacles within 10 m, chaser balls within 12 m (the Phase-I training range)
+[none   ] strike 0.634 (t 4.99 s) contact 0.366 [obstacle 0.358 floor 0.004 chaser 0.004 out 0.000] timeout 0.000 | kept 1.00 no-certificate steps 0.0000 (0.000 of episodes) | 6 s
+[learned] strike 0.984 (t 5.93 s) contact 0.001 [obstacle 0.000 floor 0.000 chaser 0.001 out 0.000] timeout 0.015 | kept 0.91 no-certificate steps 0.0020 (0.015 of episodes) | 347 s
+[lqr    ] strike 0.840 (t 7.08 s) contact 0.007 [obstacle 0.000 floor 0.000 chaser 0.007 out 0.000] timeout 0.153 | kept 0.73 no-certificate steps 0.0168 (0.076 of episodes) | 132 s
+Nominal: striker striker_rs0p1_s0 (residual on pursuit at 6 m/s); 1000 arena scenes (seed 9001); filter: discrete backup-set check with a committed plan, T = 1.5 s, chaser balls r = 3.7 m, chaser hold 0 s; chaser model guidance, hover latch True, free pursuit.
+
+Contact = left the safe set (obstacle, floor, chaser); leaving the arena and running out of time end the mission but are not contacts.
+
+| mode | strike | contact | obstacle | floor | chaser | out of arena | timeout | strike time [s] | kept | no-certificate episodes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| no filter | 0.634 | 0.366 | 0.358 | 0.004 | 0.004 | 0.000 | 0.000 | 4.99 | 1.00 | 0.000 |
+| filter, learned backup | 0.984 | 0.001 | 0.000 | 0.000 | 0.001 | 0.000 | 0.015 | 5.93 | 0.91 | 0.015 |
+| filter, hover-LQR backup | 0.840 | 0.007 | 0.000 | 0.000 | 0.007 | 0.000 | 0.153 | 7.08 | 0.73 | 0.076 |
+
+By scene type (strike / contact / episodes that lost the certificate):
+
+| mode | no chaser | with chasers |
+|---|---|---|
+| no filter | nan / nan / nan (n = 0) | 0.634 / 0.366 / 0.000 (n = 1000) |
+| filter, learned backup | nan / nan / nan (n = 0) | 0.984 / 0.001 / 0.015 (n = 1000) |
+| filter, hover-LQR backup | nan / nan / nan (n = 0) | 0.840 / 0.007 / 0.076 (n = 1000) |
+[gif] failures: scenes [26, 137, 7, 16] (contacts [26, 137, 168, 313, 577, 738, 753], time-ups [7, 16, 20, 22, 30, 32, 51, 53, 58, 63, 86, 91])
+wrote outputs/strike_final/eval/s0/ps2_final/strike_filter_table.md, strike_filter_scenes.png, strike_filter_scene*.gif

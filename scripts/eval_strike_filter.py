@@ -31,10 +31,11 @@ import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
 
-from ps2rl.cil.strike_filter import backup_ranges, load_backup, make_filter, model_from_backup  # noqa: E402
+from ps2rl.cil.strike_filter import backup_ranges, load_backup, make_filter, model_from_backup, with_chaser  # noqa: E402
 from ps2rl.cil.strike_bcbf import StrikeBCBFConfig, make_strike_bcbf  # noqa: E402
 from ps2rl.cil.strike_guidance import GuidanceConfig  # noqa: E402
-from ps2rl.envs.strike_env import StrikeEnvConfig, action_bounds, build_strike_env, generate_scene_pool  # noqa: E402
+from ps2rl.envs.strike_env import (StrikeEnvConfig, action_bounds, build_strike_env, chaser_assumed, chaser_threat,  # noqa: E402
+                                   generate_scene_pool)
 from ps2rl.envs.strike_pursuit import make_pursuit  # noqa: E402
 from ps2rl.envs.strike_scene import StrikeConfig, build_model, check_same_plant, load_strike_task  # noqa: E402
 from ps2rl.utils.policy import _coerce_actor_cfg, actor_mean_action  # noqa: E402
@@ -94,6 +95,20 @@ def main(argv=None):
                    default="first",
                    help="scenes animated (outcomes of the last mode): the first ones, the strikes closest to a chaser, "
                         "episodes hit by a chaser, any contact, time-ups, or failures (half contacts, half time-ups)")
+    p.add_argument("--gif_scenes", type=int, nargs="*", default=None,
+                   help="animate exactly these scene indices (replaces --gif / --gif_pick); the same --scene_seed and "
+                        "--episodes give the same scenes in every run, e.g. for side-by-side comparisons")
+    p.add_argument("--only_episodes", type=int, nargs="*", default=None,
+                   help="replay only these episodes of the --episodes evaluation (same scenes and perturbations, much "
+                        "faster); the tables then cover these episodes only")
+    p.add_argument("--record_episodes", type=int, nargs="*", default=None,
+                   help="record (GIFs, --save_traj) exactly these episodes while simulating every episode as the full "
+                        "evaluation does: the recorded episodes are those of the evaluation, bit for bit on the same device")
+    p.add_argument("--save_traj", type=int, default=0,
+                   help="1: write strike_filter_traj.npz (paths of the drone, chasers and target of the recorded episodes, "
+                        "per mode) for scripts/plot_strike_episodes.py; use with --only_episodes")
+    p.add_argument("--filter_sees_chasers", type=int, default=1,
+                   help="0: the filter is not told about the chasers (obstacle-only filter; shows what ignoring them costs)")
     p.add_argument("--save_episodes", type=int, default=1,
                    help="1: also write strike_filter_episodes.json (per-episode outcome, end / strike step, filter statistics)")
     p.add_argument("--out", default="outputs/strike_filter_eval")
@@ -130,10 +145,19 @@ def main(argv=None):
     if a.chaser_leash > cfg.chaser_speed * cfg.T + 1e-9:
         raise SystemExit(f"--chaser_leash {a.chaser_leash} > v_c T = {cfg.chaser_speed * cfg.T:g}: the filter's ball around the post would not cover the guard")
     ball_c = (lambda es: es.chaser_home) if a.chaser_leash > 0.0 else (lambda es: es.chaser_p)   # centres of the filter's balls
-    n_ep = int(a.episodes)
+    n_all = int(a.episodes)
+    replay = None                                 # --only_episodes: the replayed subset (episode indices of the full run)
+    if a.only_episodes:
+        replay = np.asarray(sorted(set(int(i) for i in a.only_episodes)), dtype=np.int32)
+        if replay.min() < 0 or replay.max() >= n_all:
+            raise SystemExit(f"--only_episodes outside 0..{n_all - 1}")
+    n_ep = n_all if replay is None else int(len(replay))     # episodes simulated
+    ep_index = np.arange(n_all) if replay is None else replay
     t0 = time.time()
-    pool = generate_scene_pool(ec, max(ec.obstacles_max, cfg.n_obstacle_slots), n=n_ep, seed=a.scene_seed)
-    print(f"[scenes] {n_ep} evaluation scenes (seed {a.scene_seed}) in {time.time() - t0:.0f} s", flush=True)
+    pool = generate_scene_pool(ec, max(ec.obstacles_max, cfg.n_obstacle_slots), n=n_all, seed=a.scene_seed)
+    print(f"[scenes] {n_all} evaluation scenes (seed {a.scene_seed}) in {time.time() - t0:.0f} s"
+          + (f"; replaying episodes {replay.tolist()}" if replay is not None else ""), flush=True)
+    ep_keys = (lambda k: jax.random.split(k, n_all)) if replay is None else (lambda k: jax.random.split(k, n_all)[replay])
     env = build_strike_env(m_env, ec, pool=pool)
 
     if a.nominal == "pursuit":
@@ -156,7 +180,17 @@ def main(argv=None):
             nominal = lambda es, obs: s_act(obs)
         nom_label = f"striker {sr.name}" + (f" (residual on pursuit at {sec.residual_cruise:g} m/s)" if sec.residual_cruise > 0 else "")
 
-    filters = {}
+    filters, k_idx, v_labels = {}, {}, {}
+    # the filter's chaser: the task's actual chaser (env actual_chaser_*), the backup keeps its training model
+    r_true, v_true = chaser_threat(m, ec)
+    m_f = with_chaser(m, *chaser_assumed(m, ec))
+    if m_f is not m:
+        print(f"[chaser] actual radius {r_true:g} m, top speed {v_true:g} m/s, accel {ec.chaser_accel:g} m/s^2; the filter assumes "
+              f"radius {m_f.cfg.chaser_radius:g} m, speed {m_f.cfg.chaser_speed:g} m/s (the backup was trained with "
+              f"{cfg.chaser_radius:g} m, {cfg.chaser_speed:g} m/s)", flush=True)
+    if not a.filter_sees_chasers:
+        print("[chaser] the filter is not told about the chasers (obstacle-only filter)", flush=True)
+    on_f = (lambda es: es.chaser_on) if a.filter_sees_chasers else (lambda es: jnp.zeros_like(es.chaser_on))
     o_rng, b_rng = backup_ranges(a.backup_run)
     print(f"[backup input] obstacles within {o_rng:g} m, chaser balls within {b_rng:g} m (the Phase-I training range)", flush=True)
     for mode in a.modes.split():
@@ -164,41 +198,73 @@ def main(argv=None):
             continue
         bk, prm = load_backup(m, mode, a.backup_run if mode == "learned" else None)
         if a.filter_type == "bcbf":
-            f1 = make_strike_bcbf(m, bk, prm, chaser_model=a.chaser_model, guidance=gcfg, arena=arena,
+            f1 = make_strike_bcbf(m_f, bk, prm, chaser_model=a.chaser_model, guidance=gcfg, arena=arena,
                                   bcbf=StrikeBCBFConfig.from_dict(json.loads(a.bcbf) if a.bcbf else {}),
                                   obstacle_range=o_rng, ball_range=b_rng, hover_latch=bool(a.hover_latch))
         else:
-            f1 = make_filter(m, bk, prm, obstacle_range=o_rng, ball_range=b_rng, fresh_hold=a.fresh_hold,
+            f1 = make_filter(m_f, bk, prm, obstacle_range=o_rng, ball_range=b_rng, fresh_hold=a.fresh_hold,
                              hover_latch=bool(a.hover_latch), chaser_model=a.chaser_model, reach_hold=a.reach_hold,
                              guidance=gcfg, arena=arena)
         filters[mode] = (jax.vmap(f1), jax.vmap(f1.fresh_view))
-    n_tr = n_ep if a.gif_pick != "first" else max(int(a.n_show), int(a.gif))
+        src = f1 if hasattr(f1, "k_index") else getattr(f1, "safeguard", None)
+        k_idx[mode] = getattr(src, "k_index", None)
+        v_labels.setdefault("labels", list(getattr(src, "variant_labels", [])))
+    cfg = m_f.cfg                                 # the task's chaser for the drawings and the table
+    n_tr = n_ep if (a.gif_pick != "first" or replay is not None or a.save_traj) else max(int(a.n_show), int(a.gif))
+    gif_pos = None                                # --gif_scenes as positions in the simulated batch
+    if a.gif_scenes:
+        pos_of = {int(e): j for j, e in enumerate(ep_index)}
+        bad = [i for i in a.gif_scenes if i not in pos_of]
+        if bad:
+            raise SystemExit(f"--gif_scenes {bad} are not simulated (0..{n_all - 1}, or the --only_episodes list)")
+        gif_pos = [pos_of[int(i)] for i in a.gif_scenes]
+        n_tr = max(n_tr, max(gif_pos) + 1)
+    n_tr = min(n_tr, n_ep)
+    if a.record_episodes:                         # record these (the simulation still runs every episode)
+        pos_of = {int(e): j for j, e in enumerate(ep_index)}
+        bad = [i for i in a.record_episodes if i not in pos_of]
+        if bad:
+            raise SystemExit(f"--record_episodes {bad} are not simulated")
+        rec_idx = np.asarray(sorted({pos_of[int(i)] for i in a.record_episodes}), dtype=np.int32)
+    else:
+        rec_idx = np.arange(n_tr, dtype=np.int32)
+    rec_slot = {int(q): j for j, q in enumerate(rec_idx)}     # simulated episode -> recorded slot
+    if gif_pos is not None and any(q not in rec_slot for q in gif_pos):
+        raise SystemExit("--gif_scenes must be among --record_episodes")
+    ridx = jnp.asarray(rec_idx)
 
     def run(mode, key):
-        es, obs = env.reset_batched(jax.random.split(key, n_ep))
+        es, obs = env.reset_batched(ep_keys(key))
         z = jnp.zeros((n_ep,))
-        acc0 = {"len": z, "t_strike": z, "lam": z, "no_cert": z, "committed": z, "min_chaser": z + 1e3, **{k: z for k in OUTCOMES}}
-        comm0 = filters[mode][1](es.x, es.obst, ball_c(es), es.chaser_on) if mode != "none" else jnp.zeros((n_ep, 1))
+        acc0 = {"len": z, "t_strike": z, "lam": z, "no_cert": z, "committed": z, "min_chaser": z + 1e3, "min_obstacle": z + 1e3,
+                **{k: z for k in OUTCOMES}}
+        comm0 = filters[mode][1](es.x, es.obst, ball_c(es), on_f(es)) if mode != "none" else jnp.zeros((n_ep, 1))
 
         def body(c, k):
             es, obs, alive, acc, comm = c
             u_nom = nominal(es, obs)
             if mode == "none":
                 u, lam, nocert, used_c = u_nom, jnp.ones((n_ep,)), jnp.zeros((n_ep,), bool), jnp.zeros((n_ep,), bool)
+                held, corr, kv = jnp.zeros((n_ep,), bool), jnp.zeros((n_ep,)), -jnp.ones((n_ep,))
             else:
-                fresh = filters[mode][1](es.x, es.obst, ball_c(es), es.chaser_on)
+                fresh = filters[mode][1](es.x, es.obst, ball_c(es), on_f(es))
                 comm = jnp.where((es.steps == 0)[:, None], fresh, comm)       # a new episode: commit its first view
-                u, info, comm = filters[mode][0](es.x, u_nom, es.obst, ball_c(es), es.chaser_on, comm)
+                u, info, comm = filters[mode][0](es.x, u_nom, es.obst, ball_c(es), on_f(es), comm)
                 lam, nocert, used_c = info.lam, info.no_certificate, info.used_committed
-            es2, _, obs_out, _, done, info2 = env.step_batched(es, u, jax.random.split(jax.random.fold_in(key, k), n_ep))
+                held, corr = info.held, info.correction
+                kv = comm[:, k_idx[mode]] if k_idx.get(mode) is not None else -jnp.ones((n_ep,))
+            es2, _, obs_out, _, done, info2 = env.step_batched(es, u, ep_keys(jax.random.fold_in(key, k)))
             al = alive.astype(jnp.float32)
             acc = {"len": acc["len"] + al, "lam": acc["lam"] + al * lam, "no_cert": acc["no_cert"] + al * nocert,
                    "committed": acc["committed"] + al * used_c,
                    "t_strike": jnp.where(alive & info2.strike, (k + 1).astype(jnp.float32), acc["t_strike"]),
                    "min_chaser": jnp.where(alive, jnp.minimum(acc["min_chaser"], info2.min_chaser_dist), acc["min_chaser"]),
+                   "min_obstacle": jnp.where(alive, jnp.minimum(acc["min_obstacle"], info2.min_obstacle_dist), acc["min_obstacle"]),
                    **{o: jnp.maximum(acc[o], al * getattr(info2, o).astype(jnp.float32)) for o in OUTCOMES}}
-            rec = (es.x[:n_tr, 0:3], es.chaser_p[:n_tr], es.target_p[:n_tr], lam[:n_tr], alive[:n_tr], ball_c(es)[:n_tr],
-                   es.x[:n_tr, 3:6])
+            rec = (es.x[ridx, 0:3], es.chaser_p[ridx], es.target_p[ridx], lam[ridx], alive[ridx], ball_c(es)[ridx],
+                   es.x[ridx, 3:6],
+                   {"quat": es.x[ridx, 6:10], "u": u[ridx], "u_nom": u_nom[ridx], "nocert": nocert[ridx],
+                    "committed": used_c[ridx], "held": held[ridx], "variant": kv[ridx], "correction": corr[ridx]})
             return (es2, obs_out, alive & ~done, acc, comm), rec
 
         (_, _, _, acc, _), rec = jax.lax.scan(body, (es, obs, jnp.ones((n_ep,), bool), acc0, comm0), jnp.arange(env.max_steps))
@@ -233,7 +299,8 @@ def main(argv=None):
                                   "no_cert_steps": acc["no_cert"].astype(int).tolist(),
                                   "committed_steps": acc["committed"].astype(int).tolist(),
                                   "kept_fraction": (acc["lam"] / L).round(4).tolist(),
-                                  "min_chaser_dist": np.round(acc["min_chaser"], 3).tolist()}
+                                  "min_chaser_dist": np.round(acc["min_chaser"], 3).tolist(),
+                                  "min_obstacle_dist": np.round(acc["min_obstacle"], 3).tolist()}
         has_ch = np.asarray(starts.chaser_on).max(axis=1) > 0.5          # scenes with at least one chaser
         for tag, sel in (("no_chaser", ~has_ch), ("with_chaser", has_ch)):
             results[mode][f"{tag}_episodes"] = int(sel.sum())
@@ -247,19 +314,49 @@ def main(argv=None):
               f"no-certificate steps {r['no_certificate_step_rate']:.4f} ({r['episodes_with_no_certificate']:.3f} of episodes) "
               f"| {r['wall_time_sec']:.0f} s", flush=True)
 
-    meta = {"nominal": nom_label, "backup_run": str(a.backup_run), "episodes": n_ep, "scene_seed": a.scene_seed,
+    meta = {"nominal": nom_label, "backup_run": str(a.backup_run), "episodes": n_all, "scene_seed": a.scene_seed,
+            "only_episodes": ep_index.tolist() if replay is not None else None,
             "chaser_hold": cfg.chaser_hold, "backup_input_ranges": [o_rng, b_rng], "chaser_speed_scale": a.chaser_speed_scale, "fresh_hold": a.fresh_hold,
             "T": cfg.T, "ball_radius": cfg.ball_radius, "chaser_model": a.chaser_model, "reach_hold": a.reach_hold,
             "hover_latch": bool(a.hover_latch), "chaser_leash": a.chaser_leash,
             "guidance": gcfg.as_dict() if a.chaser_model == "guidance" else None, "env_overrides": a.env,
-            "filter_type": a.filter_type, "bcbf": a.bcbf, "results": results}
+            "filter_type": a.filter_type, "bcbf": a.bcbf,
+            "chaser": {"actual_radius": r_true, "actual_speed": v_true, "accel": ec.chaser_accel,
+                       "assumed_radius": cfg.chaser_radius, "assumed_speed": cfg.chaser_speed,
+                       "filter_sees_chasers": bool(a.filter_sees_chasers)},
+            "results": results}
     (out / "strike_filter_table.json").write_text(json.dumps(meta, indent=2))
     if a.save_episodes:
         has_ch_l = (np.asarray(starts.chaser_on).max(axis=1) > 0.5).astype(int).tolist()
         (out / "strike_filter_episodes.json").write_text(json.dumps(
             {"outcomes": list(OUTCOMES), "dt": cfg.dt, "max_steps": int(env.max_steps), "has_chaser": has_ch_l,
-             "modes": episodes_out}))
-    lines = [f"Nominal: {nom_label}; {n_ep} arena scenes (seed {a.scene_seed}); filter: discrete backup-set check with a "
+             "episode_index": ep_index.tolist(), "modes": episodes_out}))
+    if a.save_traj:          # paths of the recorded episodes (scripts/plot_strike_episodes.py)
+        codes = {}
+        for mode, acc_m in accs.items():
+            s_m = acc_m["strike"] > 0.5
+            codes[mode] = np.where(s_m, 0, np.where(acc_m["crash_obstacle"] > 0.5, 1, np.where(acc_m["crash_floor"] > 0.5, 2,
+                          np.where(acc_m["crash_chaser"] > 0.5, 3, np.where(acc_m["out_of_arena"] > 0.5, 4, 5)))))[rec_idx]
+        traj = {"episode_index": ep_index[rec_idx], "obst": np.asarray(starts.obst)[rec_idx],
+                "chaser_on": np.asarray(starts.chaser_on)[rec_idx], "modes": np.array(list(recs)),
+                "dt": cfg.dt, "arena": np.array([ec.arena_x, ec.arena_y_half]), "r_drone": cfg.r_drone,
+                "strike_radius": ec.strike_radius, "chaser_radius": r_true, "chaser_speed": v_true,
+                "chaser_model": a.chaser_model, "delay": gcfg.delay, "a_evade": gcfg.a_evade, "nominal": nom_label,
+                "outcomes": np.array(OUTCOMES), "z_floor": cfg.z_floor, "z_max": ec.z_max, "u_scale": np.asarray(m.scale),
+                "u_low": np.asarray(m.low), "u_high": np.asarray(m.high), "fresh_margin": gcfg.fresh_margin,
+                "fresh_obstacle_margin": gcfg.fresh_obstacle_margin, "horizon": gcfg.horizon,
+                "trigger_on": gcfg.trigger_on, "trigger_off": gcfg.trigger_off,
+                "variant_labels": np.array(v_labels.get("labels", []) or ["-"]), "filter_type": a.filter_type}
+        for mode, rec_m in recs.items():
+            pos, chp, tgp, lam, alive, bcp, vel = (np.asarray(v) for v in rec_m[:7])
+            traj.update({f"{mode}/{k}": np.asarray(v) for k, v in rec_m[7].items()})
+            traj.update({f"{mode}/pos": pos, f"{mode}/chaser": chp, f"{mode}/target": tgp, f"{mode}/lam": lam,
+                         f"{mode}/alive": alive, f"{mode}/vel": vel, f"{mode}/outcome": codes[mode],
+                         f"{mode}/end_step": accs[mode]["len"][rec_idx].astype(int)})
+        np.savez_compressed(out / "strike_filter_traj.npz", **traj)
+        print(f"[traj] {len(rec_idx)} episodes x {len(recs)} modes -> {out / 'strike_filter_traj.npz'}", flush=True)
+    lines = [f"Nominal: {nom_label}; {n_all} arena scenes (seed {a.scene_seed})"
+             + (f", episodes {ep_index.tolist()} only" if replay is not None else "") + "; filter: discrete backup-set check with a "
              f"committed plan, T = {cfg.T} s, "
              + (f"backup trained with moving chasers (h_c, hover margin {cfg.chaser_base_margin:g} m)"
                 + (" and arena walls" if cfg.arena_walls else "") if cfg.moving_chasers
@@ -286,8 +383,8 @@ def main(argv=None):
 
     # ------------------------------------------------------------------ scene figure
     modes = list(recs)
-    n_show = int(a.n_show)
-    if n_show <= 0 and int(a.gif) <= 0:
+    n_show = min(int(a.n_show), len(rec_idx))
+    if n_show <= 0 and int(a.gif) <= 0 and not a.gif_scenes:
         print(f"wrote {out}/strike_filter_table.md", flush=True)
         return
     obst_all = np.asarray(starts.obst)
@@ -308,8 +405,9 @@ def main(argv=None):
         fig.patch.set_facecolor(SURF)
         for ax in axes.ravel()[n_show:]:
             ax.axis("off")
-        for i in range(n_show):
-            ax = axes.ravel()[i]
+        for jr in range(n_show):
+            i = int(rec_idx[jr])
+            ax = axes.ravel()[jr]
             ax.set_facecolor(SURF)
             ax.grid(color=GRID, lw=0.5)
             ax.set_axisbelow(True)
@@ -318,7 +416,7 @@ def main(argv=None):
                     ax.add_patch(Polygon(outline(o), closed=True, fc=OBS_FILL, ec=OBS_EDGE, lw=0.9, zorder=2))
             verdicts = []
             for mode in modes:
-                pos, chp, tgp, lam, alive, bcp, vel = (np.asarray(v)[:, i] for v in recs[mode])
+                pos, chp, tgp, lam, alive, bcp, vel = (np.asarray(v)[:, jr] for v in recs[mode][:7])
                 k_end = int(alive.sum())
                 ax.plot(pos[:k_end, 0], pos[:k_end, 1], color=MODE_C[mode], lw=2.0, zorder=5)
                 acc_out = outcome(mode, i)
@@ -338,7 +436,7 @@ def main(argv=None):
             ax.set_ylim(-ec.arena_y_half - 0.5, ec.arena_y_half + 0.5)
             ax.set_aspect("equal")
             ax.tick_params(labelsize=7.5, colors=INK2)
-            ax.set_title(f"scene {i}\n" + "  |  ".join(verdicts), loc="left", fontsize=9)
+            ax.set_title(f"scene {int(ep_index[i])}\n" + "  |  ".join(verdicts), loc="left", fontsize=9)
         fig.legend(handles=[Line2D([], [], color=MODE_C[mo], lw=2, label=MODE_L.get(mo, mo)) for mo in modes]
                    + [Line2D([], [], color=CHASER, lw=1.2, ls="--", label="chaser path"), Line2D([], [], color=TARGET, lw=1.5, label="target path"),
                       Line2D([], [], marker="*", ls="", ms=10, color=INK2, label="strike"), Line2D([], [], marker="x", ls="", ms=9, color=INK2, label="crash / time up")],
@@ -350,7 +448,10 @@ def main(argv=None):
         plt.close(fig)
 
     # ------------------------------------------------------------------ GIF (one scene, modes side by side)
-    if a.gif_pick in ("contact", "timeout", "failures"):
+    if gif_pos is not None:
+        gif_scenes = list(gif_pos)
+        print(f"[gif] scenes {[int(ep_index[j]) for j in gif_scenes]} (given)", flush=True)
+    elif a.gif_pick in ("contact", "timeout", "failures"):
         last = accs[modes[-1]]
         hit = np.nonzero((last["crash_obstacle"] + last["crash_floor"] + last["crash_chaser"]) > 0.5)[0]
         tup = np.nonzero(last["timeout"] > 0.5)[0]
@@ -362,20 +463,25 @@ def main(argv=None):
         else:
             n_hit = min(len(hit), (k + 1) // 2)
             gif_scenes = [int(j) for j in hit[:n_hit]] + [int(j) for j in tup[:k - n_hit]]
-        print(f"[gif] {a.gif_pick}: scenes {gif_scenes} (contacts {list(map(int, hit[:12]))}, time-ups {list(map(int, tup[:12]))})",
+        print(f"[gif] {a.gif_pick}: scenes {[int(ep_index[j]) for j in gif_scenes]} (contacts "
+              f"{[int(ep_index[j]) for j in hit[:12]]}, time-ups {[int(ep_index[j]) for j in tup[:12]]})",
               flush=True)
     elif a.gif_pick == "chaser_hit":
         gif_scenes = [int(j) for j in np.nonzero(accs[modes[-1]]["crash_chaser"] > 0.5)[0][: int(a.gif)]]
-        print(f"[gif] episodes hit by a chaser: scenes {gif_scenes}", flush=True)
+        print(f"[gif] episodes hit by a chaser: scenes {[int(ep_index[j]) for j in gif_scenes]}", flush=True)
     elif a.gif_pick == "close_chaser":
         last = accs[modes[-1]]
         cand = np.nonzero(last["strike"] > 0.5)[0]
         gif_scenes = [int(j) for j in cand[np.argsort(last["min_chaser"][cand])][: int(a.gif)]]
         dists = ", ".join(f"{last['min_chaser'][j]:.2f}" for j in gif_scenes)
-        print(f"[gif] strikes closest to a chaser: scenes {gif_scenes} (min distance {dists} m)", flush=True)
+        print(f"[gif] strikes closest to a chaser: scenes {[int(ep_index[j]) for j in gif_scenes]} (min distance {dists} m)",
+              flush=True)
     else:
-        gif_scenes = list(range(int(a.gif)))
-    for i in gif_scenes:
+        gif_scenes = [int(q) for q in rec_idx[: int(a.gif)]]
+    skipped = [int(ep_index[q]) for q in gif_scenes if q not in rec_slot]
+    if skipped:
+        print(f"[gif] scenes {skipped} not recorded, skipped", flush=True)
+    for i in [q for q in gif_scenes if q in rec_slot]:
         fig, axes = plt.subplots(len(modes), 1, figsize=(7.2, 3.5 * len(modes) + 0.4), squeeze=False)
         fig.patch.set_facecolor(SURF)
         arts = []
@@ -392,7 +498,7 @@ def main(argv=None):
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_title(MODE_L.get(mode, mode), loc="left", fontsize=10, color=MODE_C[mode], fontweight="bold")
-            pos, chp, tgp, lam, alive, bcp, vel = (np.asarray(v)[:, i] for v in recs[mode])
+            pos, chp, tgp, lam, alive, bcp, vel = (np.asarray(v)[:, rec_slot[i]] for v in recs[mode][:7])
             k_ends.append(int(alive.sum()))
             path, = ax.plot([], [], color=MODE_C[mode], lw=2.0, zorder=5)
             drone = Circle((0, 0), cfg.r_drone * 1.6, fc=MODE_C[mode], ec=INK, lw=0.8, zorder=8)
@@ -436,10 +542,11 @@ def main(argv=None):
         sub = ("\ndashed circle: distance the drone needs from the chaser at its current closing speed (guidance set)"
                if a.chaser_model == "guidance" else "\nshaded: the filter's chaser ball")
         outs = "; ".join(f"{MODE_L.get(mo, mo)}: {outcome(mo, i)}" for mo in modes)
-        fig.suptitle(f"Scene {i} ({outs}), nominal = {nom_label}{sub}", x=0.01, ha="left", fontsize=9)
-        fig.tight_layout(rect=(0, 0, 1, 0.97))
+        fig.suptitle(f"Scene {int(ep_index[i])}, chaser {r_true:g} m / {v_true:g} m/s: {outs}\nnominal = {nom_label}{sub}", x=0.01,
+                     ha="left", fontsize=9)
+        fig.tight_layout(rect=(0, 0, 1, 0.955))
         ani = animation.FuncAnimation(fig, draw, frames=int(np.ceil(n_frames / stride)) + 10, blit=True)
-        ani.save(out / f"strike_filter_scene{i}.gif", writer=animation.PillowWriter(fps=25), dpi=80)
+        ani.save(out / f"strike_filter_scene{int(ep_index[i])}.gif", writer=animation.PillowWriter(fps=25), dpi=80)
         plt.close(fig)
     print(f"wrote {out}/strike_filter_table.md, strike_filter_scenes.png, strike_filter_scene*.gif", flush=True)
 

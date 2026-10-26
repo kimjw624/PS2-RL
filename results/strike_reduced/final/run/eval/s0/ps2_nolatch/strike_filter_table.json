@@ -1,0 +1,93 @@
+{
+  "nominal": "striker striker_rs0p1_s0 (residual on pursuit at 6 m/s)",
+  "backup_run": "outputs/strike_final/p1/td3_a0p2_seed0",
+  "episodes": 1000,
+  "scene_seed": 9001,
+  "chaser_hold": 0.0,
+  "backup_input_ranges": [
+    10.0,
+    12.0
+  ],
+  "chaser_speed_scale": 1.0,
+  "fresh_hold": null,
+  "T": 1.5,
+  "ball_radius": 3.7,
+  "chaser_model": "guidance",
+  "reach_hold": null,
+  "hover_latch": false,
+  "chaser_leash": 0.0,
+  "guidance": {
+    "a_evade": 5.0,
+    "delay": 0.2,
+    "trigger_on": 0.5,
+    "trigger_off": 2.0,
+    "escape_speed_ratio": 2.0,
+    "escape_variants": [
+      [
+        2.0,
+        60.0
+      ],
+      [
+        2.0,
+        -60.0
+      ],
+      [
+        3.5,
+        0.0
+      ],
+      [
+        3.5,
+        60.0
+      ],
+      [
+        3.5,
+        -60.0
+      ]
+    ],
+    "horizon": 3.0,
+    "lqr_alternative": true,
+    "learned_alone": false,
+    "committed_prediction": true,
+    "prefer_lqr_on_ties": false,
+    "slide_along": false,
+    "best_effort_fallback": false,
+    "fresh_obstacle_margin": 0.15,
+    "fresh_margin": 0.2,
+    "k_vel": 2.0,
+    "k_att": 10.0,
+    "k_yaw": 3.0,
+    "tilt_max_deg": 45.0,
+    "push_dist": 1.5,
+    "z_min_escape": 1.0,
+    "ceiling_margin": 3.0
+  },
+  "env_overrides": "",
+  "filter_type": "discrete",
+  "bcbf": "",
+  "results": {
+    "learned": {
+      "strike_rate": 0.983,
+      "crash_rate": 0.001,
+      "contact_rate": 0.001,
+      "crash_obstacle_rate": 0.0,
+      "crash_floor_rate": 0.0,
+      "crash_chaser_rate": 0.001,
+      "out_of_arena_rate": 0.0,
+      "timeout_rate": 0.016,
+      "strike_time_mean": 5.901586532592773,
+      "kept_fraction_mean": 0.9143045544624329,
+      "no_certificate_step_rate": 0.0007569572189822793,
+      "episodes_with_no_certificate": 0.012,
+      "committed_view_step_rate": 0.013165767304599285,
+      "wall_time_sec": 350.228431224823,
+      "no_chaser_episodes": 0,
+      "no_chaser_strike_rate": NaN,
+      "no_chaser_contact_rate": NaN,
+      "no_chaser_no_certificate_episodes": NaN,
+      "with_chaser_episodes": 1000,
+      "with_chaser_strike_rate": 0.983,
+      "with_chaser_contact_rate": 0.001,
+      "with_chaser_no_certificate_episodes": 0.012
+    }
+  }
+}

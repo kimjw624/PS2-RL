@@ -1,0 +1,20 @@
+[scenes] 1000 evaluation scenes (seed 9001) in 1 s
+[backup input] obstacles within 10 m, chaser balls within 12 m (the Phase-I training range)
+[none   ] strike 0.425 (t 5.45 s) contact 0.575 [obstacle 0.574 floor 0.000 chaser 0.001 out 0.000] timeout 0.000 | kept 1.00 no-certificate steps 0.0000 (0.000 of episodes) | 4 s
+[learned] strike 0.513 (t 6.21 s) contact 0.384 [obstacle 0.001 floor 0.000 chaser 0.383 out 0.100] timeout 0.003 | kept 0.65 no-certificate steps 0.3157 (0.545 of episodes) | 33 s
+Nominal: straight-line pursuit at 6 m/s; 1000 arena scenes (seed 9001); filter: discrete backup-set check with a committed plan, T = 1.5 s, chaser balls r = 3.7 m, chaser hold 0 s; chaser model static, hover latch True, free pursuit.
+
+Contact = left the safe set (obstacle, floor, chaser); leaving the arena and running out of time end the mission but are not contacts.
+
+| mode | strike | contact | obstacle | floor | chaser | out of arena | timeout | strike time [s] | kept | no-certificate episodes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| no filter | 0.425 | 0.575 | 0.574 | 0.000 | 0.001 | 0.000 | 0.000 | 5.45 | 1.00 | 0.000 |
+| filter, learned backup | 0.513 | 0.384 | 0.001 | 0.000 | 0.383 | 0.100 | 0.003 | 6.21 | 0.65 | 0.545 |
+
+By scene type (strike / contact / episodes that lost the certificate):
+
+| mode | no chaser | with chasers |
+|---|---|---|
+| no filter | nan / nan / nan (n = 0) | 0.425 / 0.575 / 0.000 (n = 1000) |
+| filter, learned backup | nan / nan / nan (n = 0) | 0.513 / 0.384 / 0.545 (n = 1000) |
+wrote outputs/strike_final/eval/s0/pursuit_static/strike_filter_table.md

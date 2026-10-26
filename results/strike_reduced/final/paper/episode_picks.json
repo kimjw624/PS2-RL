@@ -1,0 +1,35 @@
+{
+  "seed": 0,
+  "picks": {
+    "filter_saves_obstacle": [
+      392
+    ],
+    "filter_saves_chaser": [
+      146
+    ],
+    "close_chaser_evasion": [
+      994
+    ],
+    "ps2_contact": [
+      845
+    ],
+    "ps2_timeup": [
+      16
+    ],
+    "typical": [
+      54
+    ],
+    "ps2_beats_pursuit": [
+      621
+    ],
+    "ps2_beats_residual": [
+      576
+    ],
+    "static_ball_fails": [
+      219
+    ],
+    "bcbf_fails": [
+      576
+    ]
+  }
+}

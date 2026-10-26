@@ -15,11 +15,14 @@
 #                                                                       (docker_batch/configs/strike_final_ps2.json)
 #   RUNS        evaluations to run                                      (all, see below)
 #   GIFS        failure GIFs for ps2_final                              (4)
+#   ENV         env overrides for every evaluation (JSON)               (the chaser each seed's striker was trained with:
+#               actual_chaser_radius / actual_chaser_speed / chaser_accel from its PS2 run, else its residual run)
 # Runs (output <ROOT>/eval/s<seed>/<run>/):
 #   pursuit_static   straight-line pursuit: no filter, and the filter with static chaser balls (needs a ball-format backup)
 #   pursuit_guid1    pursuit, guidance filter with one escape
 #   pursuit_bcbf     pursuit, bCBF (minimal-correction QP) with the deployed filter as its safeguard
 #   pursuit_final    pursuit, deployed filter
+#   pursuit_blind    pursuit, the filter not told about the chaser (obstacles only): what ignoring the chaser costs
 #   residual_final   residual striker trained without the filter: no filter, deployed filter
 #   ps2_final        PS2 striker: no filter, deployed filter, the same filter with the hover-LQR backup
 #   ps2_guid1        PS2 striker, one escape (no variants)
@@ -27,6 +30,7 @@
 #   ps2_nocp         PS2 striker, deployed filter without the committed chaser prediction
 #   ps2_nolatch      PS2 striker, deployed filter without the hover latch
 #   ps2_static       PS2 striker, static chaser balls (needs a ball-format backup)
+#   ps2_blind        PS2 striker, the filter not told about the chaser (obstacles only)
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
@@ -38,8 +42,9 @@ SEEDS="${SEEDS:-0 1 2}"
 N="${N:-1000}"
 SCENE_SEED="${SCENE_SEED:-9001}"
 TASK="${TASK:-docker_batch/configs/strike_final_ps2.json}"
-RUNS="${RUNS:-pursuit_static pursuit_guid1 pursuit_bcbf pursuit_final residual_final ps2_final ps2_guid1 ps2_bcbf ps2_nocp ps2_nolatch ps2_static}"
+RUNS="${RUNS:-pursuit_static pursuit_guid1 pursuit_bcbf pursuit_final pursuit_blind residual_final ps2_final ps2_guid1 ps2_bcbf ps2_nocp ps2_nolatch ps2_static ps2_blind}"
 GIFS="${GIFS:-4}"
+ENV="${ENV:-}"
 stamp() { date '+%F %T'; }
 
 # the deployed filter (single source of truth: the PS2 task file) and its ablations
@@ -63,6 +68,25 @@ for seed in ${SEEDS}; do
     RES="${ROOT}/residual/striker_rs0p1_s${seed}"
     PS2="${ROOT}/ps2/striker_rs0p1_s${seed}"
     ball_backup=$(python -c "import json; print(int(json.load(open('${P1}/configs.json'))['strike'].get('chaser_set', 'ball') == 'ball'))" 2>/dev/null || echo 0)
+    # evaluate in the chaser this seed was trained with (the task file may hold a different one), unless ENV is given
+    env_s="${ENV}"
+    if [ -z "${env_s}" ]; then
+        env_s=$(python - "${PS2}" "${RES}" <<'PY' 2>/dev/null
+import json, sys
+from pathlib import Path
+from ps2rl.envs.strike_env import StrikeEnvConfig
+d = StrikeEnvConfig()
+for run in sys.argv[1:]:
+    p = Path(run) / "configs.json"
+    if p.exists():
+        e = json.loads(p.read_text()).get("env", {})
+        print(json.dumps({k: e.get(k, getattr(d, k)) for k in ("actual_chaser_radius", "actual_chaser_speed", "chaser_accel")}))
+        break
+PY
+)
+    fi
+    envarg=(); [ -n "${env_s}" ] && envarg=(--env "${env_s}")
+    echo "[strike-eval] s${seed}: chaser ${env_s:-as in the task file} (-1 = the strike block's 0.4 m / 2 m/s)"
     for run in ${RUNS}; do
         out="${ROOT}/eval/s${seed}/${run}"
         if [ -f "${out}/strike_filter_episodes.json" ]; then echo "[strike-eval] s${seed} ${run}: done before, skipped"; continue; fi
@@ -72,6 +96,7 @@ for seed in ${SEEDS}; do
             pursuit_guid1)  filt=(--chaser_model guidance --guidance "${G_ONE}") ;;
             pursuit_bcbf)   extra=(--filter_type bcbf) ;;
             pursuit_final)  ;;
+            pursuit_blind)  filt=(--chaser_model guidance --guidance "${G_ONE}" --filter_sees_chasers 0) ;;
             residual_final) nominal=(--nominal striker --striker_run "${RES}"); modes="none learned" ;;
             ps2_final)      nominal=(--nominal striker --striker_run "${PS2}"); modes="none learned lqr"; gif="${GIFS}" ;;
             ps2_guid1)      nominal=(--nominal striker --striker_run "${PS2}"); filt=(--chaser_model guidance --guidance "${G_ONE}") ;;
@@ -79,6 +104,7 @@ for seed in ${SEEDS}; do
             ps2_nocp)       nominal=(--nominal striker --striker_run "${PS2}"); filt=(--chaser_model guidance --guidance "${G_NOCP}") ;;
             ps2_nolatch)    nominal=(--nominal striker --striker_run "${PS2}"); extra=(--hover_latch 0) ;;
             ps2_static)     nominal=(--nominal striker --striker_run "${PS2}"); filt=(--chaser_model static) ;;
+            ps2_blind)      nominal=(--nominal striker --striker_run "${PS2}"); filt=(--chaser_model guidance --guidance "${G_ONE}" --filter_sees_chasers 0) ;;
             *) echo "[strike-eval] unknown run ${run}"; continue ;;
         esac
         case "${run}" in *_static)
@@ -89,7 +115,7 @@ for seed in ${SEEDS}; do
         done
         mkdir -p "${out}"
         echo "[strike-eval] $(stamp) s${seed} ${run}: modes '${modes}' (log ${out}.log)"
-        if python scripts/eval_strike_filter.py --backup_run "${P1}" --task "${TASK}" "${nominal[@]}" "${filt[@]}" "${extra[@]}" \
+        if python scripts/eval_strike_filter.py --backup_run "${P1}" --task "${TASK}" "${envarg[@]}" "${nominal[@]}" "${filt[@]}" "${extra[@]}" \
                 --modes "${modes}" --episodes "${N}" --scene_seed "${SCENE_SEED}" --n_show 0 --gif "${gif}" --gif_pick failures \
                 --out "${out}" > "${out}.log" 2>&1; then
             grep -E "^\[(none|lqr|learned)" "${out}.log" | sed "s/^/[strike-eval]   /"

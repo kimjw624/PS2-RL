@@ -1,0 +1,70 @@
+STRIKE 주요 수식: 한글(HWP) 수식 편집기 입력
+(붙여넣은 뒤 모양을 확인할 것. 노름 기호는 LEFT | ... RIGHT | 로 적었다. 이중 막대가 필요하면 수식 편집기에서 바꾼다.)
+
+[1] 기체 동역학
+p_{k+1} = p_{k} + DELTA t ~ v_{k}
+v_{k+1} = v_{k} + DELTA t LEFT ( a_{T,k} R(q_{k} ) e_{3} - g e_{3} RIGHT )
+q_{k+1} = { q_{k} + {DELTA t} over {2} q_{k} otimes (0, omega _{k} ) } over { LEFT | q_{k} + {DELTA t} over {2} q_{k} otimes (0, omega _{k} ) RIGHT | }
+
+[2] 장애물 부호 거리
+rm sdf _{i} (p_{xy} ) = LEFT | max ( LEFT | ell RIGHT | - b_{i} , 0) RIGHT | _{2} + min LEFT ( max ( LEFT | ell _{x} RIGHT | - b_{x} , LEFT | ell _{y} RIGHT | - b_{y} ), 0 RIGHT ) - rho _{i}
+
+[3] 기하 여유
+h_{f} = z - z_{f} , ~~ h_{o} = rm sdf _{O} (p_{xy} ) - r_{d} , ~~ h_{w} = d_{wall} (p_{xy} ) - r_{d} , ~~ h_{z} = z_{max} - z - r_{d}
+
+[4] 시선과 접근 속도
+hat e _{j} = {p - c_{j}} over {LEFT | p - c_{j} RIGHT |} , ~~ s_{j} = v_{c} - hat e _{j} ^{T} v , ~~ s_{j} ^{+} = max (s_{j} , 0)
+
+[5] 추격자 여유도
+h_{c,j} = R_{j} - (r_{c} + r_{d} ) - s_{j} ^{+} delta - {(s_{j} ^{+} )^{2}} over {2 a_{e}}
+
+[6] 안전 집합
+S( zeta ) = LEFT { x : h_{f} , h_{o} , h_{w} , h_{z} >= 0 , ~ h_{c,j} >= 0 ~ forall j RIGHT }
+
+[7] 호버 LQR
+K = (R_{u} + B_{d} ^{T} P B_{d} )^{-1} B_{d} ^{T} P A_{d} , ~~ V(e) = e^{T} P e
+
+[8] 정지점 재설정
+a^{*} = p + P_{pp} ^{-1} P_{pr} r , ~~ V_{min} = r^{T} S r , ~~ S = P_{rr} - P_{rp} P_{pp} ^{-1} P_{pr}
+
+[9] 호버 타원체 범위
+rho _{xy} = sqrt { c_{B} lambda _{max} ( [ P^{-1} ] _{xy} ) } , ~~ z_{ext} = sqrt { c_{B} [ P^{-1} ] _{zz} }
+
+[10] Phase I 목적함수
+J( theta ) = E LEFT [ beta ^{tau _{B}} ~ bold 1 LEFT { tau _{B} < tau _{out} RIGHT } RIGHT ]
+
+[11] 회피 반사와 회복 정책
+sigma = rm clip LEFT ( {h_{off} - h_{min}} over {h_{off} - h_{on}} , 0, 1 RIGHT ) , ~~ pi _{b} ^{(j)} = rm sat LEFT ( (1 - sigma ) u_{base} ^{(j)} + sigma u_{esc} ^{(j)} RIGHT )
+
+[12] 후보 입력
+u_{lambda} ^{(j)} = rm sat LEFT ( lambda u_{nom} + (1 - lambda ) pi _{b} ^{(j)} (x) RIGHT ) , ~~ lambda in LEFT { 1, 0.75, 0.5, 0.25, 0 RIGHT }
+
+[13] 추격자 예측(순수 추적)
+c_{i+1} = c_{i} + min LEFT ( v_{c} DELTA t , LEFT | p_{i} - c_{i} RIGHT | RIGHT ) {p_{i} - c_{i}} over {LEFT | p_{i} - c_{i} RIGHT |}
+
+[14] 제동 정지점
+p_{brake} = p_{H,xy} + {v_{H,xy} LEFT | v_{H,xy} RIGHT |} over {2 a_{e}}
+
+[15] 선택 규칙
+( lambda ^{*} , j^{*} ) = arg max _{( lambda , j) in A} lambda
+
+[16] bCBF 제약(상대시간 형태)
+nabla h( phi _{i} ) LEFT [ Q_{i} (f(y) + g(y) u) - f_{pi} ( phi _{i} ) RIGHT ] >= - alpha h( phi _{i} )
+
+[17] bCBF QP
+min _{u, s >= 0} ~ {1} over {2} sum _{k} w_{k} (u_{k} - u_{nom,k} )^{2} + {1} over {2} w_{s} s^{2}
+
+[18] 기준 접근 제어
+v_{des} = v_{cr} {p_{t} - p} over {LEFT | p_{t} - p RIGHT |} + v_{t}
+
+[19] 보상
+r_{k} = w_{p} (d_{k-1} - d_{k} ) - w_{t} - {w_{a}} over {4} LEFT | {DELTA u_{k}} over {u_{scale}} RIGHT | ^{2} + 100 cdot bold 1 _{"성공"} - 150 cdot bold 1 _{"접촉, 이탈"}
+
+[20] PS2 보상
+r_{k} ^{PS2} = r_{k} - w_{f} LEFT | eta _{k} RIGHT | ^{2} , ~~ eta _{k} = {u_{k} - u_{nom,k}} over {u_{scale}}
+
+[21] 0건 관측의 95 % 상한
+p_{U} = 1 - 0.05 ^{1/n}
+
+[22] 정확 McNemar 검정
+p = min LEFT { 1 , ~ 2 sum _{i=0} ^{min(b,c)} LEFT ( {b+c} atop {i} RIGHT ) 2^{-(b+c)} RIGHT }

@@ -224,4 +224,5 @@ Landing under a bounded disturbance with a disturbance observer, and runway bird
 
 Low-altitude strike of a moving target among tall obstacles and a pursuing chaser: Phase-I backup, discrete backup-set
 filter with a guidance-law escape margin and escape variants, residual striker trained through the filter (PS2). Start
-with `STRIKE_HANDOFF.md`; method write-up in `docs/strike/strike_method.pdf`; how to run in `docker_batch/README_strike.md`.
+with `STRIKE_HANDOFF.md`; method write-up in `docs/strike/strike_method.pdf`; how to run in `docker_batch/README_strike.md`;
+the report's 3-seed run (models, evaluations, tables, figures) in `results/strike_reduced/final/`.

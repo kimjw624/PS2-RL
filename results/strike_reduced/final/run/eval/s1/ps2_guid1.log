@@ -1,0 +1,2 @@
+[scenes] 1000 evaluation scenes (seed 9001) in 1 s
+[backup input] obstacles within 10 m, chaser balls within 12 m (the Phase-I training range)

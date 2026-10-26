@@ -1,0 +1,36 @@
+{
+  "total_steps": 3000320,
+  "wall_time_sec": 4559.608724355698,
+  "best_step": 2250752,
+  "best_eval": {
+    "return_mean": 133.52590942382812,
+    "return_std": 35.16709899902344,
+    "strike_rate": 0.96875,
+    "crash_rate": 0.0,
+    "crash_obstacle_rate": 0.0,
+    "crash_floor_rate": 0.0,
+    "crash_chaser_rate": 0.0,
+    "out_of_arena_rate": 0.0,
+    "timeout_rate": 0.03125,
+    "strike_time_mean": 6.313225746154785,
+    "mean_speed": 5.717759132385254,
+    "min_obstacle_dist": 0.4500000476837158,
+    "min_chaser_dist": 0.9004311561584473
+  },
+  "final_eval": {
+    "return_mean": 122.70777130126953,
+    "return_std": 54.39999771118164,
+    "strike_rate": 0.9375,
+    "crash_rate": 0.0,
+    "crash_obstacle_rate": 0.0,
+    "crash_floor_rate": 0.0,
+    "crash_chaser_rate": 0.0,
+    "out_of_arena_rate": 0.0,
+    "timeout_rate": 0.0625,
+    "strike_time_mean": 6.6316657066345215,
+    "mean_speed": 5.5449419021606445,
+    "min_obstacle_dist": 0.4500002861022949,
+    "min_chaser_dist": 0.9004730582237244
+  },
+  "jax_backend": "gpu"
+}

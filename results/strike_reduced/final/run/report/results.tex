@@ -1,0 +1,16 @@
+\begin{tabular}{llcccccc}\toprule
+nominal & filter & strike & contact & time-up & $t_{\rm strike}$ [s] & kept & lost cert.\\\midrule
+Pursuit (6 m/s) & none & $0.425\pm0.000$ {\scriptsize [0.403, 0.447]} & $0.575\pm0.000$ {\scriptsize [0.553, 0.597]} & $0.000\pm0.000$ {\scriptsize [0.000, 0.002]} & 5.45 & 1.00 & 0.000\\
+ & static chaser ball & $0.522\pm0.010$ {\scriptsize [0.500, 0.545]} & $0.421\pm0.038$ {\scriptsize [0.400, 0.443]} & $0.002\pm0.001$ {\scriptsize [0.001, 0.005]} & 6.21 & 0.67 & 0.553\\
+ & guidance set, 1 escape & $0.907\pm0.003$ {\scriptsize [0.893, 0.919]} & $0.028\pm0.002$ {\scriptsize [0.021, 0.036]} & $0.066\pm0.000$ {\scriptsize [0.056, 0.078]} & 6.90 & 0.84 & 0.059\\
+ & bCBF & $0.960\pm0.003$ {\scriptsize [0.951, 0.969]} & $0.005\pm0.003$ {\scriptsize [0.002, 0.009]} & $0.035\pm0.000$ {\scriptsize [0.027, 0.044]} & 7.47 & 0.95 & 0.061\\
+ & ours & $0.952\pm0.006$ {\scriptsize [0.942, 0.961]} & $0.001\pm0.001$ {\scriptsize [0.000, 0.003]} & $0.047\pm0.006$ {\scriptsize [0.038, 0.057]} & 6.99 & 0.87 & 0.023\\
+\midrule
+Residual SAC, no PS2 & none & $0.740\pm0.009$ {\scriptsize [0.720, 0.759]} & $0.261\pm0.009$ {\scriptsize [0.241, 0.280]} & $0.000\pm0.000$ {\scriptsize [0.000, 0.002]} & 5.36 & 1.00 & 0.000\\
+ & ours & $0.944\pm0.006$ {\scriptsize [0.933, 0.954]} & $0.000\pm0.000$ {\scriptsize [0.000, 0.002]} & $0.056\pm0.006$ {\scriptsize [0.046, 0.067]} & 6.53 & 0.90 & 0.018\\
+\midrule
+PS2 (ours) & none & $0.621\pm0.013$ {\scriptsize [0.599, 0.642]} & $0.379\pm0.013$ {\scriptsize [0.358, 0.401]} & $0.000\pm0.000$ {\scriptsize [0.000, 0.002]} & 5.07 & 1.00 & 0.000\\
+ & guidance set, 1 escape & $0.957\pm0.000$ {\scriptsize [0.943, 0.969]} & $0.017\pm0.000$ {\scriptsize [0.010, 0.027]} & $0.026\pm0.000$ {\scriptsize [0.017, 0.038]} & 5.88 & 0.90 & 0.036\\
+ & bCBF & $0.973\pm0.000$ {\scriptsize [0.961, 0.982]} & $0.002\pm0.000$ {\scriptsize [0.000, 0.007]} & $0.025\pm0.000$ {\scriptsize [0.016, 0.037]} & 6.33 & 0.97 & 0.025\\
+ & ours & $0.976\pm0.008$ {\scriptsize [0.968, 0.982]} & $0.001\pm0.001$ {\scriptsize [0.000, 0.003]} & $0.024\pm0.009$ {\scriptsize [0.017, 0.031]} & 6.11 & 0.90 & 0.015\\
+\bottomrule\end{tabular}

@@ -1,0 +1,21 @@
+{
+  "chosen_run": "td3_a0p2_seed2",
+  "actor": "outputs/strike_final/p1/td3_a0p2_seed2/strike_backup_policy_actor.pkl",
+  "rule": "highest weighted recovered fraction on the test scenes",
+  "learned": {
+    "general": 0.8435,
+    "blocked": 0.3585,
+    "chaser": 0.4755,
+    "shell": 1.0,
+    "escape": 0.87
+  },
+  "lqr": {
+    "general": 0.556,
+    "blocked": 0.0005,
+    "chaser": 0.079,
+    "shell": 1.0,
+    "escape": 0.314
+  },
+  "learned_mu_weighted": 0.7041999999999999,
+  "lqr_mu_weighted": 0.4383
+}

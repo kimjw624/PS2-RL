@@ -1,0 +1,80 @@
+[jax] backend=gpu devices=[CudaDevice(id=0)]
+[run] outputs/strike_final/ps2/striker_rs0p1_s0 total_steps=3000000 reward_scale=0.1 seed=0
+[scene pool] outputs/strike_final/ps2/strike_scene_pool_f2fe7db400.npz (10000 scenes)
+[filter] discrete filter in the loop (guidance chasers), backup outputs/strike_final/p1/td3_a0p2_seed0, w_filter 0.5
+[warm start] actor, critics and alpha from outputs/strike_final/residual/striker_rs0p1_s0/best_weights.pkl
+  [eval 0] return 126.1+-52.1 strike 0.938 (t 6.55 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.062 speed 5.6 m/s
+step=51200 sps=786 ep_ret=134.0 strike=0.960 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.040 | critic=0.052 q_pi=-1.20 alpha=0.001
+step=100352 sps=832 ep_ret=131.3 strike=0.950 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.050 | critic=0.109 q_pi=-2.41 alpha=0.001
+step=151552 sps=832 ep_ret=123.4 strike=0.937 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.063 | critic=0.225 q_pi=0.86 alpha=0.001
+step=200704 sps=832 ep_ret=113.2 strike=0.910 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.090 | critic=0.98 q_pi=3.02 alpha=0.001
+step=251904 sps=832 ep_ret=110.0 strike=0.920 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.080 | critic=5.7 q_pi=0.02 alpha=0.001
+  [eval 251904] return 73.5+-78.6 strike 0.766 (t 9.51 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.234 speed 4.2 m/s
+step=301056 sps=444 ep_ret=100.4 strike=0.894 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.106 | critic=13.7 q_pi=-13.41 alpha=0.001
+step=350208 sps=831 ep_ret=76.0 strike=0.745 obstacle=0.000 floor=0.000 chaser=0.010 out=0.000 timeout=0.245 | critic=17 q_pi=-35.62 alpha=0.001
+step=401408 sps=833 ep_ret=84.5 strike=0.818 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.182 | critic=19.2 q_pi=-53.36 alpha=0.001
+step=450560 sps=832 ep_ret=91.8 strike=0.833 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.167 | critic=21.6 q_pi=-72.36 alpha=0.001
+step=501760 sps=831 ep_ret=87.5 strike=0.827 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.173 | critic=23.4 q_pi=-87.19 alpha=0.001
+  [eval 501760] return 96.1+-67.3 strike 0.891 (t 8.60 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.109 speed 4.6 m/s
+step=550912 sps=444 ep_ret=100.8 strike=0.877 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.123 | critic=23.4 q_pi=-98.73 alpha=0.001
+step=600064 sps=832 ep_ret=93.3 strike=0.853 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.147 | critic=21.8 q_pi=-103.57 alpha=0.001
+step=651264 sps=832 ep_ret=108.2 strike=0.903 obstacle=0.000 floor=0.000 chaser=0.008 out=0.000 timeout=0.089 | critic=20.2 q_pi=-107.31 alpha=0.001
+step=700416 sps=832 ep_ret=112.5 strike=0.936 obstacle=0.000 floor=0.000 chaser=0.008 out=0.000 timeout=0.056 | critic=19.4 q_pi=-108.07 alpha=0.001
+step=751616 sps=831 ep_ret=108.2 strike=0.902 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.098 | critic=17 q_pi=-106.84 alpha=0.001
+  [eval 751616] return 87.3+-84.5 strike 0.844 (t 8.35 s) crash 0.016 [obstacle 0.000 floor 0.000 chaser 0.016 out 0.000] timeout 0.141 speed 4.7 m/s
+step=800768 sps=444 ep_ret=109.6 strike=0.930 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.070 | critic=15.8 q_pi=-103.99 alpha=0.001
+step=851968 sps=832 ep_ret=107.5 strike=0.913 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.087 | critic=14.7 q_pi=-99.75 alpha=0.001
+step=901120 sps=832 ep_ret=110.4 strike=0.893 obstacle=0.000 floor=0.000 chaser=0.008 out=0.000 timeout=0.098 | critic=12.6 q_pi=-94.86 alpha=0.001
+step=950272 sps=831 ep_ret=118.7 strike=0.938 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.062 | critic=10.5 q_pi=-89.36 alpha=0.001
+step=1001472 sps=831 ep_ret=125.8 strike=0.957 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.043 | critic=9.29 q_pi=-83.67 alpha=0.001
+  [eval 1001472] return 120.5+-53.9 strike 0.953 (t 7.65 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.047 speed 5.0 m/s
+step=1050624 sps=444 ep_ret=122.6 strike=0.959 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.041 | critic=7.76 q_pi=-76.22 alpha=0.001
+step=1101824 sps=832 ep_ret=125.5 strike=0.960 obstacle=0.000 floor=0.000 chaser=0.007 out=0.000 timeout=0.033 | critic=6.42 q_pi=-70.05 alpha=0.001
+step=1150976 sps=831 ep_ret=123.7 strike=0.962 obstacle=0.000 floor=0.000 chaser=0.008 out=0.000 timeout=0.030 | critic=5.37 q_pi=-63.81 alpha=0.001
+step=1200128 sps=831 ep_ret=116.7 strike=0.915 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.085 | critic=4.21 q_pi=-57.31 alpha=0.001
+step=1251328 sps=832 ep_ret=119.6 strike=0.944 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.056 | critic=3.11 q_pi=-50.83 alpha=0.001
+  [eval 1251328] return 127.4+-33.0 strike 0.984 (t 7.04 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.016 speed 5.5 m/s
+step=1300480 sps=444 ep_ret=132.3 strike=0.969 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.031 | critic=2.26 q_pi=-43.61 alpha=0.001
+step=1351680 sps=831 ep_ret=130.3 strike=0.966 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.034 | critic=1.66 q_pi=-36.06 alpha=0.001
+step=1400832 sps=831 ep_ret=123.7 strike=0.942 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.058 | critic=1.2 q_pi=-29.35 alpha=0.001
+step=1452032 sps=831 ep_ret=130.4 strike=0.970 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.030 | critic=1.01 q_pi=-24.50 alpha=0.001
+step=1501184 sps=831 ep_ret=135.8 strike=0.981 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.019 | critic=0.786 q_pi=-21.12 alpha=0.001
+  [eval 1501184] return 128.6+-43.3 strike 0.969 (t 6.30 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.031 speed 5.9 m/s
+step=1550336 sps=444 ep_ret=129.6 strike=0.963 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.031 | critic=0.683 q_pi=-18.33 alpha=0.001
+step=1601536 sps=831 ep_ret=134.0 strike=0.982 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.012 | critic=0.611 q_pi=-16.06 alpha=0.001
+step=1650688 sps=831 ep_ret=137.3 strike=0.982 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.012 | critic=0.531 q_pi=-14.33 alpha=0.001
+step=1701888 sps=831 ep_ret=139.7 strike=0.988 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.012 | critic=0.482 q_pi=-12.85 alpha=0.001
+step=1751040 sps=831 ep_ret=133.8 strike=0.970 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.030 | critic=0.477 q_pi=-11.65 alpha=0.001
+  [eval 1751040] return 128.2+-52.2 strike 0.953 (t 6.03 s) crash 0.016 [obstacle 0.000 floor 0.000 chaser 0.016 out 0.000] timeout 0.031 speed 5.9 m/s
+step=1800192 sps=444 ep_ret=134.1 strike=0.981 obstacle=0.000 floor=0.000 chaser=0.012 out=0.000 timeout=0.006 | critic=0.446 q_pi=-10.62 alpha=0.001
+step=1851392 sps=831 ep_ret=138.2 strike=0.988 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.012 | critic=0.398 q_pi=-9.60 alpha=0.001
+step=1900544 sps=831 ep_ret=132.7 strike=0.967 obstacle=0.000 floor=0.000 chaser=0.013 out=0.000 timeout=0.020 | critic=0.378 q_pi=-8.65 alpha=0.001
+step=1951744 sps=831 ep_ret=132.3 strike=0.958 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.042 | critic=0.352 q_pi=-7.94 alpha=0.001
+step=2000896 sps=831 ep_ret=134.9 strike=0.975 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.025 | critic=0.321 q_pi=-7.10 alpha=0.001
+  [eval 2000896] return 125.0+-52.4 strike 0.953 (t 6.18 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.047 speed 5.9 m/s
+step=2050048 sps=444 ep_ret=141.2 strike=1.000 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.000 | critic=0.275 q_pi=-6.23 alpha=0.001
+step=2101248 sps=831 ep_ret=135.9 strike=0.982 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.012 | critic=0.25 q_pi=-5.31 alpha=0.001
+step=2150400 sps=831 ep_ret=139.4 strike=0.994 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.006 | critic=0.241 q_pi=-4.71 alpha=0.001
+step=2201600 sps=831 ep_ret=140.9 strike=0.994 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.006 | critic=0.243 q_pi=-4.19 alpha=0.001
+step=2250752 sps=831 ep_ret=135.9 strike=0.969 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.031 | critic=0.285 q_pi=-3.96 alpha=0.001
+  [eval 2250752] return 133.5+-35.2 strike 0.969 (t 6.31 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.031 speed 5.7 m/s
+step=2301952 sps=452 ep_ret=134.9 strike=0.976 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.024 | critic=0.336 q_pi=-3.84 alpha=0.001
+step=2351104 sps=831 ep_ret=139.7 strike=0.988 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.006 | critic=0.48 q_pi=-3.43 alpha=0.001
+step=2400256 sps=831 ep_ret=138.0 strike=0.994 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.006 | critic=0.825 q_pi=-3.17 alpha=0.001
+step=2451456 sps=832 ep_ret=137.4 strike=0.994 obstacle=0.000 floor=0.000 chaser=0.006 out=0.000 timeout=0.000 | critic=1.21 q_pi=-3.07 alpha=0.001
+step=2500608 sps=146 ep_ret=139.3 strike=0.977 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.023 | critic=1.48 q_pi=-2.82 alpha=0.001
+  [eval 2500608] return 131.6+-39.8 strike 0.969 (t 6.27 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.031 speed 5.9 m/s
+step=2551808 sps=452 ep_ret=138.2 strike=0.982 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.018 | critic=1.66 q_pi=-3.21 alpha=0.001
+step=2600960 sps=831 ep_ret=131.3 strike=0.961 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.039 | critic=2.54 q_pi=-3.42 alpha=0.001
+step=2650112 sps=832 ep_ret=127.8 strike=0.948 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.052 | critic=3.82 q_pi=-4.26 alpha=0.001
+step=2701312 sps=832 ep_ret=135.4 strike=0.982 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.018 | critic=5.15 q_pi=-5.16 alpha=0.001
+step=2750464 sps=832 ep_ret=135.4 strike=0.981 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.019 | critic=4.8 q_pi=-5.64 alpha=0.001
+  [eval 2750464] return 132.8+-46.6 strike 0.984 (t 6.28 s) crash 0.016 [obstacle 0.000 floor 0.000 chaser 0.016 out 0.000] timeout 0.000 speed 5.9 m/s
+step=2801664 sps=452 ep_ret=129.3 strike=0.962 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.038 | critic=5.01 q_pi=-7.17 alpha=0.001
+step=2850816 sps=832 ep_ret=132.7 strike=0.987 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.013 | critic=5.69 q_pi=-8.31 alpha=0.001
+step=2902016 sps=832 ep_ret=136.7 strike=1.000 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.000 | critic=4.83 q_pi=-9.12 alpha=0.001
+step=2951168 sps=832 ep_ret=128.5 strike=0.954 obstacle=0.000 floor=0.000 chaser=0.007 out=0.000 timeout=0.040 | critic=4.42 q_pi=-9.27 alpha=0.001
+step=3000320 sps=832 ep_ret=129.7 strike=0.961 obstacle=0.000 floor=0.000 chaser=0.000 out=0.000 timeout=0.039 | critic=4.66 q_pi=-9.92 alpha=0.001
+  [eval 3000320] return 122.7+-54.4 strike 0.938 (t 6.63 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.062 speed 5.5 m/s
+  [eval 3000320] return 122.7+-54.4 strike 0.938 (t 6.63 s) crash 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.062 speed 5.5 m/s
+[done] best step 2250752: strike 0.969 crash 0.000 return 133.5; 1.27 h; outputs/strike_final/ps2/striker_rs0p1_s0

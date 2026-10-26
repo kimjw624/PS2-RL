@@ -1,0 +1,15 @@
+  ep                res                 |               res_f                |                one                 |                ours               
+  20 crash_obs  3.5 / crash_obs  3.5 ok |   timeout 15.0 /   timeout 15.0 ok |   timeout 15.0 /   timeout 15.0 ok |    strike 14.6 /   timeout 15.0 XX   <- outcome differs
+  69 crash_cha  2.9 / crash_cha  2.9 ok |   timeout 15.0 /   timeout 15.0 ok |    strike  5.1 /    strike  5.1 ok |    strike  5.1 /    strike  5.1 ok
+  97    strike  5.8 /    strike  5.8 ok |    strike 11.4 /    strike 11.5 ok | crash_cha  9.0 /   timeout 15.0 XX |    strike  5.4 /    strike  5.3 ok   <- outcome differs
+ 104 crash_obs  4.1 / crash_obs  4.1 ok |    strike 11.6 /    strike 11.5 ok |   timeout 15.0 /   timeout 15.0 ok |    strike  5.2 /    strike  5.2 ok
+ 146 crash_cha  3.5 / crash_cha  3.5 ok |    strike 12.8 /    strike 14.8 t~ |    strike 10.6 /    strike 10.6 ok |    strike  7.6 /    strike  7.5 ok
+ 271 crash_flo  1.2 / crash_flo  1.2 ok |   timeout 15.0 /   timeout 15.0 ok |    strike  5.0 /    strike  5.0 ok |    strike  5.0 /    strike  5.0 ok
+ 473 crash_obs  1.7 / crash_obs  1.7 ok |   timeout 15.0 /   timeout 15.0 ok |   timeout 15.0 /   timeout 15.0 ok |    strike 14.7 /    strike 14.7 ok
+ 493 crash_cha  3.3 / crash_cha  3.3 ok |   timeout 15.0 /   timeout 15.0 ok |   timeout 15.0 /   timeout 15.0 ok |    strike 13.9 /    strike 13.5 t~
+ 576    strike  5.0 /    strike  5.0 ok |   timeout 15.0 /   timeout 15.0 ok |   timeout 15.0 /   timeout 15.0 ok |    strike  4.8 /    strike  4.8 ok
+ 601    strike  5.4 /    strike  5.4 ok |    strike 11.3 /    strike 11.4 ok | crash_cha  8.5 / crash_cha  8.5 ok |    strike  6.5 /    strike  6.5 ok
+ 827 crash_obs  0.9 / crash_obs  0.9 ok |    strike  7.1 /    strike  7.1 ok | crash_cha  5.8 / crash_cha  5.9 ok |    strike  7.9 /    strike  7.9 ok
+ 845 crash_obs  1.7 / crash_obs  1.7 ok |   timeout 15.0 /   timeout 15.0 ok | crash_cha  9.3 / crash_cha  9.2 ok | crash_cha  9.3 / crash_cha  9.2 ok
+ 914    strike  4.9 /    strike  4.9 ok |    strike 12.2 /    strike 12.7 t~ | crash_cha  8.3 / crash_cha  8.3 ok |    strike  5.2 /    strike  5.2 ok
+ 972 crash_obs  1.0 / crash_obs  1.0 ok |    strike 14.7 /    strike 14.5 ok |    strike  5.5 /    strike  5.5 ok |    strike  5.5 /    strike  5.5 ok

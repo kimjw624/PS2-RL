@@ -1,0 +1,49 @@
+{
+  "nominal": "striker striker_rs0p1_s0 (residual on pursuit at 6 m/s)",
+  "backup_run": "outputs/strike_final/p1/td3_a0p2_seed0",
+  "episodes": 1000,
+  "scene_seed": 9001,
+  "chaser_hold": 0.0,
+  "backup_input_ranges": [
+    10.0,
+    12.0
+  ],
+  "chaser_speed_scale": 1.0,
+  "fresh_hold": null,
+  "T": 1.5,
+  "ball_radius": 3.7,
+  "chaser_model": "static",
+  "reach_hold": null,
+  "hover_latch": true,
+  "chaser_leash": 0.0,
+  "guidance": null,
+  "env_overrides": "",
+  "filter_type": "discrete",
+  "bcbf": "",
+  "results": {
+    "learned": {
+      "strike_rate": 0.676,
+      "crash_rate": 0.322,
+      "contact_rate": 0.263,
+      "crash_obstacle_rate": 0.001,
+      "crash_floor_rate": 0.0,
+      "crash_chaser_rate": 0.262,
+      "out_of_arena_rate": 0.059,
+      "timeout_rate": 0.002,
+      "strike_time_mean": 5.4357991218566895,
+      "kept_fraction_mean": 0.7547613978385925,
+      "no_certificate_step_rate": 0.23914246261119843,
+      "episodes_with_no_certificate": 0.389,
+      "committed_view_step_rate": 0.006637724582105875,
+      "wall_time_sec": 36.2167546749115,
+      "no_chaser_episodes": 0,
+      "no_chaser_strike_rate": NaN,
+      "no_chaser_contact_rate": NaN,
+      "no_chaser_no_certificate_episodes": NaN,
+      "with_chaser_episodes": 1000,
+      "with_chaser_strike_rate": 0.676,
+      "with_chaser_contact_rate": 0.263,
+      "with_chaser_no_certificate_episodes": 0.389
+    }
+  }
+}

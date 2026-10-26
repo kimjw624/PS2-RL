@@ -127,6 +127,14 @@ def load_backup(m: StrikeModel, kind: str, path: str | None = None):
     return make_actor_backup(m, _coerce_actor_cfg(ck["actor_cfg"])), ck["actor_params"]
 
 
+def with_chaser(m: StrikeModel, radius: float, speed: float) -> StrikeModel:
+    """The model the filter uses against a chaser of this radius and top speed (guidance margin h_c, pure-pursuit
+    prediction, reflex speed, static balls). The learned backup keeps the model it was trained with (its observation)."""
+    if abs(radius - m.cfg.chaser_radius) < 1e-12 and abs(speed - m.cfg.chaser_speed) < 1e-12:
+        return m
+    return build_model(m.cfg.replace(chaser_radius=float(radius), chaser_speed=float(speed)))
+
+
 def model_from_backup(path: str) -> StrikeModel:
     """The strike model a Phase-I run was trained with (its configs.json)."""
     p = Path(path).expanduser()
@@ -552,13 +560,51 @@ def _make_guidance_filter(m: StrikeModel, backup: Callable, params, lams, nv: in
     def ch_next(x, chaser_p):
         return pursue(m, chaser_p, x[0:3])
 
+    def candidate(x, u_nom, obst, chaser_p, chaser_on, committed, k: int, lam, h_min=None):
+        """Candidate (variant k, blend lam) exactly as the fresh check runs it (for figures): first step
+        u = clip(lam u_nom + (1 - lam) pi_b^(k)(x)), then variant k's backup over the horizon, the chasers as pure
+        pursuers. Returns the rollout (states x_1..x_H, chasers, safe margin with the fresh-plan slack, reflex weight,
+        held flag), the path verdict, the terminal verdict and how the plan ends (hover or braking point)."""
+        h_m = g.fresh_margin if h_min is None else h_min
+        hit_x, a0_x = init_carry(x, committed[nv + 3] > 0.5, committed[nv:nv + 3], obst)
+        sv = fresh_parts(x, obst, chaser_p, chaser_on)
+        ub, _, _, _ = action(x, chaser_p, chaser_on, sv, obst, hit_x, a0_x, k)
+        u = jnp.clip(lam * u_nom + (1.0 - lam) * ub, m.low, m.high)
+        x1 = plant_step(m, x, u)
+        ch1 = pursue(m, chaser_p, x[0:3])
+        h0, a00 = init_carry(x1, hit_x, a0_x, obst)
+
+        def body(c, _):
+            xx, chp, hit, a0 = c
+            uu, hit, a0, sig = action(xx, chp, chaser_on, sv, obst, hit, a0, k)
+            xn = plant_step(m, xx, uu)
+            chn = pursue(m, chp, xx[0:3])
+            return (xn, chn, hit, a0), (xn, chn, safe_margin(xn, chn, chaser_on, obst, h_m), sig, hit)
+
+        steps = n_first if variants[k][0] == "alone" else n
+        (xN, chN, hit, a0), (xs, chs, margin, sig, held) = jax.lax.scan(body, (x1, ch1, h0, a00), None, length=steps)
+        worst = jnp.minimum(safe_margin(x1, ch1, chaser_on, obst, h_m), jnp.min(margin))
+        hover_ok = jnp.where(hit, level(xN, a0) <= cfg.c_B, in_b_obst(xN, obst))
+        return {"u": u, "x1": x1, "ch1": ch1, "states": xs, "chasers": chs, "margin": margin, "sigma": sig, "held": held,
+                "path_ok": worst >= 0.0, "terminal_ok": terminal(xN, chN, chaser_on, obst, hit, a0, h_m),
+                "hover_end": hover_ok, "anchor_end": jnp.where(hit, a0, anchor(m, xN)),
+                "brake_point": stop_point(g, xN[0:3], xN[3:6])}
+
+    filt.candidate = candidate
+    filt.lambdas = [float(v) for v in lams]
     filt.fresh_view = fresh_view
     filt.backup_view = lambda committed: committed[..., :nv]
     filt.horizon_steps = n
     filt.explain = explain
     filt.variants = [(kind, bool(alt)) for kind, alt, _ in variants]
+    # readable names of the backup variants and where the committed vector keeps the variant of the plan (for plots)
+    filt.variant_labels = ((["learned alone"] if g.learned_alone else [])
+                           + [f"learned + escape ({g.escape_speed_ratio:g} v_c, 0 deg)"]
+                           + ([f"hover LQR + escape ({g.escape_speed_ratio:g} v_c, 0 deg)"] if g.lqr_alternative else [])
+                           + [f"learned + escape ({sr:g} v_c, {ang:+g} deg)" for sr, ang in g.escape_variants])
+    filt.k_index = nv + 4
     return filt
 
 
 __all__ = ["FilterInfo", "backup_ranges", "backup_scene_fn", "full_margins", "load_backup", "local_scene", "make_filter",
-           "model_from_backup"]
+           "model_from_backup", "with_chaser"]

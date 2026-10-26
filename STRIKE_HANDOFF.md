@@ -3,6 +3,10 @@
 Branch `strike-reduced-arena`. Everything needed to train, evaluate and report the low-altitude strike task in the
 reduced arena, plus reference models and the method write-up (`docs/strike/strike_method.pdf`).
 
+**The conference report's run** (3 seeds, models, evaluations, tables, figures, trajectory figures) is in
+`results/strike_reduced/final/`. Start with `results/strike_reduced/final/README.md`. The Korean methods document is
+`results/strike_paper/strike_methods_ko.tex`.
+
 ## The task
 
 A quadrotor (collective thrust and body-rate commands, 4 g thrust box, ±18 rad/s, dt 0.02 s) must strike a slowly
@@ -43,8 +47,15 @@ Equations and plain-words explanations for every part are in `docs/strike/strike
 
 The decision experiments behind the final configuration are in `results/strike_reduced/`.
 
-A 3-seed reproduction (`docker_batch/run_strike_final.sh`, about 8–10 h on an RTX 4050) is the next step. Its tables
-land in `outputs/strike_final/report/`. Copy them to `results/strike_reduced/final/` when done.
+The 3-seed run of the report (`docker_batch/run_strike_final.sh`, 1000 test scenes per seed, 15 s) is in
+`results/strike_reduced/final/`:
+
+| configuration | strike % | contact % (count) |
+|---|---|---|
+| residual striker, no filter | 74.0 ± 0.9 | 26.05 (521 / 2000) |
+| residual striker + final filter | 94.4 ± 0.6 | 0.00 (0 / 2000) |
+| PS2 striker + one escape (seed 0) | 95.7 | 1.70 (17 / 1000) |
+| PS2 striker + final filter | 97.6 ± 0.8 | 0.05 (1 / 2000) |
 
 ## Where things are
 
@@ -60,19 +71,26 @@ land in `outputs/strike_final/report/`. Copy them to `results/strike_reduced/fin
 | `scripts/train_phase2_strike.py` | striker / PS2 training |
 | `scripts/eval_strike_filter.py` | closed-loop evaluation (tables, per-episode records, GIFs) |
 | `scripts/report_strike.py` | report tables (md + LaTeX) and figures from the final pipeline |
+| `scripts/strike_paper.py`, `strike_paper_traj.py`, `strike_episode_viz.py`, `strike_filter_snapshot.py` | the report's tables, figures and numbers; trajectory figures of the four compared configurations; episode figures; the filter's check at one step |
+| `scripts/compare_strike_episodes.py`, `plot_strike_episodes.py` | the same scenes across methods |
+| `docker_batch/run_strike_paper.sh`, `run_strike_episodes.sh` | drivers for the above (`STEPS=tables` needs only the evaluation records) |
 | `docker_batch/run_strike_final.sh`, `run_strike_final_eval.sh` | final pipeline driver (3 seeds), evaluation driver |
 | `docker_batch/configs/strike_final_{p1,residual,ps2}.json` | final task files; `strike_final_ps2.json` holds the deployed filter (`tracker.filter_guidance`) |
 | `docker_batch/configs/strike*.json` (others) | earlier sparse-arena runs reported in the write-up |
 | `docker_batch/README_strike.md` | how to run every stage |
 | `checkpoints/strike_reduced/` | reference models: Phase-I backup, residual striker, PS2 striker |
-| `results/strike_reduced/` | decision experiments (tables, per-episode records) |
+| `results/strike_reduced/` | decision experiments (tables, per-episode records); `final/`: the report's run |
+| `results/strike_paper/` | Korean methods document (XeLaTeX) and the HWP equations |
 | `docs/strike/` | method write-up (LaTeX source + PDF) |
 
-The code also has options that are off by default and not used by any config in this branch. They come from a parked study of a larger arena:
+The code also has options that are off by default and not used by any config in this branch. They come from parked studies (a larger arena, a stronger chaser):
 - moving-chaser Phase I (`StrikeConfig.chaser_set "guidance"`);
 - arena walls in the scene;
 - a flee-then-hover backup;
-- `learned_alone` filter variant.
+- `learned_alone` filter variant;
+- a chaser stronger than the Phase-I proxy (env `actual_chaser_radius`, `actual_chaser_speed`, `chaser_accel`); the
+  filter is then built for it;
+- a filter blind to the chaser (`eval_strike_filter.py --filter_sees_chasers 0`, the `*_blind` evaluation runs).
 
 ## Setup
 
@@ -121,7 +139,8 @@ Folders it creates under `outputs/strike_final/` (a run is finished when its fol
 
 ## Open items
 
-1. Run the 3-seed pipeline and put `outputs/strike_final/report/` into `results/strike_reduced/final/`.
-2. Paper checklist (write-up §12): baselines (add a Lagrangian safe-RL baseline), a robustness sweep (chaser faster
+1. Finish the seed-1 ablations and the seed-2 evaluation (`run_strike_final_eval.sh` skips the runs already done).
+2. Train Phase I with arena walls: the one contact (s0 scene 845) is the drone pinned between an obstacle and a wall.
+3. Paper checklist (write-up §12): baselines (add a Lagrangian safe-RL baseline), a robustness sweep (chaser faster
    than the assumed v_c, denser obstacles), filter compute time, and a precise statement of the guarantee.
-3. Optional: bCBF hybrid (QP rows of the backup that the discrete check certifies best), finer λ grid, a_e sensitivity.
+4. Optional: bCBF hybrid (QP rows of the backup that the discrete check certifies best), finer λ grid, a_e sensitivity.

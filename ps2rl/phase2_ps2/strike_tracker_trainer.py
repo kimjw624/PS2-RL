@@ -101,7 +101,8 @@ EP_FIELDS = ("strike", "crash_obstacle", "crash_floor", "crash_chaser", "out_of_
 def _filtered_env(cfg: StrikeTrackerConfig, m: StrikeModel, ec: StrikeEnvConfig, pool: dict):
     """The strike environment with the safety filter in the loop (strike_filtered_env)."""
     from ps2rl.cil.strike_bcbf import make_strike_bcbf
-    from ps2rl.cil.strike_filter import backup_ranges, load_backup, make_filter, model_from_backup
+    from ps2rl.cil.strike_filter import backup_ranges, load_backup, make_filter, model_from_backup, with_chaser
+    from ps2rl.envs.strike_env import chaser_assumed
     from ps2rl.cil.strike_guidance import GuidanceConfig
     from ps2rl.envs.strike_filtered_env import build_filtered_strike_env
     from ps2rl.envs.strike_scene import check_same_plant
@@ -114,14 +115,18 @@ def _filtered_env(cfg: StrikeTrackerConfig, m: StrikeModel, ec: StrikeEnvConfig,
         print(f"[filter] backup scene format: chaser_set {m_b.cfg.chaser_set}, walls {m_b.cfg.arena_walls}, T {m_b.cfg.T} s "
               f"(striker observation: chaser_set {m.cfg.chaser_set}, walls {m.cfg.arena_walls})", flush=True)
     bk, prm = load_backup(m_b, "learned", cfg.filter_backup_run)
+    m_f = with_chaser(m_b, *chaser_assumed(m_b, ec))      # the task's actual chaser (env actual_chaser_*)
+    if m_f is not m_b:
+        print(f"[filter] chaser: radius {m_f.cfg.chaser_radius:g} m, speed {m_f.cfg.chaser_speed:g} m/s (backup trained with "
+              f"{m_b.cfg.chaser_radius:g} m, {m_b.cfg.chaser_speed:g} m/s)", flush=True)
     o_rng, b_rng = backup_ranges(cfg.filter_backup_run)
     arena = (0.0, ec.arena_x, ec.arena_y_half, ec.z_max)
     gcfg = GuidanceConfig.from_dict(json.loads(cfg.filter_guidance) if cfg.filter_guidance else {})
     if cfg.filter_type == "bcbf":
-        filt = make_strike_bcbf(m_b, bk, prm, chaser_model=cfg.filter_chaser_model, guidance=gcfg, arena=arena,
+        filt = make_strike_bcbf(m_f, bk, prm, chaser_model=cfg.filter_chaser_model, guidance=gcfg, arena=arena,
                                 obstacle_range=o_rng, ball_range=b_rng)
     elif cfg.filter_type == "discrete":
-        filt = make_filter(m_b, bk, prm, obstacle_range=o_rng, ball_range=b_rng, chaser_model=cfg.filter_chaser_model,
+        filt = make_filter(m_f, bk, prm, obstacle_range=o_rng, ball_range=b_rng, chaser_model=cfg.filter_chaser_model,
                            guidance=gcfg, arena=arena)
     else:
         raise ValueError(f"filter_type must be 'discrete' or 'bcbf', got {cfg.filter_type!r}")

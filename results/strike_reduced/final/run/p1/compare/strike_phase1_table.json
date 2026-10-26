@@ -1,0 +1,129 @@
+{
+  "split": "test",
+  "regions": [
+    "general",
+    "blocked",
+    "chaser",
+    "shell",
+    "escape"
+  ],
+  "runs": {
+    "td3_a0p2_seed0": {
+      "learned": {
+        "general": 0.8425,
+        "blocked": 0.3415,
+        "chaser": 0.4575,
+        "shell": 1.0,
+        "escape": 0.8805
+      },
+      "lqr": {
+        "general": 0.556,
+        "blocked": 0.0005,
+        "chaser": 0.079,
+        "shell": 1.0,
+        "escape": 0.314
+      },
+      "learned_crash": {
+        "general": 0.1225,
+        "blocked": 0.6155,
+        "chaser": 0.51,
+        "shell": 0.0,
+        "escape": 0.0525
+      },
+      "lqr_crash": {
+        "general": 0.2215,
+        "blocked": 0.9555,
+        "chaser": 0.7395,
+        "shell": 0.0,
+        "escape": 0.1485
+      },
+      "n_per_region": {
+        "general": 2000,
+        "blocked": 2000,
+        "chaser": 2000,
+        "shell": 2000,
+        "escape": 2000
+      },
+      "learned_mu_weighted": 0.6968000000000001,
+      "lqr_mu_weighted": 0.4383
+    },
+    "td3_a0p2_seed1": {
+      "learned": {
+        "general": 0.8365,
+        "blocked": 0.37,
+        "chaser": 0.4635,
+        "shell": 1.0,
+        "escape": 0.8685
+      },
+      "lqr": {
+        "general": 0.556,
+        "blocked": 0.0005,
+        "chaser": 0.079,
+        "shell": 1.0,
+        "escape": 0.314
+      },
+      "learned_crash": {
+        "general": 0.115,
+        "blocked": 0.5875,
+        "chaser": 0.501,
+        "shell": 0.0,
+        "escape": 0.0475
+      },
+      "lqr_crash": {
+        "general": 0.2215,
+        "blocked": 0.9555,
+        "chaser": 0.7395,
+        "shell": 0.0,
+        "escape": 0.1485
+      },
+      "n_per_region": {
+        "general": 2000,
+        "blocked": 2000,
+        "chaser": 2000,
+        "shell": 2000,
+        "escape": 2000
+      },
+      "learned_mu_weighted": 0.7013,
+      "lqr_mu_weighted": 0.4383
+    },
+    "td3_a0p2_seed2": {
+      "learned": {
+        "general": 0.8435,
+        "blocked": 0.3585,
+        "chaser": 0.4755,
+        "shell": 1.0,
+        "escape": 0.87
+      },
+      "lqr": {
+        "general": 0.556,
+        "blocked": 0.0005,
+        "chaser": 0.079,
+        "shell": 1.0,
+        "escape": 0.314
+      },
+      "learned_crash": {
+        "general": 0.1195,
+        "blocked": 0.5905,
+        "chaser": 0.499,
+        "shell": 0.0,
+        "escape": 0.045
+      },
+      "lqr_crash": {
+        "general": 0.2215,
+        "blocked": 0.9555,
+        "chaser": 0.7395,
+        "shell": 0.0,
+        "escape": 0.1485
+      },
+      "n_per_region": {
+        "general": 2000,
+        "blocked": 2000,
+        "chaser": 2000,
+        "shell": 2000,
+        "escape": 2000
+      },
+      "learned_mu_weighted": 0.7041999999999999,
+      "lqr_mu_weighted": 0.4383
+    }
+  }
+}

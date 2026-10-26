@@ -112,6 +112,11 @@ class StrikeEnvConfig:
     # the chasers' actual speed = chaser_speed_scale * StrikeConfig.chaser_speed (the backup / filter keep assuming
     # chaser_speed); 0 freezes them. For tests, 1 = the task as defined.
     chaser_speed_scale: float = 1.0
+    # the chasers' actual size and top speed (< 0: StrikeConfig.chaser_radius, chaser_speed_scale * StrikeConfig.chaser_speed).
+    # A stronger chaser than the Phase-I backup's training proxy: the filter is then built with these values
+    # (``chaser_threat`` / strike_filter.with_chaser) while the backup and the striker keep their observation format.
+    actual_chaser_radius: float = -1.0
+    actual_chaser_speed: float = -1.0
     # 0 = free pursuit. > 0: guards - each chaser pursues but stays within chaser_leash [m] of its start (its post), so
     # a ball of radius r_c + r_d + chaser_leash around the post holds every point it can ever reach (with
     # chaser_leash <= v_c T that ball is inside the filter's ball R = r_c + r_d + v_c T: pass the posts to the filter).
@@ -272,6 +277,22 @@ def generate_scene_pool(ec: StrikeEnvConfig, n_obst_slots: int, n: int | None = 
     return out
 
 
+def chaser_threat(m: StrikeModel, ec: StrikeEnvConfig) -> tuple[float, float]:
+    """(radius, top speed) of the chasers as they actually are in the environment (actual_chaser_* if set, else the
+    strike config's, the speed times chaser_speed_scale)."""
+    r = float(ec.actual_chaser_radius) if ec.actual_chaser_radius >= 0.0 else float(m.cfg.chaser_radius)
+    v = float(ec.actual_chaser_speed) if ec.actual_chaser_speed >= 0.0 else float(m.cfg.chaser_speed * ec.chaser_speed_scale)
+    return r, v
+
+
+def chaser_assumed(m: StrikeModel, ec: StrikeEnvConfig) -> tuple[float, float]:
+    """(radius, top speed) the safety filter assumes: the task's chaser (actual_chaser_* if set, else the strike config's).
+    chaser_speed_scale is a robustness test (the real chaser faster or slower than assumed) and is not included."""
+    r = float(ec.actual_chaser_radius) if ec.actual_chaser_radius >= 0.0 else float(m.cfg.chaser_radius)
+    v = float(ec.actual_chaser_speed) if ec.actual_chaser_speed >= 0.0 else float(m.cfg.chaser_speed)
+    return r, v
+
+
 def load_or_generate_pool(ec: StrikeEnvConfig, n_obst_slots: int, cache_dir: str | None = None) -> dict[str, np.ndarray]:
     """The scene pool, cached as an .npz keyed by the scene settings (generated once per setting)."""
     import hashlib
@@ -279,6 +300,7 @@ def load_or_generate_pool(ec: StrikeEnvConfig, n_obst_slots: int, cache_dir: str
     from pathlib import Path
     keys = {k: v for k, v in ec.as_dict().items() if not k.startswith(("w_", "strike_bonus", "crash_penalty", "episode_",
                                                                         "chaser_accel", "chaser_repulse", "chaser_speed_scale",
+                                                                        "actual_chaser",
                                                                         "chaser_leash", "speed_soft", "tilt_soft",
                                                                         "obs_", "residual_",
                                                                         "target_speed"))}
@@ -365,8 +387,8 @@ def build_strike_env(m: StrikeModel, ec: StrikeEnvConfig, *, pool: dict | None =
     n_steps = int(round(ec.episode_seconds / cfg.dt))
     dt = float(cfg.dt)
     deg = np.pi / 180.0
-    contact_chaser = cfg.chaser_radius + cfg.r_drone
-    v_ch = float(cfg.chaser_speed * ec.chaser_speed_scale)
+    r_ch, v_ch = chaser_threat(m, ec)
+    contact_chaser = r_ch + cfg.r_drone
     residual = ec.residual_cruise > 0.0
     pursuit = make_pursuit(m, ec.residual_cruise) if residual else None
     obs_pursuit = make_pursuit(m, ec.obs_pursuit_cruise) if ec.obs_pursuit_cruise > 0.0 else None
@@ -451,7 +473,7 @@ def build_strike_env(m: StrikeModel, ec: StrikeEnvConfig, *, pool: dict | None =
             vn = v + dt * a
             vn = vn * jnp.minimum(1.0, v_ch / (jnp.sqrt(jnp.sum(vn ** 2)) + 1e-9))
             pn = p + dt * vn
-            pn = pn.at[2].set(jnp.clip(pn[2], cfg.z_floor + cfg.chaser_radius, ec.z_max))
+            pn = pn.at[2].set(jnp.clip(pn[2], cfg.z_floor + r_ch, ec.z_max))
             if ec.chaser_leash > 0.0:                     # guard: stay within the leash of the post
                 off = pn - home
                 d = jnp.sqrt(jnp.sum(off ** 2) + 1e-12)
@@ -517,5 +539,5 @@ def build_strike_env(m: StrikeModel, ec: StrikeEnvConfig, *, pool: dict | None =
                      reset=jax.jit(reset), step=jax.jit(step), obs_fn=obs_fn, pool=pool)
 
 
-__all__ = ["action_bounds", "StrikeEnv", "StrikeEnvConfig", "StrikeEnvState", "StrikeStepInfo", "build_strike_env", "generate_scene_pool",
-           "load_or_generate_pool"]
+__all__ = ["action_bounds", "StrikeEnv", "StrikeEnvConfig", "StrikeEnvState", "StrikeStepInfo", "build_strike_env", "chaser_assumed",
+           "chaser_threat", "generate_scene_pool", "load_or_generate_pool"]

@@ -1,0 +1,193 @@
+{
+ "69": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "crash_chaser",
+   "outcome_text": "충돌(요격기)",
+   "time_s": 2.94
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "timeout",
+   "outcome_text": "시간 초과",
+   "time_s": 15.0
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.14
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.06
+  }
+ },
+ "271": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "crash_floor",
+   "outcome_text": "충돌(바닥)",
+   "time_s": 1.22
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "timeout",
+   "outcome_text": "시간 초과",
+   "time_s": 15.0
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 4.96
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 4.96
+  }
+ },
+ "576": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.02
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "timeout",
+   "outcome_text": "시간 초과",
+   "time_s": 15.0
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "timeout",
+   "outcome_text": "시간 초과",
+   "time_s": 15.0
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 4.82
+  }
+ },
+ "601": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.4
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 11.42
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "crash_chaser",
+   "outcome_text": "충돌(요격기)",
+   "time_s": 8.52
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 6.5
+  }
+ },
+ "827": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "crash_obstacle",
+   "outcome_text": "충돌(장애물)",
+   "time_s": 0.9
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 7.14
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "crash_chaser",
+   "outcome_text": "충돌(요격기)",
+   "time_s": 5.86
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 7.88
+  }
+ },
+ "845": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "crash_obstacle",
+   "outcome_text": "충돌(장애물)",
+   "time_s": 1.74
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "timeout",
+   "outcome_text": "시간 초과",
+   "time_s": 15.0
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "crash_chaser",
+   "outcome_text": "충돌(요격기)",
+   "time_s": 9.24
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "crash_chaser",
+   "outcome_text": "충돌(요격기)",
+   "time_s": 9.24
+  }
+ },
+ "972": {
+  "res": {
+   "label": "잔차 정책",
+   "outcome": "crash_obstacle",
+   "outcome_text": "충돌(장애물)",
+   "time_s": 1.02
+  },
+  "res_f": {
+   "label": "잔차 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 14.5
+  },
+  "one": {
+   "label": "PS2 + 단일 회피 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.52
+  },
+  "ours": {
+   "label": "PS2 + 최종 필터",
+   "outcome": "strike",
+   "outcome_text": "성공",
+   "time_s": 5.52
+  }
+ },
+ "backup_index_j": {
+  "0": "학습 기반 (2, 0°)",
+  "1": "LQR 기반 (2, 0°)",
+  "2": "학습 기반 (2, +60°)",
+  "3": "학습 기반 (2, -60°)",
+  "4": "학습 기반 (3.5, 0°)",
+  "5": "학습 기반 (3.5, +60°)",
+  "6": "학습 기반 (3.5, -60°)"
+ }
+}

@@ -34,6 +34,14 @@ Every row has 0 contacts, with a 95 % Clopper–Pearson upper bound of 2.8 %.
 | PS2 striker | guidance + variants | 0.938 | 0 | 0.062 |
 | PS2 striker | bCBF (1-escape safeguard) | 0.828 | 0.055 | 0.117 |
 
-## Final 3-seed results
+## Final 3-seed results (the report)
 
-To be added in `final/` from `outputs/strike_final/report/` (`docker_batch/run_strike_final.sh`).
+In `final/`: the report's run with models, every evaluation, the report tables, and the paper's tables and figures.
+See `final/README.md`. Main rows (1000 test scenes per seed, 15 s):
+
+| configuration | strike % | contact % (count) |
+|---|---|---|
+| residual striker, no filter | 74.0 ± 0.9 | 26.05 (521 / 2000) |
+| residual striker + final filter | 94.4 ± 0.6 | 0.00 (0 / 2000) |
+| PS2 striker + one escape (seed 0) | 95.7 | 1.70 (17 / 1000) |
+| PS2 striker + final filter | 97.6 ± 0.8 | 0.05 (1 / 2000) |

@@ -1,0 +1,807 @@
+% STRIKE 방법 상세 정리 (논문 작성용). XeLaTeX로 컴파일한다.
+%   cd results/strike_paper && xelatex strike_methods_ko.tex && xelatex strike_methods_ko.tex
+% 표와 그림은 scripts/strike_paper.py 와 scripts/strike_episode_viz.py 의 출력
+% (docker_batch/run_strike_paper.sh -> outputs/strike_final/paper)을 읽는다. 다른 폴더를 쓰려면
+%   xelatex "\def\paperdir{/경로/paper}\input{strike_methods_ko.tex}"
+\providecommand{\paperdir}{../strike_reduced/final/paper}   % the report's results in this branch
+\providecommand{\episodedir}{\paperdir/episodes}
+\providecommand{\snapdir}{\paperdir/traj4/snapshots}   % filter snapshots
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{Noto Serif CJK KR}
+\setsansfont{Noto Sans CJK KR}
+\setmonofont{Noto Sans Mono CJK KR}
+\usepackage{amsmath,amssymb,bm,mathtools}
+\usepackage{graphicx,float}
+\usepackage{booktabs,array,tabularx,multirow}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+\usepackage{caption,subcaption}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{fvextra}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usepackage[colorlinks=true,linkcolor=NavyBlue,urlcolor=NavyBlue,citecolor=NavyBlue]{hyperref}
+
+\linespread{1.18}
+\setcounter{tocdepth}{1}
+\floatplacement{table}{H}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{2pt}
+\emergencystretch=2em
+\setlist{nosep,leftmargin=1.5em}
+\captionsetup{font=small,labelfont=bf,labelsep=period}
+\renewcommand{\figurename}{그림}
+\renewcommand{\tablename}{표}
+\renewcommand{\contentsname}{목차}
+\renewcommand{\refname}{참고 문헌}
+\renewcommand{\abstractname}{요약}
+\renewcommand{\appendixname}{부록}
+\SetAlgorithmName{알고리즘}{알고리즘}{알고리즘 목록}
+\SetKwInput{KwIn}{입력}
+\SetKwInput{KwOut}{출력}
+\SetKwInput{KwMem}{기억}
+\SetKw{KwRet}{반환}
+\SetKwIF{If}{ElseIf}{Else}{만약}{이면}{그렇지 않고 만약}{그렇지 않으면}{끝}
+\SetKwFor{For}{각}{에 대해}{끝}
+\titleformat{\section}{\large\bfseries\sffamily\color{NavyBlue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries\sffamily}{\thesubsection}{0.6em}{}
+\titleformat{\paragraph}[runin]{\normalsize\bfseries}{}{}{}[.]
+\pagestyle{fancy}\fancyhf{}
+\lhead{\small STRIKE: 방법과 결과 상세 정리}
+\rhead{\small 2026.\ 10.\ 23}
+\cfoot{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+\newtcolorbox{keybox}[1]{colback=NavyBlue!4,colframe=NavyBlue!55,fonttitle=\bfseries\sffamily\small,title={#1},
+  left=4pt,right=4pt,top=2pt,bottom=2pt,fontupper=\small}
+\newtcolorbox{warnbox}[1]{colback=Orange!6,colframe=Orange!70,fonttitle=\bfseries\sffamily\small,title={#1},
+  left=4pt,right=4pt,top=2pt,bottom=2pt,fontupper=\small}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\sat}{\operatorname{sat}}
+\newcommand{\clip}{\operatorname{clip}}
+\newcommand{\sdf}{\operatorname{sdf}}
+\newcommand{\nrm}{\operatorname{normalize}}
+\newcommand{\Safe}{\mathcal{S}}
+\newcommand{\Base}{\bar{\mathcal{B}}}
+\newcommand{\BaseP}{\mathcal{B}_{\mathrm{I}}}
+\newcommand{\Term}{\mathcal{T}}
+\newcommand{\unom}{u_{\mathrm{nom}}}
+\newcommand{\upur}{u_{\mathrm{pur}}}
+\newcommand{\uesc}{u_{\mathrm{esc}}}
+\newcommand{\ubase}{u_{\mathrm{base}}}
+\newcommand{\ustar}{u^{\star}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+\newcommand{\figpath}[1]{\paperdir/figures/#1}
+\newcommand{\tabin}[1]{\IfFileExists{\paperdir/tables/#1.tex}{\input{\paperdir/tables/#1.tex}}{\begin{center}\fbox{표 파일 없음: #1.tex}\end{center}}}
+\newcommand{\figin}[2][\linewidth]{\IfFileExists{#2}{\includegraphics[width=#1]{#2}}{\fbox{그림 파일 없음}}}
+
+\title{\vspace{-1.0cm}\textbf{\sffamily STRIKE: 다중 회복 정책 안전 필터와\\ 필터 포함 임무 학습(PS2)을 이용한 쿼드로터 저고도 표적 접근}\\[4pt]
+\large 방법, 수식, 알고리즘, 평가 방법과 결과의 상세 정리 (논문 작성용)}
+\author{김중원 \quad (정리 보조: Claude)}
+\date{\small 2026년 10월 23일. 대상: 희소 경기장, 원래 추격자(반경 0.4 m, 2 m/s, 2 m/s$^2$)로 학습한 최종 구성}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+\noindent
+장애물과 이동 추격자가 함께 있는 저고도 경기장에서 쿼드로터가 이동 표적의 0.6\,m 이내로 접근하는 문제(STRIKE)를 다룬다.
+방법은 두 층으로 이루어진다.
+\emph{안전 필터}는 임무 정책의 명목 입력을 일곱 개 회복 정책과 다섯 단계로 혼합한 35개 후보 각각을 한 스텝 실행한 뒤,
+그 다음 상태에서 회복 정책을 3\,s 동안 가상으로 전개하여 바닥·장애물·벽·천장 제약과 상대 접근 속도를 반영한 추격자 여유도 $h_c$를 확인하고,
+종단 상태가 호버하거나 제동할 수 있는 상태인지 검사한다. 통과한 후보 가운데 명목 입력을 가장 많이 유지하는 입력을 실행하고,
+통과 후보가 없으면 직전에 인증한 계획을 그 추격자 예측 그대로 이어서 실행한다.
+\emph{임무 정책}은 6\,m/s 기준 접근 제어에 잔차를 더하는 SAC 정책이며, 실제 필터를 포함한 환경에서 필터의 수정량을 벌점으로 받으며 재학습한다(PS2).
+1000개 평가 장면과 15\,s 제한에서 PS2 정책과 최종 필터의 조합은 성공률 97.6\,\%, 접촉 2000회 중 1회(0.05\,\%, 95\,\% 상한 0.28\,\%)를 보였고,
+같은 필터를 쓰는 잔차 정책(94.4\,\%, 접촉 0/2000)보다 성공률이 높았다(같은 장면 쌍 비교, 정확 McNemar 검정 $p<10^{-6}$).
+수치는 현재 업로드된 평가(시드 0 전체, 시드 1 일부)에 기반하며, 세 시드 평가가 끝나면 같은 스크립트로 표와 그림이 갱신된다.
+\end{abstract}
+
+\tableofcontents
+\vspace{4pt}
+
+%======================================================================
+\section{이 문서의 범위와 읽는 법}\label{sec:scope}
+
+이 문서는 학술대회 원고(\emph{STRIKE 다중 회복 정책과 안전 필터 학습을 이용한 쿼드로터의 저고도 표적 접근}) 작성을 위해,
+최종 구성의 수식과 알고리즘을 구현(\file{ps2rl/})과 대조하여 정리한 것이다.
+모든 수식과 상수는 저장소의 코드와 학습에 사용된 설정 파일(\file{configs.json})에서 확인했다.
+원고 초안과 다른 부분은 부록~\ref{app:draft}에, 주요 수식의 한글(HWP) 수식 편집기 입력은 부록~\ref{app:hwp}에 정리했다.
+
+\begin{keybox}{이 버전의 구성 (원고의 ``최종 구성'')}
+\begin{itemize}
+\item \textbf{경기장}: 40\,m$\times$20\,m, 높은 장애물 3개, 이동 추격자 1개(반경 $r_c=0.4$\,m, 속력 $\le v_c=2$\,m/s, 가속도 $\le a_c=2$\,m/s$^2$), 이동 표적, 15\,s 제한.
+\item \textbf{안전 필터}: 이산 다중 회복 필터. 회복 정책 7개(학습 회복 정책 또는 호버 LQR과 회피 반사의 결합), 혼합률 5단계, 3\,s 예측, 신규 계획 여유, 확장 종단 집합, 추격자 예측을 재생하는 계획 유지.
+\item \textbf{임무 정책}: 6\,m/s 기준 접근 제어 + SAC 잔차(관측 135차원). PS2: 배치하는 필터를 그대로 포함한 환경에서 300만 스텝 재학습.
+\item \textbf{평가}: 세 시드(전체 파이프라인을 시드별로 학습), 1000개 평가 장면(시드 9001), 15\,s 에피소드와 10\,s 절단 결과, Clopper--Pearson 구간과 같은 장면 쌍 비교.
+\end{itemize}
+\end{keybox}
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[node distance=5mm and 7mm, every node/.style={font=\small},
+  box/.style={draw, rounded corners, align=center, minimum height=10mm, inner sep=4pt, fill=#1!8}, box/.default=gray,
+  >={Stealth[length=2mm]}]
+\node[box=blue] (p1) {Phase I\\ 학습 회복 정책 $\pi_\theta$\\ (안전 도착, TD3)};
+\node[box=orange, right=of p1] (fam) {회복 정책군 $\{\pi_b^{(j)}\}_{j=0}^{6}$\\ 기본 회복 + 회피 반사\\ (속력비, 회피 각)};
+\node[box=red, right=of fam] (filt) {이산 안전 필터 $F$\\ 35개 후보, 3\,s 전개,\\ 종단 검사, 계획 유지};
+\node[box=gray, right=of filt] (plant) {쿼드로터,\\ 장애물, 추격자,\\ 표적};
+\node[box=green, below=8mm of filt] (str) {임무 정책\\ $\unom=\sat(\upur+\Delta u_\xi)$};
+\draw[->] (p1) -- (fam);
+\draw[->] (fam) -- (filt);
+\draw[->] (str) -- node[right]{$\unom$} (filt);
+\draw[->] (filt) -- node[above]{$u$} (plant);
+\draw[->] (plant) |- node[pos=0.75,below]{$o$ (상태, 장면)} (str);
+\node[draw, dashed, rounded corners, fit=(filt)(str)(plant), inner sep=5pt,
+  label={[font=\scriptsize]below:PS2: 필터를 포함한 환경에서 임무 정책을 학습($r^{\mathrm{PS2}}=r-w_f\|\eta\|^2$)}] {};
+\end{tikzpicture}
+\caption{전체 구성. 안전 필터는 회복 가능성을, 임무 정책은 표적 접근 성능을 담당한다.}\label{fig:overview}
+\end{figure}
+
+\paragraph{재현 경로} 표·그림·본문 수치는 \file{docker\_batch/run\_strike\_paper.sh}가 만든다.
+\file{STEPS=tables}는 몇 초 안에 표(\file{.md/.csv/.tsv/.tex}), 그림 7종, 본문 인용 수치(\file{numbers.md})를 만든다.
+나머지 단계는 대표 에피소드를 다시 실행해 2차원·3차원 궤적 그림, 상세 신호 그림, 2차원·3차원 GIF를 만든다(\S\ref{sec:results-episodes}).
+
+%======================================================================
+\section{문제 설정}\label{sec:problem}
+
+\subsection{기체 모델}
+기체 상태는 위치 $p\in\R^3$, 관성좌표 속도 $v\in\R^3$, 자세 쿼터니언 $q\in S^3$로 이루어지고,
+입력은 질량으로 나눈 총추력(추력 가속도) $a_T$와 기체 각속도 명령 $\omega$이다.
+\begin{equation}
+x=(p,v,q),\qquad u=(a_T,\omega),\qquad 0\le a_T\le 4g=39.24\ \mathrm{m/s^2},\qquad |\omega_i|\le 18\ \mathrm{rad/s}.
+\label{eq:state}
+\end{equation}
+시간 간격 $\Delta t=0.02$\,s(50\,Hz)의 명시적 Euler 적분으로 상태를 갱신한다. $R(q)$는 기체 좌표에서 관성좌표로의 회전행렬, $e_3=(0,0,1)^\top$, $\otimes$는 쿼터니언 곱이다.
+\begin{align}
+p_{k+1}&=p_k+\Delta t\,v_k, \label{eq:dyn-p}\\
+v_{k+1}&=v_k+\Delta t\,\big(a_{T,k}\,R(q_k)e_3-g\,e_3\big), \label{eq:dyn-v}\\
+\tilde q_{k+1}&=q_k+\tfrac{\Delta t}{2}\,q_k\otimes(0,\omega_k),\qquad q_{k+1}=\tilde q_{k+1}/\|\tilde q_{k+1}\|. \label{eq:dyn-q}
+\end{align}
+이를 $x_{k+1}=f_d(x_k,u_k)$로 쓴다. 입력은 항상 상자 $\mathcal U$로 포화시킨다($\sat$).
+입력의 정규화 척도는 $u_{\mathrm{scale}}=(a_{\max},\omega_{\max},\omega_{\max},\omega_{\max})=(39.24,18,18,18)$이다.
+이 모델은 PX4 오프보드 제어가 받는 추력--각속도 인터페이스에 맞춘 운동 모델이며, 모터 동특성, 지연, 공력, 추정 오차는 포함하지 않는다.
+
+\subsection{경기장과 장면 생성}\label{sec:arena}
+\begin{itemize}
+\item \textbf{경기장}: $x\in[0,40]$\,m, $|y|\le10$\,m, 기준 바닥 고도 $z_f=1$\,m, 상한 고도 $z_{\max}=10$\,m. 기체 반경 $r_d=0.3$\,m.
+\item \textbf{장애물}: 높은 기둥 3개. 확률 0.5로 원기둥(반경 $\mathcal U[0.8,2.0]$\,m), 아니면 직사각 기둥(반폭 $\mathcal U[1.5,3.0]\times\mathcal U[1.0,2.5]$\,m, 회전 $\pm30^\circ$). 중심 $x\in[7,31]$\,m.
+  장애물 간 간격 3.5\,m 이상, 출발점과 표적에서 4\,m 이상, 옆벽에서 1\,m 이상 떨어지게 하고, 장애물과 옆벽에서 1.5\,m 넘게 떨어진 0.5\,m 격자점만으로 출발점과 표적을 이을 수 있는 장면만 사용한다.
+\item \textbf{출발}: $x=2$\,m, $y\in[-3,3]$\,m, $z\in[2,4]$\,m, 속력 $\mathcal U[4,6]$\,m/s(표적 방향 $\pm15^\circ$), 기울기 $10^\circ$ 이하.
+\item \textbf{표적}: $x\in[32,37]$\,m, $|y|\le5$\,m, $z\in[1.6,2.5]$\,m에서 시작해 수평으로 $\mathcal U[0.2,0.8]$\,m/s의 일정 속도로 떠돌며, $x\in[32,39]$, $|y|\le9$의 영역 경계에서 반사된다.
+\item \textbf{추격자}: 출발점--표적 직선의 $35$--$85\,\%$ 지점에서 옆으로 $5$--$9$\,m 떨어진 곳(높이 $2$--$4$\,m)에서 시작한다.
+\end{itemize}
+
+\paragraph{추격자 운동(환경)} 추격자 $j$의 위치 $c_j$, 속도 $\nu_j$는 장애물을 밀어내는 순수 추적으로 움직인다.
+\begin{align}
+w&=\frac{p-c_j}{\|p-c_j\|}+2\varpi_c\begin{bmatrix}\nabla\sdf_O(c_{j,xy})\\0\end{bmatrix},\qquad
+\varpi_c=\clip\!\Big(\frac{d_{\mathrm{rep}}-\sdf_O(c_{j,xy})}{d_{\mathrm{rep}}},0,1\Big),\quad d_{\mathrm{rep}}=2\ \mathrm m,\\
+\nu_{j,k+1}&=\Pi_{v_c}\!\Big(\nu_{j,k}+\Delta t\,\Pi_{a_c}\big(\tfrac{v_c w/\|w\|-\nu_{j,k}}{\Delta t}\big)\Big),\qquad c_{j,k+1}=c_{j,k}+\Delta t\,\nu_{j,k+1},
+\end{align}
+여기서 $\Pi_r(\cdot)$는 노름을 $r$ 이하로 줄이는 연산이며, 높이는 $[z_f+r_c,z_{\max}]$로 제한한다.
+필터는 이 운동을 알지 못하고, 거리 감소에 가장 불리한 \emph{가속도 제한 없는 순수 추적}(식~\eqref{eq:pursue})으로 예측한다.
+
+\subsection{장애물의 부호 거리}
+장애물 $i$는 중심 $c_i$, 반폭 $b_i=(b_x,b_y)$, 회전 $\psi_i$, 모서리 반경 $\rho_i$로 표현한다(원기둥은 $b_i=0$, $\rho_i$=반경, 직사각 기둥은 $\rho_i=0$).
+$\ell=R(\psi_i)^\top(p_{xy}-c_i)$로 두면
+\begin{equation}
+\sdf_i(p_{xy})=\big\|\max(|\ell|-b_i,0)\big\|_2+\min\!\big(\max(|\ell_x|-b_x,\ |\ell_y|-b_y),\,0\big)-\rho_i,\qquad
+\sdf_O=\min_i\sdf_i ,
+\label{eq:sdf}
+\end{equation}
+이며 $|\cdot|$와 $\max$는 성분별로 적용한다. 밖에서 양수, 표면에서 0, 안에서 음수이다.
+
+\subsection{종료 조건과 성과 지표}\label{sec:outcomes}
+매 스텝 다음 사건을 검사한다(같은 스텝에서 접촉이 우선).
+\begin{itemize}
+\item \textbf{성공}(strike): $\|p-p_t\|<0.6$\,m.
+\item \textbf{접촉}(contact): 장애물 $\sdf_O(p_{xy})<r_d$, 바닥 $z<z_f$, 추격자 $\|p-c_j\|<r_c+r_d=0.7$\,m 중 하나.
+\item \textbf{영역 이탈}(out): $x\notin[-1,41]$, $|y|>11$ 또는 $z>z_{\max}$. 임무 실패이지만 접촉으로 세지 않는다.
+\item \textbf{시간초과}(time-up): 15\,s(750스텝) 동안 위 사건이 없음. 10\,s 결과는 같은 에피소드를 10\,s에서 절단한 것이다.
+\end{itemize}
+
+%======================================================================
+\section{안전 집합}\label{sec:safe}
+
+\subsection{기하 제약}
+\begin{equation}
+h_f=z-z_f,\qquad h_o=\sdf_O(p_{xy})-r_d,\qquad h_w=d_{\mathrm{wall}}(p_{xy})-r_d,\qquad h_z=z_{\max}-z-r_d,
+\label{eq:geo}
+\end{equation}
+여기서 $d_{\mathrm{wall}}$은 네 외벽($x=0$, $x=40$, $y=\pm10$)까지의 최소 거리다.
+바닥 조건은 과제의 고도 정의($z\ge z_f$)를 그대로 따르므로 $r_d$를 빼지 않는다.
+
+\subsection{추격자 여유도 $h_c$의 유도}\label{sec:hc}
+추격자 $j$에 대해 거리와 시선(추격자에서 기체로 향하는 단위벡터)을
+\begin{equation}
+R_j=\|p-c_j\|,\qquad \hat e_j=\frac{p-c_j}{R_j}
+\end{equation}
+로 두면 기체가 거리를 벌리는 속도는 $\hat e_j^\top v$이다. 추격자는 거리를 최대 $v_c$로 줄이므로(기체를 정면으로 향할 때) 최악의 접근 속도는
+\begin{equation}
+s_j=v_c-\hat e_j^\top v,\qquad s_j^+=\max(s_j,0)
+\label{eq:closing}
+\end{equation}
+이다. 기체가 반응 지연 $\delta$ 뒤에 유효 이탈 가속도 $a_e$로 거리를 벌리는 속도를 높인다고 하자.
+지연 동안에는 거리를 최대 $s_j^+\delta$ 잃는다. 그 뒤 접근 속도가 $s(t)=s_j^+-a_e t$로 줄어 0이 될 때까지 잃는 거리는
+\begin{equation}
+\int_0^{s_j^+/a_e}(s_j^+-a_e t)\,dt=\frac{(s_j^+)^2}{2a_e}
+\qquad\Big(\text{등가로}\ 0=(s_j^+)^2-2a_e d_{\mathrm{brake}}\Big)
+\end{equation}
+이다. 충돌 반경과 두 손실을 현재 거리에서 빼면 추격자 여유도를 얻는다.
+\begin{equation}
+\boxed{\;h_{c,j}=R_j-(r_c+r_d)-s_j^+\,\delta-\frac{(s_j^+)^2}{2a_e}\;},\qquad \delta=0.2\ \mathrm s,\quad a_e=5\ \mathrm{m/s^2}.
+\label{eq:hc}
+\end{equation}
+$a_e$는 기체의 최대 가속도보다 훨씬 작게 잡은 값이다. 요구 거리 $d_{\mathrm{req}}=r_c+r_d+s^+\delta+(s^+)^2/(2a_e)$의 예는 다음과 같다.
+
+\begin{center}\small
+\begin{tabular}{lccl}\toprule
+상황 & $s^+$ [m/s] & $d_{\mathrm{req}}$ [m] & 구성 \\\midrule
+추격자로부터 $v_c$ 이상으로 멀어짐 & 0 & 0.7 & 충돌 반경만 \\
+정지(호버) & 2 & 1.5 & $0.7+0.4+0.4$ \\
+추격자 쪽으로 6\,m/s 정면 접근 & 8 & 8.7 & $0.7+1.6+6.4$ \\\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+같은 거리 4\,m라도 정지 중이면 $h_c=2.5$\,m이지만 6\,m/s로 정면 접근 중이면 $h_c=-4.7$\,m이다.
+즉 아직 충돌하지 않은 상태도 안전 집합 밖일 수 있고, 이것이 거리만 보는 조건과의 차이다.
+
+\paragraph{열린 공간에서의 불변성(근사)} 지연 뒤 기체가 $\hat e_j$ 방향으로 $a_e$의 가속을 유지하고 추격자가 정면으로 $v_c$로 다가오면 $\dot R_j=-s_j$, $\dot s_j=-a_e$이므로 $s_j>0$에서
+\begin{equation}
+\dot h_{c,j}=\dot R_j-\dot s_j\,\delta-\frac{s_j\dot s_j}{a_e}=-s_j+a_e\delta+s_j=a_e\delta\ \ge0
+\end{equation}
+이다. 따라서 막힌 곳이 없으면 $\{h_c\ge0\}$은 ``도피''에 대해 유지된다. 시선 회전에 의한 항(크기 $\lesssim v_c^2/(4R)$)은 $a_e$를 실제 최대보다 작게 잡아 흡수한다고 본다.
+장애물과 벽이 도피 방향을 막을 수 있다는 점이 이 식만으로는 부족한 이유이고, 필터가 회복 궤적을 직접 검사하는 이유이다.
+
+\subsection{안전 집합}
+장면 정보 $\zeta$(장애물과 추격자 상태)에 대해
+\begin{equation}
+\Safe(\zeta)=\big\{x:\ h_f\ge0,\ h_o\ge0,\ h_w\ge0,\ h_z\ge0,\ h_{c,j}\ge0\ \ \forall j\big\}.
+\label{eq:safe}
+\end{equation}
+
+\subsection{비교: 구형 근사(초기 방식)}\label{sec:ball}
+초기 방식은 추격자를 현재 위치에 고정된 반경 $R_{\mathrm{ball}}=r_c+r_d+v_cT=3.7$\,m($T=1.5$\,s)의 구로 보고 $\|p-c_j\|\ge R_{\mathrm{ball}}$을 요구한다.
+$T$초 안에 추격자가 닿을 수 있는 영역을 덮지만, 그 뒤 추격자의 위치와 기체의 접근 속도를 반영하지 못한다.
+Phase I 학습(\S\ref{sec:phase1})은 이 구형 근사를 사용하며, 구형 근사 필터는 비교 실험(표~\ref{tab:table1_15s}, \ref{tab:table3_ablation})에 쓰인다.
+
+%======================================================================
+\section{기준 집합: 호버 LQR}\label{sec:base}
+
+\subsection{선형화와 LQR}
+호버 목표점 $a$ 주변에서 오차 상태 $e=(p-a,\ v,\ \phi)\in\R^9$를 쓴다. $\phi=2\,\mathrm{sgn}(q_w)\,q_{xyz}$는 작은 회전벡터(자세 좌표)이다.
+호버 입력 $\ustar=(g,0,0,0)$ 주변의 연속시간 선형 모델은
+\begin{equation}
+\dot p=v,\qquad \dot v_x=g\,\phi_y,\qquad \dot v_y=-g\,\phi_x,\qquad \dot v_z=\Delta a_T,\qquad \dot\phi=\omega
+\end{equation}
+이고, Euler 이산화 $A_d=I+\Delta tA$, $B_d=\Delta tB$에 대해 이산 LQR을 설계한다.
+\begin{equation}
+e_{k+1}=A_de_k+B_d\Delta u_k,\qquad \Delta u_k=-Ke_k,\qquad K=(R_u+B_d^\top PB_d)^{-1}B_d^\top PA_d,\qquad V(e)=e^\top Pe.
+\label{eq:lqr}
+\end{equation}
+$P$는 이산 Riccati 방정식의 해이다. 가중치는 $Q=\mathrm{diag}(2,2,8,\ 0.01,0.01,0.5,\ 8,8,2)$, $R_u=\mathrm{diag}(0.06,0.15,0.15,0.12)$이다.
+
+\subsection{정지점의 재설정}
+속도가 있는 기체는 제자리에 멈출 수 없으므로, $V$를 최소로 만드는 목표점을 해석적으로 구한다.
+$r=(v,\phi)$로 두고 $P$를 위치와 나머지로 분할하면
+\begin{equation}
+V=(p-a)^\top P_{pp}(p-a)+2(p-a)^\top P_{pr}r+r^\top P_{rr}r .
+\end{equation}
+$\partial V/\partial a=-2P_{pp}(p-a)-2P_{pr}r=0$에서
+\begin{equation}
+a^\star(x)=p+Dr,\quad D=P_{pp}^{-1}P_{pr};\qquad
+V_{\min}(r)=\min_aV=r^\top Sr,\quad S=P_{rr}-P_{rp}P_{pp}^{-1}P_{pr}
+\label{eq:anchor}
+\end{equation}
+이다($S$는 Schur 여행렬). 이때 $e=(-Dr,r)$이므로 재설정 LQR은 $u=\ustar-\tilde Kr$, $\tilde K=K_r-K_pD$로, 어디서든 목표점 없이 정지하는 제어기가 된다.
+설계값에서 $D$의 속도 성분은 약 0.385\,s로, 수평 속도 1\,m/s마다 정지점이 0.385\,m 앞에 놓인다.
+
+\subsection{호버 타원체와 기준 집합}
+$\{e:e^\top Pe\le c\}$에서 위치 성분의 방향 $n$으로의 최대 변위는 Cauchy--Schwarz 부등식으로 $\sqrt{c\,n^\top[P^{-1}]_{pp}n}$이다. 따라서
+\begin{equation}
+\rho_{xy}=\sqrt{c_B\,\lambda_{\max}\big([P^{-1}]_{xy}\big)}=1.22\ \mathrm m,\qquad
+z_{\mathrm{ext}}=\sqrt{c_B\,[P^{-1}]_{zz}}=0.63\ \mathrm m,\qquad c_B=50 .
+\label{eq:extent}
+\end{equation}
+필터가 쓰는 기준 집합은 정적 환경의 호버 회복 가능 상태로, 추격자 조건을 포함하지 않는다(추격자는 회피 반사와 종단 조건으로 다룬다, \S\ref{sec:family}, \ref{sec:terminal}).
+\begin{equation}
+\Base=\left\{x\ \middle|\
+\begin{aligned}
+&h_f,h_o,h_w,h_z\ge0,\qquad r^\top Sr\le c_B,\\
+&\sdf_O(a^\star_{xy})\ge\rho_{xy}+r_d,\qquad d_{\mathrm{wall}}(a^\star_{xy})\ge\rho_{xy}+r_d,\\
+&a^\star_z-z_{\mathrm{ext}}\ge z_f,\qquad z_{\max}-a^\star_z\ge\rho_{xy}+r_d
+\end{aligned}\right\}.
+\label{eq:base}
+\end{equation}
+즉 충분히 느리고($V_{\min}\le c_B$), LQR이 정착하는 동안 움직일 수 있는 타원체 전체가 장애물·바닥·벽에서 떨어져 있다.
+천장 조건은 구현대로 $\rho_{xy}$를 쓰며, $\rho_{xy}\ge z_{\mathrm{ext}}$이므로 보수적이다.
+Phase I의 기준 집합 $\BaseP$는 벽과 천장 대신 추격자 구 조건 $\|a^\star-c_j\|\ge R_{\mathrm{ball}}+\rho$($\rho=1.22$\,m, 3차원 범위)를 쓴다.
+
+\subsection{$c_B$의 인증}
+목표점을 $a_0$에 고정한 LQR $u=\ustar-K(p-a_0,r)$이 $\{V\le c_B\}$를 유지하려면 $c_B$가 다음 세 한계보다 작아야 한다.
+\begin{itemize}
+\item 입력 한계: 타원체 위에서 $\max|K_ie|=\sqrt{c\,K_iP^{-1}K_i^\top}\le m_i$이므로 $c_U=\min_i m_i^2/(K_iP^{-1}K_i^\top)=56.1$ ($m=(g,18,18,18)$).
+\item 자세 좌표: $|\phi|<2$이면 좌표가 일대일이므로 $c_{\mathrm{chart}}=4/\lambda_{\max}([P^{-1}]_{\phi\phi})=102.1$.
+\item 비선형 감소: 비선형 Euler 모델에서 $\{V=c\}$ 위 4000개 표본의 한 스텝 감소 $V^+/V<1$을 확인한다. $c=\min(c_U,c_{\mathrm{chart}})=56.1$에서 이미 모든 표본이 감소하므로(최악 방향 0.3\,m/s$^2$ 바람 포함) $c_{\mathrm{Lyap}}\ge56.1$이다. 감소하지 않으면 이분법으로 줄인다.
+\end{itemize}
+$c_B=50$에서 표본 최대 $V^+/V$는 0.980(바람 포함 0.986)이다. $\Base$ 안에서 수평 속력은 2.67\,m/s, 수직 속력은 2.12\,m/s, 기울기는 $52.7^\circ$ 이하이다.
+표본 검사이므로 연속 상태공간 전체의 엄밀한 증명은 아니다.
+
+\subsection{호버 latch}
+계획이 $\Base$에 들어가고 회피 반사가 꺼져 있으면($\sigma=0$, \S\ref{sec:family}) 그때의 목표점 $a_0$을 고정하고 고정 목표점 LQR로 호버한다.
+인증이 다루는 제어기가 바로 이 고정 목표점 LQR이기 때문이다. 매 스텝 재설정하면 목표점이 밀리미터 단위로 흔들려, 경계에서 들어온 상태가 다시 $\Base$ 밖으로 나가는 일이 생긴다.
+고정된 호버는 $V(p-a_0,r)\le c_B$인 동안 종단 조건으로 인정된다.
+
+%======================================================================
+\section{Phase I: 안전 도착 회복 정책}\label{sec:phase1}
+
+\paragraph{정책} LQR 입력에 잔차를 더한다.
+\begin{equation}
+\pi_\theta(x,\zeta)=\sat\big(u_{\mathrm{LQR}}(x)+\Delta u_\theta(o)\big),\qquad u_{\mathrm{LQR}}(x)=\ustar-\tilde Kr .
+\label{eq:phase1-policy}
+\end{equation}
+관측 $o\in\R^{98}$은 $z-z_f$, $v$, $q$(8개), 가까운 순서의 장애물 슬롯 8개(최근접점 벡터 2, 중심 오프셋 2, 반폭 2, $\cos2\psi$, $\sin2\psi$, 모서리 반경, 존재 여부: 각 10개), 추격자 구 슬롯 2개(중심 오프셋 3, 반경 $R_{\mathrm{ball}}$, 존재 여부: 각 5개)로 구성된다.
+슬롯 순서는 회복 전개를 시작할 때의 순서로 고정하여 전개 중 입력이 불연속으로 바뀌지 않게 한다. $\Safe$와 $\BaseP$의 소속은 $o$의 정확한 함수이다.
+
+\paragraph{목적함수와 Bellman 관계} 에피소드는 표본 (상태, 장면)에서 시작한 회복 전개 하나이며, $\BaseP$ 도달(성공), $\Safe$ 이탈(실패), 112스텝(2.24\,s) 중 먼저 일어나는 사건에서 끝난다.
+\begin{equation}
+J(\theta)=\mathbb E\big[\beta^{\tau_B}\,\mathbf 1\{\tau_B<\tau_{\mathrm{out}}\}\big],\qquad \beta=0.99 .
+\label{eq:sa}
+\end{equation}
+장면을 포함한 상태 $y=(x,\zeta)$와 결합 전이 $y^+=G(y,u)$에 대해 최적값은
+\begin{equation}
+W^\star(y)=1\ (y\in\BaseP\cap\Safe),\qquad W^\star(y)=0\ (y\notin\Safe),\qquad W^\star(y)=\beta\max_{u\in\mathcal U}W^\star(G(y,u))\ \ (\text{그 밖})
+\end{equation}
+를 만족하고, $W^\star(y)=\beta^{d(y)}$($d$는 안전하게 도착하는 최소 스텝 수)이다. TD3의 critic 목표는 이 관계를 그대로 쓴다.
+\begin{equation}
+y_{\mathrm{TD}}=b(o)+\beta\,c(o)\,\min_{i=1,2}Q'_i\big(o',\mu'(o')\big),\qquad b=\mathbf 1\{\BaseP\},\ c=\mathbf 1\{\Safe\setminus\BaseP\},
+\end{equation}
+여기서 $Q'(o',\cdot)$는 $o'\in\BaseP$이면 1, $o'\notin\Safe$이면 0으로 둔다. 엔트로피 항은 critic 목표에 넣지 않는다(도착 순서 ``빨리 $>$ 늦게 $>$ 실패''를 보존하기 위함).
+actor 손실은 $-\mathbb E[\min_iQ_i(o,\Delta u_\theta(o))]+0.2\,\mathbb E\big[\tfrac14\|\Delta u/u_{\mathrm{scale}}\|^2\big]$이고, 둘째 항이 잔차를 LQR 쪽으로 붙잡는다. actor는 LQR 모방($\Delta u\approx0$)으로 초기화한다.
+
+\paragraph{학습 분포} 일반(속력 $\le10$\,m/s, 기울기 $\le45^\circ$, 장애물 0--6개, 추격자 구 0--2개), 정지 경로 막힘(속력 $\ge3$\,m/s, LQR 정지점 부근에 장애물), 추격자 근접(속력 $\ge3$\,m/s, LQR 정지점 부근에 추격자 구), 호버 근방(느리고 정지점이 비어 있음) 영역을 가중치 $(0.4,0.2,0.2,0.2)$로 섞는다.
+평가에는 저속 상태 근처에 추격자 구가 있는 저속 탈출 영역을 추가로 쓴다(가중치 0). 영역마다 5만 개 시작점을 미리 뽑고, 검증 1000개와 시험 2000개는 따로 뽑는다.
+
+\paragraph{평가 지표와 결과} 시험 상태가 $C_N$에 속하는 비율 $\hat m$을 쓴다. $C_N$은 $N=T/\Delta t=75$스텝(1.5\,s) 안에 $\Safe$를 벗어나지 않고 $\BaseP$에 처음 도달하는 상태의 집합이다.
+학습 회복 정책은 가중 평균 $70.1\pm0.3\,\%$(세 시드)로 호버 LQR의 $43.8\,\%$보다 높다(표~\ref{tab:table4_phase1}, 그림~\ref{fig:phase1}).
+이 평가는 추격자를 정지한 구로 근사한 Phase I 조건이며, 최종 필터의 이동 추격자 성능과는 구분해야 한다.
+
+%======================================================================
+\section{회복 정책군}\label{sec:family}
+
+\paragraph{기본 회복 입력} 기준 집합 안이거나 호버가 고정되어 있으면 고정 목표점 LQR, 밖이면 학습 회복 정책(또는 호버 LQR 변형에서는 재설정 LQR)을 쓴다.
+\begin{equation}
+\ubase^{(j)}(x)=\begin{cases}\ustar-K(p-a_0,r) & x\in\Base\ \text{또는 호버 고정},\\ \pi_\theta(x,\zeta_{\mathrm{view}}) & \text{그 밖(학습 변형)},\\ u_{\mathrm{LQR}}(x) & \text{그 밖(LQR 변형)}.\end{cases}
+\end{equation}
+호버가 고정되기 전에는 $a_0=a^\star(x)$이므로 첫 줄은 재설정 LQR과 같다. 학습 회복 정책의 장면 입력 $\zeta_{\mathrm{view}}$는 계획을 만든 시점의 장면(가까운 장애물 8개와 추격자 구)으로 고정한다. Phase I에서 학습한 범위(장애물 10\,m, 추격자 12\,m 이내)만 넣는다.
+
+\paragraph{회피 반사} 최소 추격자 여유도 $h_{\min}=\min_jh_{c,j}$에 따라 회피 입력을 섞는다.
+\begin{equation}
+\sigma(x)=\clip\!\Big(\frac{h_{\mathrm{off}}-h_{\min}(x)}{h_{\mathrm{off}}-h_{\mathrm{on}}},0,1\Big),\qquad
+\pi_b^{(j)}(x)=\sat\big((1-\sigma)\,\ubase^{(j)}(x)+\sigma\,\uesc^{(j)}(x)\big),\qquad h_{\mathrm{on}}=0.5,\ h_{\mathrm{off}}=2.0\ \mathrm m.
+\label{eq:reflex}
+\end{equation}
+$h_{\min}\ge2$\,m이면 기본 회복 입력만, $h_{\min}=1.25$\,m이면 절반씩, $h_{\min}\le0.5$\,m이면 회피 입력만 쓴다. 반사가 작동하면($\sigma>0$) 호버 고정을 푼다.
+
+\paragraph{회피 입력} 가장 위험한 추격자 $j^\star=\arg\min_jh_{c,j}$의 반대 방향 $\hat e_{xy}$를 변형 각 $\vartheta_j$만큼 돌리고, 정지점 $a^\star$ 주변의 장애물과 벽의 바깥 법선으로 민다.
+\begin{align}
+d&=\nrm\Big(R(\vartheta_j)\,\hat e_{xy}+2\varpi_o\,n_o+2\textstyle\sum_{i=1}^4\varpi_{w,i}\,n_{w,i}\Big),\qquad
+\varpi=\clip\!\Big(\frac{d_{\mathrm{push}}-(\mathrm{dist}(a^\star_{xy})-\rho_{xy}-r_d)}{d_{\mathrm{push}}},0,1\Big),\\
+v_{\mathrm{des}}&=\big(v_{\mathrm{esc},j}\,d,\ 1.5\,(z_{\mathrm{ref}}-z)\big),\qquad z_{\mathrm{ref}}=\clip(z,\ z_f+1,\ z_{\max}-3),
+\end{align}
+여기서 $n_o=\nabla\sdf_O(a^\star_{xy})/\|\nabla\sdf_O\|$, $n_{w,i}$는 벽의 안쪽 법선, $\mathrm{dist}$는 각 장애물·벽까지의 거리, $d_{\mathrm{push}}=1.5$\,m이다.
+속도 루프는 $a=k_v(v_{\mathrm{des}}-v)$(수평 성분은 $\|a_{xy}\|\le g\tan45^\circ$로 제한), $a_{\mathrm{des}}=(a_{xy},a_z+g)$에서
+$a_T=a_{\mathrm{des}}^\top z_b$, $\omega=k_{\mathrm{att}}R^\top(z_b\times\hat a_{\mathrm{des}})-k_\psi\psi\,e_3$로 입력을 만들고 포화시킨다($k_v,k_{\mathrm{att}},k_\psi)=(2,10,3)$, $z_b=R(q)e_3$, $\psi$는 요각).
+추격자 여유가 충분할 때는 학습 회복 정책이 장애물을 처리하고, $h_c$가 줄어들수록 회복 정책은 ``$v_{\mathrm{esc}}$로 도피''로 바뀐다. 이는 열린 공간에서 $h_c$를 줄이지 않는 행동이다(\S\ref{sec:hc}).
+
+\paragraph{일곱 변형} 회피 속력비 $v_{\mathrm{esc}}/v_c$와 회피 각 $\vartheta$의 조합으로 회복 정책을 늘린다(표~\ref{tab:variants}).
+필터는 어느 하나라도 인증하는 후보를 받아들이므로, 회복 가능 집합은 각 변형 회복 가능 집합의 합집합이 된다.
+
+\begin{table}[h]\centering\small
+\caption{필터의 회복 정책 일곱 변형. 번호는 동률일 때의 우선순위이다.}\label{tab:variants}
+\begin{tabular}{cccc}\toprule
+번호 $j$ & 기본 회복 입력(기준 집합 밖) & $v_{\mathrm{esc}}/v_c$ & $\vartheta$ \\\midrule
+0 & 학습 회복 정책 $\pi_\theta$ & 2 & $0^\circ$ \\
+1 & 재설정 호버 LQR & 2 & $0^\circ$ \\
+2, 3 & 학습 회복 정책 & 2 & $+60^\circ$, $-60^\circ$ \\
+4 & 학습 회복 정책 & 3.5 & $0^\circ$ \\
+5, 6 & 학습 회복 정책 & 3.5 & $+60^\circ$, $-60^\circ$ \\\bottomrule
+\end{tabular}
+\end{table}
+
+%======================================================================
+\section{이산 다중 회복 안전 필터}\label{sec:filter}
+
+
+
+\subsection{후보 입력}
+임무 정책의 명목 입력 $\unom$을 각 회복 정책의 현재 입력과 섞어 후보를 만든다.
+\begin{equation}
+u^{(j)}_\lambda=\sat\big(\lambda\,\unom+(1-\lambda)\,\pi_b^{(j)}(x)\big),\qquad \lambda\in\Lambda=\{1,0.75,0.5,0.25,0\},\quad j=0,\dots,6 .
+\label{eq:cand}
+\end{equation}
+$7\times5=35$개 후보를 검사한다($\lambda=1$에서는 일곱 개가 같은 입력이다).
+이는 입력 집합 전체를 최적화하는 것이 아니라 명목 입력과 각 회복 입력을 잇는 선분 위의 유한한 점을 검사하는 것이다.
+
+\subsection{회복 궤적의 전개와 추격자 예측}
+후보를 한 스텝 실행한 다음 상태에서 시작해 그 변형의 회복 정책을 $N=150$스텝(3\,s) 전개한다. 추격자는 예측 기체를 향해 $v_c$로 직진한다고 가정한다(거리 감소에 가장 불리한 운동).
+\begin{align}
+x_1&=f_d\big(x,u^{(j)}_\lambda\big),\qquad x_{i+1}=f_d\big(x_i,\ \pi_b^{(j)}(x_i;c_i)\big),\qquad i=1,\dots,N, \label{eq:rollout}\\
+c_{\ell,i+1}&=c_{\ell,i}+\min\!\big(v_c\Delta t,\ \|p_i-c_{\ell,i}\|\big)\,\frac{p_i-c_{\ell,i}}{\|p_i-c_{\ell,i}\|},\qquad c_{\ell,0}=c_\ell(\text{현재}),\qquad c_{\ell,i,z}\ge z_f+r_c . \label{eq:pursue}
+\end{align}
+$\ell$은 추격자 번호이다. 회피 반사는 예측 추격자 위치 $c_i$를 보고, 학습 회복 정책의 장면 입력은 계획 시점의 것으로 고정된다. 종단 첨자는 $H=N+1$이다.
+
+\subsection{궤적 조건(신규 계획 여유)}
+새 계획은 모든 예측 노드 $i=1,\dots,H$에서 여유를 더한 안전 집합에 있어야 한다.
+\begin{equation}
+\min\{h_f,h_o,h_w,h_z\}(x_i)\ge m_o=0.15\ \mathrm m,\qquad \min_\ell h_{c,\ell}(x_i;c_{\ell,i})\ge m_c=0.2\ \mathrm m .
+\label{eq:fresh}
+\end{equation}
+여유는 반사 방향의 재조준과 실제 추격자가 예측과 다르게 움직이는 것에 대비한 것이다. 계획 유지(\S\ref{sec:commit})의 재검사는 여유 없이($m_o=m_c=0$) 안전 집합만 요구한다.
+
+\subsection{종단 집합}\label{sec:terminal}
+종단 상태 $x_H$는 호버하거나 직선 제동으로 멈출 수 있어야 한다.
+\begin{align}
+\Term_{\mathrm{hover}}&=\big\{x_H:\ \text{호버 고정이면 } V(p_H-a_0,r_H)\le c_B,\ \text{아니면 } x_H\in\Base\big\},\\
+\Term_{\mathrm{flee}}&=\big\{x_H:\ \sdf_O(p_{\mathrm{brake}})\ge r_d,\ d_{\mathrm{wall}}(p_{\mathrm{brake}})\ge r_d\big\},\qquad
+p_{\mathrm{brake}}=p_{H,xy}+\frac{v_{H,xy}\|v_{H,xy}\|}{2a_e},\\
+\Term&=\big(\Term_{\mathrm{hover}}\cup\Term_{\mathrm{flee}}\big)\cap\big\{\min_\ell h_{c,\ell}(x_H;c_{\ell,H})\ge m_c\big\}.
+\label{eq:terminal}
+\end{align}
+$p_{\mathrm{brake}}$는 수평 속도 방향으로 $a_e$로 제동할 때의 정지점이다. 따라서 종단이 항상 $\Base$인 것은 아니며, 도피 중인 상태도 제동 공간이 남아 있으면 허용한다.
+회복 정책 $j$의 유한시간 회복 가능 집합은
+\begin{equation}
+C^{(j)}=\big\{(x,\zeta):\ x_i\in\Safe^{+}\ (i=1,\dots,H),\ x_H\in\Term\big\},\qquad C=\bigcup_{j=0}^{6}C^{(j)}
+\end{equation}
+이며($\Safe^+$는 식~\eqref{eq:fresh}의 여유를 더한 안전 집합), 후보 실행 직후 상태가 $C^{(j)}$에 속하는지를 검사한다.
+합집합은 각 집합을 포함하므로 같은 검사 조건에서 한 회복 정책만 쓰는 경우보다 선택지가 줄지 않는다. 다만 모든 회피 가능 상태를 찾는다는 뜻은 아니다.
+
+\subsection{선택 규칙}
+인증된 조합의 집합을 $\mathcal A$라 할 때 명목 입력의 비중이 가장 큰 후보를 실행한다.
+\begin{equation}
+(\lambda^\star,j^\star)\in\arg\max_{(\lambda,j)\in\mathcal A}\lambda,\qquad u=u^{(j^\star)}_{\lambda^\star}\quad(\text{동률이면 작은 }j).
+\label{eq:select}
+\end{equation}
+변형마다 회복 입력이 다르므로 이는 $\|u-\unom\|$의 최소화와 일반적으로 같지 않다. ``명목 입력이 회복 가능성을 유지하면 그대로 통과시키고, 필요할 때만 회복 쪽으로 움직인다''는 최소 수정의 이산 형태이다.
+그림~\ref{fig:snapshot}은 실제 에피소드에서 필터가 한 스텝에 검사한 내용을 다시 계산한 것이다. 명목 입력($\lambda=1$)은 앞의 장애물 때문에 모든 회복 정책에서 거부되고, 회복 정책 0과 $\lambda=0.75$의 조합이 인증되어 실행되었다(평가 기록과 일치).
+\IfFileExists{\snapdir/snapshot_ep845_step091.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{\snapdir/snapshot_ep845_step091.png}
+\caption{필터의 한 스텝 결정(시드 0, 에피소드 845, $t=1.8$\,s). 왼쪽: 일곱 회복 정책의 3\,s 계획($\lambda=0$)과 끝나는 방식(점선 원: 호버 타원체, $\times$: 제동 정지점), 선택한 후보의 계획(굵은 파랑)과 추격자 예측(초록 점선), 추격자의 $h_c=0$ 거리(옅은 원). 오른쪽: 후보 35개의 인증 결과(초록: 인증, 빨강: 궤적 조건 위반, 주황: 종단 조건 위반)와 선택한 칸.}\label{fig:snapshot}
+\end{figure}}{}
+
+\subsection{계획 유지와 추격자 예측 재생}\label{sec:commit}
+학습 회복 정책의 입력(가까운 장애물 순서, 범위 안의 장애물)은 스텝마다 바뀔 수 있어 직전에 인증한 계획이 다음 스텝에 달라질 수 있다.
+그래서 필터는 기억 $m=(\zeta_{\mathrm{view}},a_0,\text{호버 고정 여부},j_c,\text{추격자 슬롯 순서},\hat c)$를 저장한다. $\hat c$는 인증한 계획이 예측한 다음 스텝의 추격자 위치이다.
+$\mathcal A=\varnothing$이면 저장한 변형 $j_c$의 회복 입력을 \emph{저장한 장면 입력과 예측 추격자 위치} $\hat c$로 계산해 실행한다.
+모델이 정확하면 이 입력은 인증된 회복 궤적의 다음 입력과 정확히 같다(committed continuation). 이 입력도 실제 추격자 위치에 대해 여유 없이 다시 검사하고, 실패하면 그대로 실행하되 ``인증 없음''으로 기록한다.
+예측 추격자 위치는 식~\eqref{eq:pursue}로 한 스텝씩 진행한다.
+
+\subsection{알고리즘}
+\begin{algorithm}[H]
+\caption{이산 다중 회복 안전 필터 $F$ (한 제어 스텝)}\label{alg:filter}
+\KwIn{상태 $x$, 장면(장애물, 추격자 $c$), 명목 입력 $\unom$}
+\KwMem{$m=(\zeta_{\mathrm{view}},a_0,\text{고정 여부},j_c,\text{슬롯 순서},\hat c)$}
+\KwOut{실행 입력 $u$, 갱신된 기억 $m'$, 정보 $(\lambda^\star,\text{인증 여부})$}
+현재 장면에서 새 장면 입력 $\zeta_{\mathrm{new}}$를 만들고, 추격자 예측 $c_1\gets$ 식~\eqref{eq:pursue}를 한 스텝 적용\;
+\For{$j=0,\dots,6$}{
+  $\pi_b^{(j)}(x)$ 계산(식~\eqref{eq:reflex})\;
+  \For{$\lambda\in\{1,0.75,0.5,0.25,0\}$}{
+    $u^{(j)}_\lambda\gets\sat(\lambda\unom+(1-\lambda)\pi_b^{(j)}(x))$, \ $x_1\gets f_d(x,u^{(j)}_\lambda)$\;
+    회복 정책 $j$를 $N=150$스텝 전개(식~\eqref{eq:rollout}--\eqref{eq:pursue})\;
+    모든 노드가 식~\eqref{eq:fresh}를 만족하고 $x_H\in\Term$이면 $(\lambda,j)$를 $\mathcal A$에 추가\;
+  }
+}
+\eIf{$\mathcal A\neq\varnothing$}{
+  $(\lambda^\star,j^\star)\gets\arg\max_{\mathcal A}\lambda$ (동률이면 작은 $j$), \ $u\gets u^{(j^\star)}_{\lambda^\star}$\;
+  $m'\gets(\zeta_{\mathrm{new}},a_0',\text{고정 여부}',j^\star,\text{새 슬롯 순서},c_1)$\;
+}{
+  $u\gets\pi_b^{(j_c)}(x;\zeta_{\mathrm{view}},\hat c)$ \tcp*{직전 인증 계획의 다음 입력}
+  여유 없이 실제 추격자에 대해 재검사하고, 실패하면 ``인증 없음''으로 기록\;
+  $m'\gets(\zeta_{\mathrm{view}},a_0',\text{고정 여부}',j_c,\text{슬롯 순서},\Pi(\hat c))$\;
+}
+\KwRet{$u,\ m'$}
+\end{algorithm}
+
+\subsection{보장되는 것과 보장되지 않는 것}\label{sec:guarantee}
+\begin{keybox}{명제 (가정 아래의 진술)}
+가정: (A1) 기체 모델이 정확하고 외란이 없다. (A2) 각 추격자의 속력은 $v_c$ 이하이다. (A3) 3\,s 예측 구간에서 속력 $v_c$의 순수 추적이 $h_c$에 대해 최악의 경우이다(거리에 대해서는 성립, 시선 방향에 대해서는 근사).
+
+이때 실행되는 모든 입력은 인증된 후보이거나 직전 인증 계획의 이어짐이다. 인증된 계획은 3\,s 동안 상태를 여유를 둔 $\Safe$ 안에 두고 $\Term$에서 끝난다.
+추격자 예측 재생 덕분에 이어짐은 인증된 회복 궤적의 꼬리를 정확히 재현하며, 실제 추격자 위치에 대해 다시 검사된다.
+\end{keybox}
+남는 간극은 $\Term$이 추격자에 대해 불변 집합이 아니라는 점이다. 호버는 결국 추격자에게 따라잡히고, 도피는 열린 공간이 남아 있는 동안만 안전하다.
+또한 이어짐을 재검사할 때 예측 구간이 한 스텝 늘어나므로, 그 마지막 상태가 $\Term$을 만족하지 못해 인증을 잃을 수 있다.
+따라서 이 필터는 3\,s 앞을 인증하고 20\,ms마다 다시 계획하는 장치이며, 이동 추격자에 대한 무한시간 불변성의 증명은 아니다.
+실제 측정에서는 인증 상실이 PS2 정책 에피소드의 1.5\,\%에서 나타났다(표~\ref{tab:table2_final}).
+
+\subsection{계산량}
+한 제어 스텝에서 후보 35개와 이어짐 7개, 즉 42개의 150스텝 전개(제어 스텝당 약 6300회의 회복 입력 계산)를 수행하며, 학습 변형은 그때마다 98차원 입력의 신경망을 평가한다.
+GPU(RTX 4050 노트북)에서 1000개 에피소드를 묶어 평가하면 15\,s 에피소드 전체가 약 350\,s 걸린다(묶음 기준 약 0.46\,ms/기체-스텝).
+단일 기체의 실시간 최악 실행 시간은 측정하지 않았다.
+
+%======================================================================
+\section{비교 필터: bCBF-QP}\label{sec:bcbf}
+
+PS2-RL의 backup CBF QP를 같은 집합에 적용한 비교 구성이다. 기체와 추격자를 포함한 상태를 $y=(p,v,q,c_1,\dots,c_C)$, 결합 동역학을 $\dot y=f(y)+g(y)u$,
+고정된 회복 정책(반사 포함)의 흐름을 $\varphi(\tau,y)$, 그 벡터장을 $f_\pi$라 하자.
+민감도 $Q_i=\partial\varphi(\tau_i,y)/\partial y$는 Euler 전개의 정확한 Jacobian으로 전파한다.
+절대 예측 시각 $t_i$를 고정하면 $\tau_i=t_i-t$가 시간에 따라 줄어들므로, 매끄러운 구간에서
+\begin{equation}
+\frac{d}{dt}h\big(\varphi(t_i-t,y(t))\big)=\nabla h(\varphi_i)\big[Q_i\big(f(y)+g(y)u\big)-f_\pi(\varphi_i)\big]
+\end{equation}
+이다. 둘째 항이 남은 예측 시간이 줄어드는 데서 나온다. 이를 $-\alpha h(\varphi_i)$ 이상으로 제한한 선형 제약을 노드 $\tau_i$(1.5\,s 구간, 3스텝 간격)와 모든 안전 함수 $h\in\{h_o,h_f,h_w,h_z,h_c\}$에 대해 둔다($\alpha=4$).
+종단 노드에서는 기준 집합 함수(반사가 작동 중이면 제동점 함수)와 $h_c$에 같은 형태의 제약을 $\alpha_B=2$로 둔다.
+\begin{equation}
+\min_{u,\ s\ge0}\ \tfrac12\sum_kw_k(u_k-u_{\mathrm{nom},k})^2+\tfrac12w_ss^2\quad\text{s.t. 완화된 CBF 제약, }u\in\mathcal U,\qquad w=(1,0.1,0.1,1),\ w_s=10^6 .
+\end{equation}
+roll/pitch 각속도의 가중치가 작아 추력보다 기울기로 경로를 바꾸는 해를 선호한다.
+회복 입력 $u=\pi_b(x)$가 제약을 $10^{-2}$보다 크게 위반하면(정규화된 행 기준) QP를 건너뛰고, QP 출력은 다시 이산 필터(최종 회복 정책군)를 통과시킨다.
+따라서 이 구성의 접촉 억제는 QP 단독의 결과가 아니며, 선형화·이산화·slack 때문에 표준 연속시간 CBF 불변성 정리를 그대로 적용할 수 없다.
+
+%======================================================================
+\section{임무 정책}\label{sec:striker}
+
+\paragraph{기준 접근 제어} 표적 위치 $p_t$와 속도 $v_t$에 대해
+\begin{equation}
+v_{\mathrm{des}}=v_{\mathrm{cr}}\frac{p_t-p}{\|p_t-p\|}+v_t,\qquad v_{\mathrm{cr}}=6\ \mathrm{m/s}
+\end{equation}
+를 회피 반사와 같은 속도·자세 루프($k_v=2.5$, 기울기 $50^\circ$, $k_{\mathrm{att}}=10$, $k_\psi=3$)로 추종해 $\upur$를 만든다. 장애물과 추격자를 고려하지 않는다.
+
+\paragraph{잔차 정책}
+\begin{equation}
+\unom=\sat\big(\upur(x)+\Delta u_\xi(o)\big),\qquad |\Delta a_T|\le0.1\,a_{\max}=3.92\ \mathrm{m/s^2},\quad |\Delta\omega_i|\le0.25\,\omega_{\max}=4.5\ \mathrm{rad/s}.
+\label{eq:residual}
+\end{equation}
+관측은 135차원이다: 회복 정책 형식의 장면 관측 98개, 표적 오프셋/10, 표적 속도, 추격자 속도, 경기장 내 위치(14개),
+유도 특징 19개(시선 방향 3, $d/10$, $\log(d+0.1)$, 상대 속도/5 3, 접근 속도/5, 시선각 변화율/2 3, 요 좌표계의 상대 위치/10 3과 상대 속도/5 3, 표적 높이/2),
+그리고 보정 대상인 기준 입력 $(\upur-\ustar)/u_{\mathrm{scale}}$(4개).
+
+\paragraph{보상} 표적 거리 $d_k=\|p_k-p_{t,k}\|$에 대해
+\begin{equation}
+r_k=w_p(d_{k-1}-d_k)-w_t-\frac{w_a}{4}\Big\|\frac{\Delta u_k}{u_{\mathrm{scale}}}\Big\|^2+100\cdot\mathbf 1_{\text{성공}}-150\cdot\mathbf 1_{\text{접촉 또는 이탈}},\qquad w_p=2,\ w_t=w_a=0.05 .
+\label{eq:reward}
+\end{equation}
+거리 항은 $w_p(d_0-d_{\mathrm{end}})$로 합쳐지고, 시간 비용은 빠른 성공을 장려한다. 시간초과는 critic 목표에서 종료로 보지 않는다(부트스트랩 유지).
+
+\paragraph{학습} SAC, $\gamma=0.995$, 보상 척도 0.1, 병렬 환경 64개, 배치 256, 재생 버퍼 $10^6$, 학습률 $3\times10^{-4}$, $\tau=0.005$, 온도 초기값 0.1(하한 $10^{-3}$, 목표 엔트로피 $-4$), 은닉층 256$\times$2(ELU).
+처음 20만 스텝은 actor를 고정하고 critic만 학습한다(critic warm-up). actor 손실에 고정점 벌점 $0.2\,\mathbb E\big[\tfrac14\|\Delta u/b\|^2\big]$($b$는 잔차 한계)을 더한다.
+1000만 스텝 학습하며, 25만 스텝마다 128개 에피소드로 평가해 반환값이 가장 큰 체크포인트를 쓴다. 처음부터 학습한 정책은 실패했고(성공 0, 이후 0.41--0.49), 기준 접근 제어의 잔차로 두어야 안정적으로 학습되었다.
+
+%======================================================================
+\section{PS2: 필터를 포함한 임무 학습}\label{sec:ps2}
+
+필터를 환경의 일부로 두고 임무 정책을 다시 학습한다.
+\begin{align}
+u_{\mathrm{nom},k}&=\sat\big(\upur(x_k)+\Delta u_\xi(o_k)\big),\qquad (u_k,m_{k+1})=F\big(x_k,\zeta_k,m_k,u_{\mathrm{nom},k}\big),\qquad x_{k+1}=f_d(x_k,u_k), \label{eq:ps2}\\
+r^{\mathrm{PS2}}_k&=r_k-w_f\|\eta_k\|^2,\qquad \eta_k=\frac{u_k-u_{\mathrm{nom},k}}{u_{\mathrm{scale}}},\qquad w_f=0.5 . \label{eq:ps2-reward}
+\end{align}
+정책은 자신이 제안한 입력이 그대로 실행된다고 가정하지 않고, 필터 개입 이후의 상태와 보상으로 학습한다. 필터가 자주 막는 행동보다 실제로 진전이 생기고 수정 비용이 작은 행동이 유리해진다.
+필터 기억 $m$까지 포함한 전이 $(x,\zeta,m)\mapsto(x^+,\zeta^+,m^+)$는 정책에서 보면 환경의 일부이므로, 이산 필터를 미분하지 않고도 off-policy SAC로 학습할 수 있다.
+다만 $m$은 관측되지 않으므로 관측이 완전한 상태라고 주장하지 않는다. 필터 출력을 복사하는 모방학습이 아니라, 수정된 전이에서 같은 강화학습 목표를 다시 최적화하는 것이다.
+
+\paragraph{설정} 같은 시드의 잔차 정책 최고 체크포인트에서 시작하여, 처음 10만 스텝은 actor를 고정하고 critic을 재적응시키며, 온도는 시작 값으로 고정한다(학습률 0).
+배치할 필터(최종 회복 정책군, 추격자 예측 재생)와 같은 필터로 300만 스텝 학습하고(학습 = 배치), 25만 스텝마다 64개 에피소드로 평가해 반환값이 가장 큰 체크포인트를 쓴다.
+PS2 정책은 필터와 함께 쓰도록 학습한 정책이며, 필터 없이 실행하면 성공률이 잔차 정책보다 낮다(62.1\,\% 대 74.0\,\%). 필터가 장애물에서 비켜 주는 것에 의존하기 때문이다.
+
+\paragraph{학습 시간} RTX 4050 노트북 GPU에서 시드당 Phase I 약 10분(1000만 스텝), 잔차 정책 28--34분(1000만 스텝), PS2 72--76분(300만 스텝)이 걸렸다.
+
+%======================================================================
+\section{평가 방법}\label{sec:protocol}
+
+\paragraph{절차} 시드 $s\in\{0,1,2\}$마다 전체 파이프라인(Phase I $\to$ 잔차 정책 $\to$ PS2)을 그 시드로 학습한다.
+모든 구성을 같은 1000개 평가 장면(장면 시드 9001, 학습 장면 풀과 별도)으로 평가하며, 장면마다 출발 교란과 표적·추격자 초기 조건까지 같다.
+에피소드는 15\,s이고, 10\,s 결과는 같은 에피소드를 10\,s에서 절단한 것이다(10\,s까지 끝나지 않은 에피소드는 시간초과로 센다).
+각 시드는 그 시드의 임무 정책을 학습한 추격자 설정(원래 추격자)으로 평가한다.
+
+\paragraph{지표} 성공률, 접촉률(장애물·바닥·추격자), 시간초과율, 영역 이탈률, 성공 에피소드의 평균 도달 시간,
+평균 명목 유지율 $\bar\lambda$(에피소드 스텝 평균 $\lambda^\star$, 새 인증이 없는 스텝은 0),
+인증 상실률(한 스텝 이상 유효한 인증 계획이 없었던 에피소드의 비율). 인증 상실은 접촉과 다른 지표이다.
+
+\paragraph{통계} 시드별 비율의 평균 $\pm$ 표준편차를 보고하고, 시드를 합친 횟수 $k/n$에 대해 양측 95\,\% Clopper--Pearson 구간을 쓴다.
+\begin{equation}
+p_L=\mathrm{B}^{-1}\!\big(\tfrac{\alpha}{2};\,k,\,n-k+1\big),\qquad p_U=\mathrm{B}^{-1}\!\big(1-\tfrac{\alpha}{2};\,k+1,\,n-k\big),\qquad \alpha=0.05,
+\end{equation}
+여기서 $\mathrm B^{-1}$는 베타 분포의 분위수이다. $k=0$이면 $p_U=1-(\alpha/2)^{1/n}$이고, 단측 95\,\% 상한은 $1-0.05^{1/n}\approx3/n$이다.
+$n=1000$에서 0.30\,\%(단측)와 0.37\,\%(양측), $n=3000$에서 0.10\,\%와 0.12\,\%이다.
+모든 구성이 같은 장면을 쓰므로 두 구성의 비교는 \emph{쌍 비교}이다. 구성 A만 성공한 장면 수 $b$와 B만 성공한 장면 수 $c$로 정확 McNemar 검정을 한다.
+\begin{equation}
+p_{\mathrm{McNemar}}=\min\Big\{1,\ 2\sum_{i=0}^{\min(b,c)}\binom{b+c}{i}2^{-(b+c)}\Big\}.
+\end{equation}
+구성끼리 비교하는 표(표~\ref{tab:table2_final}, \ref{tab:table3_ablation})는 모든 행이 평가된 공통 시드만 쓴다.
+
+%======================================================================
+\section{결과}\label{sec:results}
+
+\begin{warnbox}{수치의 기준}
+아래 표와 그림은 업로드된 평가 결과(시드 0 전체, 시드 1 일부, 시드 2 미평가)에서 만든 것이다. 각 행의 ``시드 $\times$ 장면'' 열이 사용한 에피소드 수를 나타낸다.
+세 시드 평가를 마친 뒤 \file{STEPS=tables bash docker\_batch/run\_strike\_paper.sh}로 다시 만들고 이 문서를 다시 컴파일하면 표와 그림이 갱신된다.
+\end{warnbox}
+
+\subsection{주요 비교}
+\tabin{table1_10s}
+\tabin{table1_15s}
+
+\begin{figure}[H]\centering
+\figin{\figpath{fig_outcomes.pdf}}
+\caption{구성별 결과 비율(왼쪽 10\,s, 오른쪽 15\,s 제한). 막대 안의 수는 성공률(\%)이다.}\label{fig:outcomes}
+\end{figure}
+
+\paragraph{필터의 효과} 같은 임무 정책에서 최종 필터는 접촉을 거의 없앤다. 잔차 정책은 26.1\,\%(521/2000)에서 0/2000으로, 기준 접근 제어는 57.5\,\%에서 1/2000으로 줄었다.
+대신 우회와 정지 때문에 10\,s 시간초과가 늘어난다(잔차 정책 0\,\%$\to$15.5\,\%). 15\,s 제한에서는 시간초과 대부분이 늦은 성공으로 바뀐다.
+
+\paragraph{PS2의 효과} 같은 최종 필터를 쓸 때 PS2 정책은 잔차 정책보다 성공률이 높다(10\,s 84.5$\to$90.4\,\%, 15\,s 94.4$\to$97.6\,\%).
+같은 장면 쌍 비교에서 PS2만 성공한 장면이 172개, 잔차 정책만 성공한 장면이 54개로(10\,s) 차이는 유의하다($p<10^{-6}$, 표~\ref{tab:table5_paired}).
+평균 도달 시간도 6.53\,s에서 6.11\,s로 줄었다. 필터를 고정하고 임무 정책만 바꾼 비교이므로 필터 포함 재학습의 효과를 보여 주는 핵심 근거이다.
+
+\begin{figure}[H]\centering
+\begin{subfigure}{0.49\linewidth}\centering\figin{\figpath{fig_strike_time.pdf}}\caption{누적 성공률}\label{fig:strike-time}\end{subfigure}\hfill
+\begin{subfigure}{0.49\linewidth}\centering\figin{\figpath{fig_safety.pdf}}\caption{추격자 최소 여유 거리의 누적 분포}\label{fig:safety}\end{subfigure}
+\caption{(a) 시간에 따른 누적 성공률(음영은 시드를 합친 95\,\% 구간). 점선은 10\,s. (b) 에피소드별 추격자 최소 여유 거리 $\min_t(\|p-c\|-r_c-r_d)$의 누적 분포. 필터를 쓴 구성에서 0.2\,m의 계단은 추격자가 바짝 따라오는 동안 필터가 $h_c$를 신규 계획 여유 $m_c=0.2$\,m에 유지한 에피소드들이다(멀어지는 중에는 $h_c$가 거리 여유와 같다).}
+\end{figure}
+
+\subsection{최종 필터 선택과 구성 요소}
+\tabin{table2_final}
+\tabin{table3_ablation}
+\tabin{table5_paired}
+
+\begin{figure}[H]\centering
+\figin{\figpath{fig_ablation.pdf}}
+\caption{구성 요소 제거 실험(PS2 정책, 15\,s). 오차 막대는 95\,\% Clopper--Pearson 구간이다.}\label{fig:ablation}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{회피 변형}: 단일 회피 필터는 접촉 1.7\,\%(17/1000)로, 최종 필터(1/1000)와의 쌍 비교에서 차이가 유의하다($p=3.1\times10^{-5}$). 성공률도 낮다(15\,s 95.7\,\% 대 98.4\,\%).
+\item \textbf{bCBF-QP}: 성공률은 비슷하지만 최종 필터가 10\,s와 15\,s 모두 높고($p=0.0015$, $0.043$), 평균 도달 시간이 짧다(5.93\,s 대 6.33\,s, 공통 시드 기준). bCBF는 명목 유지율이 더 높지만(0.97) 이후 이산 검사에서 인증을 더 자주 잃는다(2.5\,\% 대 1.5\,\%).
+\item \textbf{학습 회복 정책}: 회복 정책을 호버 LQR로 바꾸면 15\,s 성공률이 82--84\,\%로 크게 떨어지고 시간초과가 15--17\,\%로 늘어난다(시드 2개와 공통 시드 기준). Phase I 회복 정책이 필터의 허용 범위를 넓히는 것이 성능의 주요 원인이다.
+\item \textbf{구형 근사}: 추격자를 정지한 구로 보면 접촉이 26.3\,\%로, 상대 접근 속도를 반영한 $h_c$가 필수적이다.
+\item \textbf{계획 유지의 추격자 예측 재생과 호버 latch}: 1000개 장면에서 성공·접촉의 차이는 관측되지 않았다(98.6\,\%, 98.3\,\% 대 98.4\,\%). 두 요소는 성능보다 이어짐이 인증된 계획을 정확히 재현하고 인증 대상 제어기와 일치하게 하는 일관성을 위한 것이다.
+\end{itemize}
+
+\begin{figure}[H]\centering
+\figin{\figpath{fig_filter.pdf}}
+\caption{필터 개입. 왼쪽: 에피소드 평균 명목 유지율 $\bar\lambda$의 누적 분포(1에서의 계단은 필터가 한 번도 수정하지 않은 에피소드). 오른쪽: 인증 상실 에피소드 비율.}\label{fig:filter}
+\end{figure}
+
+\subsection{학습 과정과 Phase I}
+\begin{figure}[H]\centering
+\figin{\figpath{fig_training.pdf}}
+\caption{학습 중 평가 성공률(시드별). 원은 평가에 사용한 체크포인트. 필터 없이 학습한 잔차 정책은 시드 1, 2에서 500--650만 스텝 이후 붕괴했으며, 평가에는 최고 반환값 체크포인트(시드 0: 850만, 시드 1: 125만, 시드 2: 175만 스텝)를 썼다. PS2 학습은 필터 안에서 안정적이다.}\label{fig:training}
+\end{figure}
+\tabin{table4_phase1}
+\begin{figure}[H]\centering
+\figin[0.55\linewidth]{\figpath{fig_phase1.pdf}}
+\caption{Phase I 회복 성공률(1.5\,s 안에 안전하게 기준 집합 도달). 학습 회복 정책은 세 시드 평균과 표준편차.}\label{fig:phase1}
+\end{figure}
+
+\subsection{대표 에피소드}\label{sec:results-episodes}
+\file{run\_strike\_paper.sh}는 시드 0의 평가에서 필터가 장애물 충돌을 막은 장면, 추격자 접촉을 막은 장면, 추격자 근접 회피, 유일한 접촉 장면,
+기준 제어가 실패한 장면 등을 자동으로 고르고(\file{episode\_picks.json}), 각 장면을 여러 구성으로 다시 실행해 다음을 만든다.
+\begin{itemize}
+\item 2차원 궤적 비교(구성별 패널), 3차원 궤적(속력 색), 3차원 비교 그림;
+\item 상세 신호 그림: 표적 거리, 장애물·벽·바닥·천장 여유, $h_c$와 반사 가중치 $\sigma$, 속력과 고도, $\lambda^\star$와 인증 상태(신규/이어짐/인증 없음), 사용한 회복 변형, 입력과 명목 입력;
+\item 2차원 GIF와 회전하는 3차원 GIF(추격자 $h_c$ 요구 거리 구 표시);
+\item 필터 스냅샷(\file{scripts/strike\_filter\_snapshot.py}): 처음 명목 입력을 줄인 스텝, 이전 계획을 이어 간 스텝, 인증을 잃은 스텝에서 필터의 검사를 다시 계산한 그림(그림~\ref{fig:snapshot}).
+\end{itemize}
+\IfFileExists{\episodedir/overview_main.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{\episodedir/overview_main.png}
+\caption{대표 에피소드(시드 0)의 수평 궤적. 실선은 최종 필터를 쓴 PS2 정책과 잔차 정책, 점선은 필터 없는 PS2 정책이다. 별은 성공, X는 접촉, 회색 원은 시간초과.}\label{fig:episodes-overview}
+\end{figure}}{\IfFileExists{\episodedir/overview.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{\episodedir/overview.png}
+\caption{대표 에피소드(시드 0)의 수평 궤적.}\label{fig:episodes-overview}
+\end{figure}}{}}
+
+\paragraph{유일한 접촉 사례(시드 0, 에피소드 845)} 기체는 큰 원기둥과 위쪽 벽 사이의 좁은 공간($y\approx9$\,m)으로 들어간 뒤 약 6\,s부터 새 인증을 찾지 못해
+이전 계획(호버 LQR + 회피 변형)을 이어 갔고, 약 7.5\,s부터는 그 계획도 재검사를 통과하지 못했다(인증 없음).
+추격자가 다가오면서 회피 반사가 작동했지만 벽과 장애물이 도피 방향을 막아 9.2\,s에 접촉했다. 같은 장면에서 bCBF 구성도 같은 방식으로 실패했다.
+이 사례는 \S\ref{sec:guarantee}의 남는 간극, 즉 호버 종단이 다가오는 추격자에 대해 불변 집합이 아니고 막힌 공간에서는 도피도 보장되지 않는다는 점이 실제로 나타난 경우이다.
+인증을 잃은 7.5\,s의 검사를 다시 계산하면(그림~\ref{fig:snapshot-lost}) 35개 후보 모두 궤적 조건을 위반했다. 위쪽 벽($y=10$\,m) 쪽으로 움직이던 기체에서 일곱 회복 정책의 3\,s 계획이 모두 벽을 넘었기 때문이다.
+Phase I 회복 정책은 벽 없이 학습되었고, 회피 반사는 추격자 여유가 $h_{\mathrm{off}}=2$\,m 이상이면 섞이지 않는다. 벽을 포함한 Phase I 학습이 남은 개선 방향이다.
+\IfFileExists{\snapdir/snapshot_ep845_step374.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{\snapdir/snapshot_ep845_step374.png}
+\caption{인증을 잃은 시점의 검사(에피소드 845, $t=7.5$\,s). 일곱 회복 정책의 계획이 모두 위쪽 벽을 넘어 새 인증이 없고, 필터는 이전 계획을 이어 실행했다.}\label{fig:snapshot-lost}
+\end{figure}}{}
+\IfFileExists{\episodedir/ep845/compare2d.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{\episodedir/ep845/compare2d.png}
+\caption{에피소드 845를 여러 구성으로 다시 실행한 수평 궤적(CPU 재실행).}\label{fig:ep845-2d}
+\end{figure}}{}
+\IfFileExists{\episodedir/ep845/detail_ps2_ours.png}{%
+\begin{figure}[H]\centering
+\includegraphics[width=0.86\linewidth]{\episodedir/ep845/detail_ps2_ours.png}
+\caption{에피소드 845, PS2 정책 + 최종 필터의 상세 신호. 위에서부터 표적 거리, 기하 여유, $h_c$와 반사 가중치 $\sigma$, 속력과 고도, $\lambda^\star$와 인증 상태(노랑: 이전 계획 유지, 빨강: 인증 없음), 사용한 회복 변형, 입력과 명목 입력.}\label{fig:ep845-detail}
+\end{figure}}{}
+
+%======================================================================
+\section{한계와 적용 범위}\label{sec:limits}
+\begin{enumerate}
+\item \textbf{종단 집합의 불변성}: 호버 기준 집합은 정적 장애물에 대한 회복 수단이다. 추격자가 계속 다가오면 호버는 영구히 안전하지 않고, 도피 종단도 유한시간 예측의 조건이다. 정적 기준 집합에 기대는 원래 이론의 보장을 그대로 옮길 수 없다.
+\item \textbf{추격자 모델}: 예측은 현재 시선 방향의 순수 추적이며, 장애물 우회와 시선각 변화를 포함한 모든 추격 전략의 최악값이라는 증명은 없다. 반응 지연과 이탈 가속도에 기반한 $h_c$도 근사이다.
+\item \textbf{모델 오차}: 입력 지연, 공력, 센서 오차, 바람이 있으면 3\,s 검사와 실제 경로가 달라질 수 있다. 모든 오차를 포함하는 강건 경계는 제시하지 않았다.
+\item \textbf{시간 이산 검사}: 검사는 20\,ms 노드에서 한다. 노드 사이 연속시간 충돌까지 배제하려면 이동량이나 보간 오차를 이용한 추가 조건이 필요하다.
+\item \textbf{인증 상실}: 계획 유지 중에도 인증을 잃을 수 있다(PS2 에피소드의 1.5\,\%). 이 시점은 명제의 전제를 벗어난다.
+\item \textbf{통계}: 1000개 장면과 2--3개 시드의 결과이다. 접촉 1/2000은 접촉확률이 0이라는 증명이 아니며 95\,\% 상한은 0.28\,\%이다.
+\item \textbf{실기체}: 결과는 시뮬레이션의 성공과 접촉이다. 실시간 최악 실행 시간, PX4 추력·각속도 추종 오차, 실기체 운용 성능은 검증하지 않았다.
+\end{enumerate}
+
+%======================================================================
+\appendix
+\section{하이퍼파라미터}\label{app:hparams}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}X}\toprule
+구분 & 값 \\\midrule
+모델 & $\Delta t=0.02$\,s, $a_T\in[0,4g]$, $|\omega_i|\le18$\,rad/s, $r_d=0.3$\,m, $z_f=1$\,m, $z_{\max}=10$\,m \\
+경기장·장면 & 40$\times$20\,m, 장애물 3개, 추격자 1개($r_c=0.4$\,m, $v_c=2$\,m/s, $a_c=2$\,m/s$^2$, 반발 거리 2\,m), 표적 0.2--0.8\,m/s, 성공 반경 0.6\,m, 15\,s \\
+$h_c$ & $\delta=0.2$\,s, $a_e=5$\,m/s$^2$ \\
+호버 LQR & $Q=\mathrm{diag}(2,2,8,0.01,0.01,0.5,8,8,2)$, $R_u=\mathrm{diag}(0.06,0.15,0.15,0.12)$, $c_B=50$, $\rho_{xy}=1.22$\,m, $z_{\mathrm{ext}}=0.63$\,m \\
+Phase I & TD3, 1000만 스텝, 병렬 64, 배치 256, 버퍼 $10^6$, $\beta=0.99$, 학습률 actor $10^{-4}$/critic $3\times10^{-4}$, $\tau=0.0025$, 정책 지연 2, 탐색 잡음 0.1, 잔차 벌점 0.2, 에피소드 112스텝, 구형 근사 $T=1.5$\,s, 영역 가중치 $(0.4,0.2,0.2,0.2)$ \\
+회피 반사 & $h_{\mathrm{on}}=0.5$\,m, $h_{\mathrm{off}}=2.0$\,m, $(k_v,k_{\mathrm{att}},k_\psi)=(2,10,3)$, 기울기 $45^\circ$, $d_{\mathrm{push}}=1.5$\,m, $z_{\mathrm{ref}}\in[z_f+1,z_{\max}-3]$ \\
+회복 정책군 & $(v_{\mathrm{esc}}/v_c,\vartheta)\in\{(2,0^\circ)\text{ 학습},(2,0^\circ)\text{ LQR},(2,\pm60^\circ),(3.5,0^\circ),(3.5,\pm60^\circ)\}$ \\
+이산 필터 & $\Lambda=\{1,0.75,0.5,0.25,0\}$, 예측 3\,s(150스텝), 신규 계획 여유 $m_o=0.15$\,m·$m_c=0.2$\,m, 종단 $\Term_{\mathrm{hover}}\cup\Term_{\mathrm{flee}}$, 계획 유지(추격자 예측 재생), 호버 latch \\
+bCBF-QP & $\alpha=4$, $\alpha_B=2$, 1.5\,s, 3스텝 간격, $w=(1,0.1,0.1,1)$, $w_s=10^6$, 건너뛰기 허용치 $10^{-2}$, 보조 필터 = 최종 이산 필터 \\
+기준 접근 제어 & $v_{\mathrm{cr}}=6$\,m/s, $k_v=2.5$, 기울기 $50^\circ$ \\
+잔차 정책 & 잔차 한계 추력 10\,\%, 각속도 25\,\%; 관측 135; SAC $\gamma=0.995$, 보상 척도 0.1, 병렬 64, 배치 256, 학습률 $3\times10^{-4}$, $\tau=0.005$, 온도 0.1(하한 $10^{-3}$), critic warm-up 20만, 고정점 벌점 0.2, 1000만 스텝 \\
+보상 & $w_p=2$, $w_t=0.05$, $w_a=0.05$, 성공 $+100$, 접촉·이탈 $-150$ \\
+PS2 & $w_f=0.5$, 잔차 정책에서 시작, critic 재적응 10만, 온도 고정, 300만 스텝 \\
+평가 & 시드 3개, 장면 1000개(시드 9001), 15\,s와 10\,s 절단, Clopper--Pearson 95\,\%, 정확 McNemar \\\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{기호표}\label{app:symbols}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm}X}\toprule
+기호 & 의미 \\\midrule
+$x=(p,v,q)$, $u=(a_T,\omega)$ & 기체 상태, 입력(추력 가속도, 기체 각속도) \\
+$f_d$, $\Delta t$ & 이산 동역학, 시간 간격 \\
+$\zeta$, $c_\ell$, $\nu_\ell$ & 장면 정보, 추격자 위치, 추격자 속도 \\
+$r_d$, $r_c$, $v_c$, $a_c$ & 기체 반경, 추격자 반경, 추격자 속력·가속도 상한 \\
+$h_f,h_o,h_w,h_z$ & 바닥, 장애물, 벽, 천장 여유 \\
+$h_{c,j}$, $s_j^+$, $\delta$, $a_e$ & 추격자 여유도, 양의 접근 속도, 반응 지연, 유효 이탈 가속도 \\
+$\Safe$, $\Base$, $\BaseP$ & 안전 집합, 필터의 기준 집합, Phase I 기준 집합 \\
+$e$, $P$, $K$, $V$ & 호버 오차, Riccati 해, LQR 이득, $V=e^\top Pe$ \\
+$a^\star$, $D$, $S$ & 최적 정지점, 정지점 행렬, Schur 여행렬 ($V_{\min}=r^\top Sr$) \\
+$c_B$, $\rho_{xy}$, $z_{\mathrm{ext}}$ & 기준 집합 수준, 타원체의 수평·수직 범위 \\
+$\pi_\theta$, $\Delta u_\theta$ & Phase I 학습 회복 정책과 그 잔차 \\
+$\pi_b^{(j)}$, $\uesc^{(j)}$, $\sigma$ & 회복 정책 변형 $j$, 회피 입력, 반사 가중치 \\
+$\Lambda$, $\lambda^\star$, $\bar\lambda$ & 혼합률 집합, 선택한 혼합률, 에피소드 평균 \\
+$N$, $H$, $m_o$, $m_c$ & 예측 스텝(150), 종단 첨자($N+1$), 신규 계획 여유 \\
+$\Term$, $p_{\mathrm{brake}}$ & 종단 집합, 제동 정지점 \\
+$F$, $m$ & 안전 필터, 필터 기억(계획 유지) \\
+$\upur$, $\Delta u_\xi$, $\unom$ & 기준 접근 입력, 임무 정책 잔차, 명목 입력 \\
+$r_k$, $r^{\mathrm{PS2}}_k$, $\eta_k$, $w_f$ & 보상, PS2 보상, 정규화한 필터 수정량, 수정 비용 가중치 \\\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{원고 초안과 다른 점}\label{app:draft}
+초안을 이 버전의 결과로 바꿀 때 확인할 항목이다.
+\begin{enumerate}
+\item \textbf{평가 규모}: 초안의 ``단일 시드, 128개 장면'' 수치(44.5, 82.8, 93.8, 100\,\% 등)는 이전 실험이다. 현재 표는 1000개 장면, 시드 2--3개이며 15\,s 에피소드와 10\,s 절단을 함께 보고한다.
+\item \textbf{접촉 0건 표현}: PS2 정책 + 최종 필터는 접촉 1/2000(시드 0의 한 장면)이다. ``접촉이 관측되지 않았다'' 대신 ``2000회 중 1회(95\,\% 상한 0.28\,\%)''로 쓴다. 잔차 정책 + 최종 필터는 0/2000이다.
+\item \textbf{15\,s 성공률}: 초안의 ``128개 장면 모두 성공(100\,\%)''은 현재 97.6\,\%이다(시간초과 2.4\,\%).
+\item \textbf{PS2 정책의 학습 필터}: 초안 표 1은 단일 회피 필터로 학습한 PS2 정책을 썼다. 최종 파이프라인의 PS2 정책은 배치하는 최종 필터(회피 변형, 추격자 예측 재생)로 학습했다.
+\item \textbf{bCBF slack 가중치}: 초안 식 (34) 뒤의 $w_s=10$은 $w_s=10^6$이다.
+\item \textbf{신규 계획 여유}: 0.15\,m는 장애물과 벽뿐 아니라 바닥과 천장에도 적용된다.
+\item \textbf{기준 집합의 추격자 조건}: 필터의 기준 집합 $\Base$에는 추격자 조건이 없고, 추격자는 종단 조건 $h_c\ge0.2$\,m와 회피 반사로 다룬다. Phase I의 기준 집합만 추격자 구 조건을 가진다.
+\item \textbf{천장 조건}: 식 (20)의 $z_{\max}-a^\star_z\ge\rho_{\mathrm{top}}+r_d$에서 구현은 $\rho_{\mathrm{top}}=\rho_{xy}$이다(초안과 같음, 보수적).
+\item \textbf{제동 정지점}: 식 (30)은 구현에서 수평 성분만 쓴다: $p_{\mathrm{brake}}=p_{H,xy}+v_{H,xy}\|v_{H,xy}\|/(2a_e)$. 이 점이 장애물과 벽에서 $r_d$ 이상 떨어져야 한다.
+\item \textbf{추격자 운동}: 환경의 추격자는 속력 2\,m/s와 함께 가속도 2\,m/s$^2$ 상한을 가지며, 장애물 2\,m 이내에서 밀려난다(\S\ref{sec:arena}). 필터의 예측(가속도 제한 없는 순수 추적)과 다르다는 점을 밝혀 둔다.
+\item \textbf{Phase I 수치}: 가중 성공률은 세 시드 평균 70.1$\pm$0.3\,\%(초안 69.9\,\%), LQR 43.8\,\%이다.
+\item \textbf{이동 추격자 회복 학습 변형}: 초안 표 2의 해당 행은 최종 파이프라인 평가에 포함되지 않은 128개 장면 실험이다. 쓰려면 이전 실험임을 밝히거나 표에서 뺀다.
+\item \textbf{수식 표기}: 초안 식 (2)·(6)의 $|\omega_i)$, $|\ell_i)$는 절댓값 $|\omega_i|$, $|\ell_i|$이고, 식 (4)의 괄호는 $v_{k+1}=v_k+\Delta t\,(a_{T,k}R(q_k)e_3-ge_3)$이다. 회피 각 $\vartheta$와 임무 정책 매개변수(초안 $\Delta u_\vartheta$)의 기호가 겹치므로 이 문서는 임무 정책 잔차를 $\Delta u_\xi$로 썼다.
+\end{enumerate}
+
+\section{한글(HWP) 수식 편집기 입력}\label{app:hwp}
+본문의 주요 수식을 한글 수식 편집기 문법으로 옮긴 것이다(같은 내용: \file{results/strike\_paper/hwp\_equations.txt}). 붙여넣은 뒤 모양을 확인한다.
+\IfFileExists{hwp_equations.txt}{\VerbatimInput[fontsize=\scriptsize,breaklines,breakanywhere,firstline=4]{hwp_equations.txt}}{\fbox{hwp\_equations.txt 없음}}
+
+\end{document}

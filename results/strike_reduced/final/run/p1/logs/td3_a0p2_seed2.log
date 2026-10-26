@@ -1,0 +1,508 @@
+[jax] backend=gpu devices=[CudaDevice(id=0)]
+[base set] c_B 50.0 | c_U 56.1 c_chart 102.1 c_Lyap 56.1 (wind 0.30: 56.1) | V+/V at c_B 0.980 (wind 0.986) | hover ellipsoid 1.22 m wide, 0.63 m tall
+[task] T 1.5 s (N 75), chaser ball radius 3.70 m, walls False, floor 1.0 m, obs_dim 98; regions {'general': 0.4, 'blocked': 0.2, 'chaser': 0.2, 'shell': 0.2, 'escape': 0.0}
+[run] outputs/strike_final/p1/td3_a0p2_seed2 backbone=td3 total_steps=10000000 actor_init=lqr_bc actor_start_update=20000
+[pool] 50000 episode starts per region in 1.9 s
+[actor init] behaviour-cloned the hover LQR: 3000 steps, final normalized MSE 1.30e-08
+[eval] LQR backup (val): general=0.528 blocked=0.001 chaser=0.109 shell=1.000 escape=0.322 mu_w=0.433 | actor at start: mu_w=0.433
+step=57344 replay=57344 updates=6919 eps/sec=9591.7 curriculum=1.00
+  critic=0.0032 actor=-0.1525 act_pen=0.0000 target=0.3216 q_pi=0.1525 q1_gn=0.032 actor_gn=0.240
+  [eval val] mu_w=0.433 general=0.528 blocked=0.001 chaser=0.109 shell=1.000 escape=0.322 crash=0.406
+step=106496 replay=106496 updates=13063 eps/sec=19127.5 curriculum=1.00
+  critic=0.0025 actor=-0.1231 act_pen=0.0000 target=0.2619 q_pi=0.1231 q1_gn=0.026 actor_gn=0.203
+step=155648 replay=155648 updates=19207 eps/sec=18975.5 curriculum=1.00
+  critic=0.0020 actor=-0.1055 act_pen=0.0000 target=0.2265 q_pi=0.1055 q1_gn=0.024 actor_gn=0.159
+  [eval val] mu_w=0.406 general=0.435 blocked=0.045 chaser=0.127 shell=0.990 escape=0.478 crash=0.415
+step=204800 replay=204800 updates=25351 eps/sec=18566.1 curriculum=1.00
+  critic=0.0018 actor=-0.1297 act_pen=0.0118 target=0.2692 q_pi=0.1321 q1_gn=0.022 actor_gn=0.097
+step=253952 replay=253952 updates=31495 eps/sec=18339.2 curriculum=1.00
+  critic=0.0018 actor=-0.1441 act_pen=0.0069 target=0.2997 q_pi=0.1455 q1_gn=0.021 actor_gn=0.059
+  [eval val] mu_w=0.480 general=0.570 blocked=0.063 chaser=0.197 shell=0.999 escape=0.553 crash=0.396
+step=303104 replay=303104 updates=37639 eps/sec=17892.1 curriculum=1.00
+  critic=0.0017 actor=-0.1472 act_pen=0.0058 target=0.3063 q_pi=0.1483 q1_gn=0.021 actor_gn=0.043
+step=352256 replay=352256 updates=43783 eps/sec=17846.9 curriculum=1.00
+  critic=0.0019 actor=-0.1465 act_pen=0.0054 target=0.3047 q_pi=0.1476 q1_gn=0.020 actor_gn=0.033
+  [eval val] mu_w=0.490 general=0.596 blocked=0.068 chaser=0.194 shell=0.994 escape=0.615 crash=0.377
+step=401408 replay=401408 updates=49927 eps/sec=17380.4 curriculum=1.00
+  critic=0.0019 actor=-0.1472 act_pen=0.0052 target=0.3083 q_pi=0.1482 q1_gn=0.021 actor_gn=0.031
+step=450560 replay=450560 updates=56071 eps/sec=17275.9 curriculum=1.00
+  critic=0.0020 actor=-0.1481 act_pen=0.0050 target=0.3087 q_pi=0.1491 q1_gn=0.020 actor_gn=0.029
+  [eval val] mu_w=0.531 general=0.652 blocked=0.096 chaser=0.256 shell=0.998 escape=0.632 crash=0.359
+step=507904 replay=507904 updates=63239 eps/sec=16826.5 curriculum=1.00
+  critic=0.0021 actor=-0.1498 act_pen=0.0053 target=0.3128 q_pi=0.1509 q1_gn=0.021 actor_gn=0.030
+step=557056 replay=557056 updates=69383 eps/sec=19513.2 curriculum=1.00
+  critic=0.0021 actor=-0.1503 act_pen=0.0054 target=0.3138 q_pi=0.1514 q1_gn=0.021 actor_gn=0.031
+  [eval val] mu_w=0.528 general=0.645 blocked=0.093 chaser=0.257 shell=0.998 escape=0.679 crash=0.357
+step=606208 replay=606208 updates=75527 eps/sec=19031.1 curriculum=1.00
+  critic=0.0022 actor=-0.1507 act_pen=0.0056 target=0.3146 q_pi=0.1518 q1_gn=0.022 actor_gn=0.029
+step=655360 replay=655360 updates=81671 eps/sec=19138.5 curriculum=1.00
+  critic=0.0022 actor=-0.1536 act_pen=0.0062 target=0.3192 q_pi=0.1549 q1_gn=0.021 actor_gn=0.029
+  [eval val] mu_w=0.557 general=0.682 blocked=0.115 chaser=0.305 shell=0.999 escape=0.713 crash=0.340
+step=704512 replay=704512 updates=87815 eps/sec=18432.0 curriculum=1.00
+  critic=0.0021 actor=-0.1554 act_pen=0.0061 target=0.3253 q_pi=0.1567 q1_gn=0.021 actor_gn=0.029
+step=753664 replay=753664 updates=93959 eps/sec=18412.9 curriculum=1.00
+  critic=0.0021 actor=-0.1577 act_pen=0.0061 target=0.3290 q_pi=0.1590 q1_gn=0.022 actor_gn=0.030
+  [eval val] mu_w=0.581 general=0.721 blocked=0.139 chaser=0.325 shell=0.999 escape=0.705 crash=0.336
+step=802816 replay=802816 updates=100103 eps/sec=17901.6 curriculum=1.00
+  critic=0.0022 actor=-0.1599 act_pen=0.0063 target=0.3342 q_pi=0.1612 q1_gn=0.021 actor_gn=0.031
+step=851968 replay=851968 updates=106247 eps/sec=17776.1 curriculum=1.00
+  critic=0.0021 actor=-0.1614 act_pen=0.0064 target=0.3374 q_pi=0.1627 q1_gn=0.022 actor_gn=0.029
+  [eval val] mu_w=0.573 general=0.706 blocked=0.154 chaser=0.298 shell=0.999 escape=0.709 crash=0.341
+step=901120 replay=901120 updates=112391 eps/sec=17330.6 curriculum=1.00
+  critic=0.0023 actor=-0.1631 act_pen=0.0063 target=0.3397 q_pi=0.1643 q1_gn=0.021 actor_gn=0.029
+step=950272 replay=950272 updates=118535 eps/sec=17217.3 curriculum=1.00
+  critic=0.0023 actor=-0.1644 act_pen=0.0063 target=0.3431 q_pi=0.1656 q1_gn=0.022 actor_gn=0.030
+  [eval val] mu_w=0.575 general=0.703 blocked=0.156 chaser=0.315 shell=1.000 escape=0.735 crash=0.334
+step=1007616 replay=1000000 updates=125703 eps/sec=16689.8 curriculum=1.00
+  critic=0.0023 actor=-0.1649 act_pen=0.0065 target=0.3452 q_pi=0.1662 q1_gn=0.021 actor_gn=0.029
+step=1056768 replay=1000000 updates=131847 eps/sec=19460.9 curriculum=1.00
+  critic=0.0025 actor=-0.1674 act_pen=0.0072 target=0.3498 q_pi=0.1688 q1_gn=0.022 actor_gn=0.031
+  [eval val] mu_w=0.601 general=0.732 blocked=0.190 chaser=0.349 shell=1.000 escape=0.748 crash=0.318
+step=1105920 replay=1000000 updates=137991 eps/sec=19020.4 curriculum=1.00
+  critic=0.0024 actor=-0.1689 act_pen=0.0067 target=0.3534 q_pi=0.1702 q1_gn=0.022 actor_gn=0.031
+step=1155072 replay=1000000 updates=144135 eps/sec=18942.7 curriculum=1.00
+  critic=0.0024 actor=-0.1707 act_pen=0.0075 target=0.3577 q_pi=0.1722 q1_gn=0.022 actor_gn=0.031
+  [eval val] mu_w=0.595 general=0.720 blocked=0.187 chaser=0.350 shell=1.000 escape=0.750 crash=0.323
+step=1204224 replay=1000000 updates=150279 eps/sec=18494.8 curriculum=1.00
+  critic=0.0026 actor=-0.1721 act_pen=0.0074 target=0.3599 q_pi=0.1736 q1_gn=0.023 actor_gn=0.031
+step=1253376 replay=1000000 updates=156423 eps/sec=18387.8 curriculum=1.00
+  critic=0.0026 actor=-0.1750 act_pen=0.0076 target=0.3659 q_pi=0.1765 q1_gn=0.022 actor_gn=0.032
+  [eval val] mu_w=0.593 general=0.713 blocked=0.185 chaser=0.353 shell=1.000 escape=0.751 crash=0.318
+step=1302528 replay=1000000 updates=162567 eps/sec=17808.9 curriculum=1.00
+  critic=0.0027 actor=-0.1763 act_pen=0.0078 target=0.3682 q_pi=0.1778 q1_gn=0.022 actor_gn=0.031
+step=1351680 replay=1000000 updates=168711 eps/sec=17640.3 curriculum=1.00
+  critic=0.0026 actor=-0.1771 act_pen=0.0073 target=0.3707 q_pi=0.1786 q1_gn=0.022 actor_gn=0.032
+  [eval val] mu_w=0.598 general=0.731 blocked=0.197 chaser=0.333 shell=1.000 escape=0.751 crash=0.315
+step=1400832 replay=1000000 updates=174855 eps/sec=17262.1 curriculum=1.00
+  critic=0.0027 actor=-0.1784 act_pen=0.0075 target=0.3738 q_pi=0.1799 q1_gn=0.022 actor_gn=0.030
+step=1458176 replay=1000000 updates=182023 eps/sec=17054.0 curriculum=1.00
+  critic=0.0025 actor=-0.1800 act_pen=0.0081 target=0.3773 q_pi=0.1816 q1_gn=0.021 actor_gn=0.030
+  [eval val] mu_w=0.606 general=0.725 blocked=0.212 chaser=0.370 shell=1.000 escape=0.767 crash=0.310
+step=1507328 replay=1000000 updates=188167 eps/sec=19323.2 curriculum=1.00
+  critic=0.0025 actor=-0.1829 act_pen=0.0079 target=0.3825 q_pi=0.1845 q1_gn=0.021 actor_gn=0.031
+step=1556480 replay=1000000 updates=194311 eps/sec=19396.3 curriculum=1.00
+  critic=0.0024 actor=-0.1856 act_pen=0.0080 target=0.3874 q_pi=0.1872 q1_gn=0.021 actor_gn=0.032
+  [eval val] mu_w=0.622 general=0.743 blocked=0.237 chaser=0.386 shell=1.000 escape=0.749 crash=0.297
+step=1605632 replay=1000000 updates=200455 eps/sec=19012.2 curriculum=1.00
+  critic=0.0024 actor=-0.1869 act_pen=0.0081 target=0.3911 q_pi=0.1885 q1_gn=0.021 actor_gn=0.031
+step=1654784 replay=1000000 updates=206599 eps/sec=18808.5 curriculum=1.00
+  critic=0.0024 actor=-0.1893 act_pen=0.0081 target=0.3955 q_pi=0.1909 q1_gn=0.021 actor_gn=0.030
+  [eval val] mu_w=0.625 general=0.751 blocked=0.232 chaser=0.390 shell=0.999 escape=0.783 crash=0.299
+step=1703936 replay=1000000 updates=212743 eps/sec=18255.8 curriculum=1.00
+  critic=0.0024 actor=-0.1906 act_pen=0.0081 target=0.3988 q_pi=0.1922 q1_gn=0.021 actor_gn=0.031
+step=1753088 replay=1000000 updates=218887 eps/sec=18293.5 curriculum=1.00
+  critic=0.0024 actor=-0.1927 act_pen=0.0083 target=0.4037 q_pi=0.1943 q1_gn=0.020 actor_gn=0.030
+  [eval val] mu_w=0.633 general=0.762 blocked=0.241 chaser=0.398 shell=1.000 escape=0.764 crash=0.295
+step=1802240 replay=1000000 updates=225031 eps/sec=17733.0 curriculum=1.00
+  critic=0.0023 actor=-0.1943 act_pen=0.0082 target=0.4058 q_pi=0.1960 q1_gn=0.020 actor_gn=0.031
+step=1851392 replay=1000000 updates=231175 eps/sec=17735.3 curriculum=1.00
+  critic=0.0023 actor=-0.1971 act_pen=0.0078 target=0.4114 q_pi=0.1987 q1_gn=0.021 actor_gn=0.030
+  [eval val] mu_w=0.636 general=0.762 blocked=0.244 chaser=0.413 shell=1.000 escape=0.787 crash=0.291
+step=1900544 replay=1000000 updates=237319 eps/sec=17157.5 curriculum=1.00
+  critic=0.0023 actor=-0.1980 act_pen=0.0082 target=0.4139 q_pi=0.1996 q1_gn=0.020 actor_gn=0.031
+step=1957888 replay=1000000 updates=244487 eps/sec=17010.5 curriculum=1.00
+  critic=0.0023 actor=-0.2000 act_pen=0.0079 target=0.4176 q_pi=0.2016 q1_gn=0.021 actor_gn=0.031
+  [eval val] mu_w=0.645 general=0.776 blocked=0.250 chaser=0.422 shell=1.000 escape=0.809 crash=0.289
+step=2007040 replay=1000000 updates=250631 eps/sec=19298.0 curriculum=1.00
+  critic=0.0022 actor=-0.2010 act_pen=0.0087 target=0.4191 q_pi=0.2027 q1_gn=0.020 actor_gn=0.030
+step=2056192 replay=1000000 updates=256775 eps/sec=19258.1 curriculum=1.00
+  critic=0.0022 actor=-0.2023 act_pen=0.0087 target=0.4235 q_pi=0.2041 q1_gn=0.020 actor_gn=0.032
+  [eval val] mu_w=0.650 general=0.777 blocked=0.276 chaser=0.419 shell=1.000 escape=0.806 crash=0.282
+step=2105344 replay=1000000 updates=262919 eps/sec=18702.2 curriculum=1.00
+  critic=0.0021 actor=-0.2056 act_pen=0.0087 target=0.4285 q_pi=0.2074 q1_gn=0.019 actor_gn=0.031
+step=2154496 replay=1000000 updates=269063 eps/sec=18676.5 curriculum=1.00
+  critic=0.0022 actor=-0.2067 act_pen=0.0082 target=0.4313 q_pi=0.2083 q1_gn=0.019 actor_gn=0.030
+  [eval val] mu_w=0.641 general=0.764 blocked=0.268 chaser=0.408 shell=0.999 escape=0.776 crash=0.286
+step=2203648 replay=1000000 updates=275207 eps/sec=18184.9 curriculum=1.00
+  critic=0.0021 actor=-0.2081 act_pen=0.0088 target=0.4344 q_pi=0.2099 q1_gn=0.019 actor_gn=0.030
+step=2252800 replay=1000000 updates=281351 eps/sec=18103.3 curriculum=1.00
+  critic=0.0020 actor=-0.2104 act_pen=0.0087 target=0.4373 q_pi=0.2121 q1_gn=0.019 actor_gn=0.030
+  [eval val] mu_w=0.653 general=0.790 blocked=0.274 chaser=0.413 shell=1.000 escape=0.777 crash=0.282
+step=2301952 replay=1000000 updates=287495 eps/sec=17644.3 curriculum=1.00
+  critic=0.0022 actor=-0.2125 act_pen=0.0092 target=0.4433 q_pi=0.2143 q1_gn=0.019 actor_gn=0.031
+step=2351104 replay=1000000 updates=293639 eps/sec=17564.3 curriculum=1.00
+  critic=0.0020 actor=-0.2150 act_pen=0.0089 target=0.4475 q_pi=0.2168 q1_gn=0.019 actor_gn=0.030
+  [eval val] mu_w=0.661 general=0.787 blocked=0.293 chaser=0.437 shell=0.999 escape=0.798 crash=0.271
+step=2400256 replay=1000000 updates=299783 eps/sec=17018.0 curriculum=1.00
+  critic=0.0021 actor=-0.2160 act_pen=0.0091 target=0.4500 q_pi=0.2179 q1_gn=0.019 actor_gn=0.031
+step=2457600 replay=1000000 updates=306951 eps/sec=16956.1 curriculum=1.00
+  critic=0.0020 actor=-0.2175 act_pen=0.0086 target=0.4528 q_pi=0.2193 q1_gn=0.019 actor_gn=0.029
+  [eval val] mu_w=0.649 general=0.772 blocked=0.276 chaser=0.424 shell=0.999 escape=0.800 crash=0.280
+step=2506752 replay=1000000 updates=313095 eps/sec=19244.8 curriculum=1.00
+  critic=0.0020 actor=-0.2196 act_pen=0.0088 target=0.4566 q_pi=0.2214 q1_gn=0.019 actor_gn=0.030
+step=2555904 replay=1000000 updates=319239 eps/sec=19203.7 curriculum=1.00
+  critic=0.0021 actor=-0.2193 act_pen=0.0086 target=0.4572 q_pi=0.2211 q1_gn=0.019 actor_gn=0.030
+  [eval val] mu_w=0.645 general=0.772 blocked=0.268 chaser=0.414 shell=0.999 escape=0.830 crash=0.286
+step=2605056 replay=1000000 updates=325383 eps/sec=18667.2 curriculum=1.00
+  critic=0.0021 actor=-0.2209 act_pen=0.0085 target=0.4604 q_pi=0.2226 q1_gn=0.019 actor_gn=0.031
+step=2654208 replay=1000000 updates=331527 eps/sec=18605.3 curriculum=1.00
+  critic=0.0020 actor=-0.2226 act_pen=0.0088 target=0.4636 q_pi=0.2243 q1_gn=0.018 actor_gn=0.031
+  [eval val] mu_w=0.664 general=0.792 blocked=0.308 chaser=0.427 shell=1.000 escape=0.823 crash=0.271
+step=2703360 replay=1000000 updates=337671 eps/sec=17983.3 curriculum=1.00
+  critic=0.0019 actor=-0.2234 act_pen=0.0088 target=0.4646 q_pi=0.2252 q1_gn=0.018 actor_gn=0.030
+step=2752512 replay=1000000 updates=343815 eps/sec=18123.7 curriculum=1.00
+  critic=0.0019 actor=-0.2252 act_pen=0.0088 target=0.4685 q_pi=0.2270 q1_gn=0.018 actor_gn=0.029
+  [eval val] mu_w=0.658 general=0.792 blocked=0.284 chaser=0.422 shell=1.000 escape=0.810 crash=0.281
+step=2801664 replay=1000000 updates=349959 eps/sec=17552.2 curriculum=1.00
+  critic=0.0020 actor=-0.2266 act_pen=0.0089 target=0.4712 q_pi=0.2284 q1_gn=0.018 actor_gn=0.029
+step=2850816 replay=1000000 updates=356103 eps/sec=17448.2 curriculum=1.00
+  critic=0.0019 actor=-0.2283 act_pen=0.0092 target=0.4750 q_pi=0.2302 q1_gn=0.018 actor_gn=0.030
+  [eval val] mu_w=0.664 general=0.792 blocked=0.300 chaser=0.437 shell=1.000 escape=0.817 crash=0.273
+step=2908160 replay=1000000 updates=363271 eps/sec=16988.1 curriculum=1.00
+  critic=0.0019 actor=-0.2292 act_pen=0.0089 target=0.4771 q_pi=0.2310 q1_gn=0.018 actor_gn=0.030
+step=2957312 replay=1000000 updates=369415 eps/sec=19680.8 curriculum=1.00
+  critic=0.0019 actor=-0.2297 act_pen=0.0091 target=0.4767 q_pi=0.2315 q1_gn=0.018 actor_gn=0.031
+  [eval val] mu_w=0.665 general=0.786 blocked=0.307 chaser=0.446 shell=1.000 escape=0.836 crash=0.271
+step=3006464 replay=1000000 updates=375559 eps/sec=19160.6 curriculum=1.00
+  critic=0.0019 actor=-0.2304 act_pen=0.0087 target=0.4791 q_pi=0.2321 q1_gn=0.017 actor_gn=0.029
+step=3055616 replay=1000000 updates=381703 eps/sec=19118.1 curriculum=1.00
+  critic=0.0019 actor=-0.2318 act_pen=0.0090 target=0.4806 q_pi=0.2336 q1_gn=0.018 actor_gn=0.030
+  [eval val] mu_w=0.668 general=0.793 blocked=0.310 chaser=0.446 shell=0.998 escape=0.821 crash=0.270
+step=3104768 replay=1000000 updates=387847 eps/sec=18621.4 curriculum=1.00
+  critic=0.0018 actor=-0.2318 act_pen=0.0091 target=0.4818 q_pi=0.2336 q1_gn=0.017 actor_gn=0.029
+step=3153920 replay=1000000 updates=393991 eps/sec=18611.1 curriculum=1.00
+  critic=0.0018 actor=-0.2332 act_pen=0.0095 target=0.4839 q_pi=0.2351 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.668 general=0.798 blocked=0.287 chaser=0.456 shell=1.000 escape=0.831 crash=0.272
+step=3203072 replay=1000000 updates=400135 eps/sec=18042.2 curriculum=1.00
+  critic=0.0018 actor=-0.2340 act_pen=0.0092 target=0.4859 q_pi=0.2358 q1_gn=0.017 actor_gn=0.028
+step=3252224 replay=1000000 updates=406279 eps/sec=17873.3 curriculum=1.00
+  critic=0.0018 actor=-0.2343 act_pen=0.0089 target=0.4873 q_pi=0.2361 q1_gn=0.017 actor_gn=0.028
+  [eval val] mu_w=0.672 general=0.792 blocked=0.317 chaser=0.460 shell=1.000 escape=0.829 crash=0.260
+step=3301376 replay=1000000 updates=412423 eps/sec=17350.0 curriculum=1.00
+  critic=0.0018 actor=-0.2351 act_pen=0.0087 target=0.4886 q_pi=0.2368 q1_gn=0.017 actor_gn=0.029
+step=3350528 replay=1000000 updates=418567 eps/sec=17355.6 curriculum=1.00
+  critic=0.0019 actor=-0.2357 act_pen=0.0094 target=0.4898 q_pi=0.2375 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.677 general=0.801 blocked=0.331 chaser=0.454 shell=1.000 escape=0.823 crash=0.255
+step=3407872 replay=1000000 updates=425735 eps/sec=16875.6 curriculum=1.00
+  critic=0.0019 actor=-0.2365 act_pen=0.0091 target=0.4906 q_pi=0.2383 q1_gn=0.017 actor_gn=0.028
+step=3457024 replay=1000000 updates=431879 eps/sec=19598.4 curriculum=1.00
+  critic=0.0018 actor=-0.2361 act_pen=0.0094 target=0.4903 q_pi=0.2380 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.650 general=0.779 blocked=0.266 chaser=0.427 shell=0.999 escape=0.823 crash=0.279
+step=3506176 replay=1000000 updates=438023 eps/sec=19084.3 curriculum=1.00
+  critic=0.0017 actor=-0.2381 act_pen=0.0092 target=0.4929 q_pi=0.2399 q1_gn=0.017 actor_gn=0.027
+step=3555328 replay=1000000 updates=444167 eps/sec=18999.6 curriculum=1.00
+  critic=0.0018 actor=-0.2382 act_pen=0.0096 target=0.4945 q_pi=0.2401 q1_gn=0.017 actor_gn=0.028
+  [eval val] mu_w=0.672 general=0.793 blocked=0.303 chaser=0.470 shell=1.000 escape=0.850 crash=0.265
+step=3604480 replay=1000000 updates=450311 eps/sec=18461.9 curriculum=1.00
+  critic=0.0018 actor=-0.2385 act_pen=0.0092 target=0.4948 q_pi=0.2404 q1_gn=0.017 actor_gn=0.028
+step=3653632 replay=1000000 updates=456455 eps/sec=18281.4 curriculum=1.00
+  critic=0.0018 actor=-0.2384 act_pen=0.0092 target=0.4951 q_pi=0.2402 q1_gn=0.017 actor_gn=0.026
+  [eval val] mu_w=0.685 general=0.811 blocked=0.322 chaser=0.481 shell=1.000 escape=0.842 crash=0.258
+step=3702784 replay=1000000 updates=462599 eps/sec=17832.5 curriculum=1.00
+  critic=0.0017 actor=-0.2383 act_pen=0.0091 target=0.4943 q_pi=0.2402 q1_gn=0.017 actor_gn=0.027
+step=3751936 replay=1000000 updates=468743 eps/sec=17872.7 curriculum=1.00
+  critic=0.0017 actor=-0.2394 act_pen=0.0090 target=0.4967 q_pi=0.2412 q1_gn=0.017 actor_gn=0.027
+  [eval val] mu_w=0.688 general=0.818 blocked=0.319 chaser=0.487 shell=1.000 escape=0.853 crash=0.262
+step=3801088 replay=1000000 updates=474887 eps/sec=17425.3 curriculum=1.00
+  critic=0.0017 actor=-0.2399 act_pen=0.0096 target=0.4989 q_pi=0.2418 q1_gn=0.017 actor_gn=0.028
+step=3850240 replay=1000000 updates=481031 eps/sec=17279.4 curriculum=1.00
+  critic=0.0017 actor=-0.2406 act_pen=0.0093 target=0.4996 q_pi=0.2424 q1_gn=0.017 actor_gn=0.027
+  [eval val] mu_w=0.664 general=0.787 blocked=0.291 chaser=0.456 shell=1.000 escape=0.851 crash=0.271
+step=3907584 replay=1000000 updates=488199 eps/sec=16829.6 curriculum=1.00
+  critic=0.0017 actor=-0.2413 act_pen=0.0088 target=0.5004 q_pi=0.2430 q1_gn=0.017 actor_gn=0.027
+step=3956736 replay=1000000 updates=494343 eps/sec=19466.2 curriculum=1.00
+  critic=0.0017 actor=-0.2414 act_pen=0.0090 target=0.5011 q_pi=0.2432 q1_gn=0.016 actor_gn=0.026
+  [eval val] mu_w=0.674 general=0.788 blocked=0.320 chaser=0.472 shell=1.000 escape=0.841 crash=0.263
+step=4005888 replay=1000000 updates=500487 eps/sec=18969.2 curriculum=1.00
+  critic=0.0017 actor=-0.2435 act_pen=0.0094 target=0.5052 q_pi=0.2453 q1_gn=0.017 actor_gn=0.028
+step=4055040 replay=1000000 updates=506631 eps/sec=18941.8 curriculum=1.00
+  critic=0.0017 actor=-0.2436 act_pen=0.0090 target=0.5048 q_pi=0.2454 q1_gn=0.016 actor_gn=0.026
+  [eval val] mu_w=0.674 general=0.796 blocked=0.316 chaser=0.463 shell=1.000 escape=0.821 crash=0.261
+step=4104192 replay=1000000 updates=512775 eps/sec=18473.5 curriculum=1.00
+  critic=0.0017 actor=-0.2441 act_pen=0.0097 target=0.5058 q_pi=0.2461 q1_gn=0.017 actor_gn=0.027
+step=4153344 replay=1000000 updates=518919 eps/sec=18375.3 curriculum=1.00
+  critic=0.0017 actor=-0.2447 act_pen=0.0097 target=0.5085 q_pi=0.2467 q1_gn=0.017 actor_gn=0.027
+  [eval val] mu_w=0.680 general=0.808 blocked=0.312 chaser=0.471 shell=1.000 escape=0.850 crash=0.264
+step=4202496 replay=1000000 updates=525063 eps/sec=17775.3 curriculum=1.00
+  critic=0.0016 actor=-0.2463 act_pen=0.0095 target=0.5098 q_pi=0.2482 q1_gn=0.016 actor_gn=0.027
+step=4251648 replay=1000000 updates=531207 eps/sec=17811.7 curriculum=1.00
+  critic=0.0017 actor=-0.2472 act_pen=0.0096 target=0.5122 q_pi=0.2491 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.669 general=0.792 blocked=0.297 chaser=0.463 shell=1.000 escape=0.840 crash=0.269
+step=4300800 replay=1000000 updates=537351 eps/sec=17267.7 curriculum=1.00
+  critic=0.0016 actor=-0.2466 act_pen=0.0093 target=0.5114 q_pi=0.2485 q1_gn=0.016 actor_gn=0.028
+step=4358144 replay=1000000 updates=544519 eps/sec=17211.8 curriculum=1.00
+  critic=0.0016 actor=-0.2479 act_pen=0.0095 target=0.5128 q_pi=0.2498 q1_gn=0.016 actor_gn=0.026
+  [eval val] mu_w=0.680 general=0.813 blocked=0.309 chaser=0.467 shell=1.000 escape=0.850 crash=0.261
+step=4407296 replay=1000000 updates=550663 eps/sec=19572.6 curriculum=1.00
+  critic=0.0016 actor=-0.2476 act_pen=0.0096 target=0.5134 q_pi=0.2496 q1_gn=0.016 actor_gn=0.028
+step=4456448 replay=1000000 updates=556807 eps/sec=19494.5 curriculum=1.00
+  critic=0.0016 actor=-0.2487 act_pen=0.0094 target=0.5161 q_pi=0.2506 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.688 general=0.815 blocked=0.335 chaser=0.477 shell=1.000 escape=0.855 crash=0.253
+step=4505600 replay=1000000 updates=562951 eps/sec=18849.7 curriculum=1.00
+  critic=0.0016 actor=-0.2500 act_pen=0.0095 target=0.5182 q_pi=0.2519 q1_gn=0.016 actor_gn=0.027
+step=4554752 replay=1000000 updates=569095 eps/sec=18744.4 curriculum=1.00
+  critic=0.0015 actor=-0.2502 act_pen=0.0089 target=0.5180 q_pi=0.2520 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.694 general=0.814 blocked=0.351 chaser=0.492 shell=1.000 escape=0.844 crash=0.245
+step=4603904 replay=1000000 updates=575239 eps/sec=18249.3 curriculum=1.00
+  critic=0.0016 actor=-0.2505 act_pen=0.0090 target=0.5183 q_pi=0.2523 q1_gn=0.016 actor_gn=0.026
+step=4653056 replay=1000000 updates=581383 eps/sec=18239.8 curriculum=1.00
+  critic=0.0016 actor=-0.2511 act_pen=0.0099 target=0.5204 q_pi=0.2530 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.687 general=0.810 blocked=0.335 chaser=0.481 shell=1.000 escape=0.859 crash=0.255
+step=4702208 replay=1000000 updates=587527 eps/sec=17791.1 curriculum=1.00
+  critic=0.0015 actor=-0.2521 act_pen=0.0092 target=0.5217 q_pi=0.2540 q1_gn=0.015 actor_gn=0.026
+step=4751360 replay=1000000 updates=593671 eps/sec=17550.1 curriculum=1.00
+  critic=0.0016 actor=-0.2525 act_pen=0.0098 target=0.5223 q_pi=0.2545 q1_gn=0.016 actor_gn=0.028
+  [eval val] mu_w=0.688 general=0.813 blocked=0.327 chaser=0.488 shell=1.000 escape=0.848 crash=0.251
+step=4800512 replay=1000000 updates=599815 eps/sec=17152.0 curriculum=1.00
+  critic=0.0015 actor=-0.2539 act_pen=0.0097 target=0.5245 q_pi=0.2559 q1_gn=0.016 actor_gn=0.027
+step=4857856 replay=1000000 updates=606983 eps/sec=17103.5 curriculum=1.00
+  critic=0.0015 actor=-0.2535 act_pen=0.0095 target=0.5267 q_pi=0.2554 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.680 general=0.801 blocked=0.318 chaser=0.478 shell=1.000 escape=0.851 crash=0.258
+step=4907008 replay=1000000 updates=613127 eps/sec=19390.5 curriculum=1.00
+  critic=0.0015 actor=-0.2534 act_pen=0.0097 target=0.5239 q_pi=0.2554 q1_gn=0.016 actor_gn=0.028
+step=4956160 replay=1000000 updates=619271 eps/sec=19381.3 curriculum=1.00
+  critic=0.0016 actor=-0.2530 act_pen=0.0091 target=0.5244 q_pi=0.2548 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.686 general=0.812 blocked=0.333 chaser=0.472 shell=1.000 escape=0.860 crash=0.256
+step=5005312 replay=1000000 updates=625415 eps/sec=18822.2 curriculum=1.00
+  critic=0.0015 actor=-0.2531 act_pen=0.0089 target=0.5236 q_pi=0.2549 q1_gn=0.016 actor_gn=0.026
+step=5054464 replay=1000000 updates=631559 eps/sec=18800.4 curriculum=1.00
+  critic=0.0016 actor=-0.2533 act_pen=0.0091 target=0.5240 q_pi=0.2552 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.685 general=0.811 blocked=0.331 chaser=0.471 shell=1.000 escape=0.841 crash=0.258
+step=5103616 replay=1000000 updates=637703 eps/sec=18298.8 curriculum=1.00
+  critic=0.0016 actor=-0.2533 act_pen=0.0089 target=0.5242 q_pi=0.2551 q1_gn=0.016 actor_gn=0.027
+step=5152768 replay=1000000 updates=643847 eps/sec=18212.3 curriculum=1.00
+  critic=0.0016 actor=-0.2535 act_pen=0.0094 target=0.5237 q_pi=0.2554 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.689 general=0.814 blocked=0.337 chaser=0.479 shell=1.000 escape=0.851 crash=0.256
+step=5201920 replay=1000000 updates=649991 eps/sec=17731.6 curriculum=1.00
+  critic=0.0015 actor=-0.2532 act_pen=0.0093 target=0.5237 q_pi=0.2551 q1_gn=0.015 actor_gn=0.028
+step=5251072 replay=1000000 updates=656135 eps/sec=17664.2 curriculum=1.00
+  critic=0.0015 actor=-0.2529 act_pen=0.0092 target=0.5238 q_pi=0.2547 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.683 general=0.805 blocked=0.320 chaser=0.483 shell=1.000 escape=0.837 crash=0.256
+step=5300224 replay=1000000 updates=662279 eps/sec=17139.0 curriculum=1.00
+  critic=0.0015 actor=-0.2539 act_pen=0.0093 target=0.5246 q_pi=0.2558 q1_gn=0.015 actor_gn=0.026
+step=5357568 replay=1000000 updates=669447 eps/sec=16941.9 curriculum=1.00
+  critic=0.0016 actor=-0.2525 act_pen=0.0089 target=0.5229 q_pi=0.2543 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.695 general=0.819 blocked=0.340 chaser=0.495 shell=1.000 escape=0.850 crash=0.254
+step=5406720 replay=1000000 updates=675591 eps/sec=19256.8 curriculum=1.00
+  critic=0.0015 actor=-0.2533 act_pen=0.0089 target=0.5236 q_pi=0.2551 q1_gn=0.015 actor_gn=0.026
+step=5455872 replay=1000000 updates=681735 eps/sec=19266.3 curriculum=1.00
+  critic=0.0015 actor=-0.2533 act_pen=0.0090 target=0.5243 q_pi=0.2551 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.684 general=0.807 blocked=0.326 chaser=0.480 shell=1.000 escape=0.844 crash=0.255
+step=5505024 replay=1000000 updates=687879 eps/sec=18700.8 curriculum=1.00
+  critic=0.0015 actor=-0.2533 act_pen=0.0094 target=0.5241 q_pi=0.2552 q1_gn=0.016 actor_gn=0.026
+step=5554176 replay=1000000 updates=694023 eps/sec=18628.3 curriculum=1.00
+  critic=0.0015 actor=-0.2539 act_pen=0.0089 target=0.5244 q_pi=0.2557 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.687 general=0.812 blocked=0.328 chaser=0.484 shell=1.000 escape=0.853 crash=0.257
+step=5603328 replay=1000000 updates=700167 eps/sec=18147.7 curriculum=1.00
+  critic=0.0015 actor=-0.2520 act_pen=0.0089 target=0.5217 q_pi=0.2538 q1_gn=0.015 actor_gn=0.026
+step=5652480 replay=1000000 updates=706311 eps/sec=17991.4 curriculum=1.00
+  critic=0.0015 actor=-0.2537 act_pen=0.0093 target=0.5235 q_pi=0.2556 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.691 general=0.817 blocked=0.328 chaser=0.494 shell=1.000 escape=0.854 crash=0.254
+step=5701632 replay=1000000 updates=712455 eps/sec=17526.0 curriculum=1.00
+  critic=0.0015 actor=-0.2530 act_pen=0.0093 target=0.5230 q_pi=0.2549 q1_gn=0.015 actor_gn=0.027
+step=5750784 replay=1000000 updates=718599 eps/sec=17382.9 curriculum=1.00
+  critic=0.0015 actor=-0.2539 act_pen=0.0091 target=0.5251 q_pi=0.2557 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.679 general=0.809 blocked=0.304 chaser=0.473 shell=1.000 escape=0.846 crash=0.262
+step=5808128 replay=1000000 updates=725767 eps/sec=16949.6 curriculum=1.00
+  critic=0.0015 actor=-0.2541 act_pen=0.0085 target=0.5251 q_pi=0.2558 q1_gn=0.015 actor_gn=0.027
+step=5857280 replay=1000000 updates=731911 eps/sec=19688.4 curriculum=1.00
+  critic=0.0015 actor=-0.2541 act_pen=0.0091 target=0.5258 q_pi=0.2560 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.677 general=0.807 blocked=0.313 chaser=0.459 shell=1.000 escape=0.838 crash=0.263
+step=5906432 replay=1000000 updates=738055 eps/sec=19198.8 curriculum=1.00
+  critic=0.0014 actor=-0.2555 act_pen=0.0089 target=0.5282 q_pi=0.2573 q1_gn=0.015 actor_gn=0.026
+step=5955584 replay=1000000 updates=744199 eps/sec=19073.2 curriculum=1.00
+  critic=0.0014 actor=-0.2555 act_pen=0.0093 target=0.5276 q_pi=0.2574 q1_gn=0.015 actor_gn=0.025
+  [eval val] mu_w=0.689 general=0.818 blocked=0.333 chaser=0.475 shell=1.000 escape=0.853 crash=0.257
+step=6004736 replay=1000000 updates=750343 eps/sec=18599.9 curriculum=1.00
+  critic=0.0014 actor=-0.2555 act_pen=0.0092 target=0.5277 q_pi=0.2574 q1_gn=0.015 actor_gn=0.027
+step=6053888 replay=1000000 updates=756487 eps/sec=18486.9 curriculum=1.00
+  critic=0.0014 actor=-0.2549 act_pen=0.0090 target=0.5280 q_pi=0.2567 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.689 general=0.816 blocked=0.333 chaser=0.480 shell=1.000 escape=0.856 crash=0.256
+step=6103040 replay=1000000 updates=762631 eps/sec=18022.5 curriculum=1.00
+  critic=0.0014 actor=-0.2564 act_pen=0.0092 target=0.5292 q_pi=0.2582 q1_gn=0.015 actor_gn=0.027
+step=6152192 replay=1000000 updates=768775 eps/sec=17942.9 curriculum=1.00
+  critic=0.0014 actor=-0.2564 act_pen=0.0091 target=0.5299 q_pi=0.2582 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.692 general=0.816 blocked=0.335 chaser=0.492 shell=1.000 escape=0.850 crash=0.252
+step=6201344 replay=1000000 updates=774919 eps/sec=17458.3 curriculum=1.00
+  critic=0.0014 actor=-0.2556 act_pen=0.0090 target=0.5287 q_pi=0.2574 q1_gn=0.015 actor_gn=0.027
+step=6250496 replay=1000000 updates=781063 eps/sec=17399.6 curriculum=1.00
+  critic=0.0014 actor=-0.2556 act_pen=0.0093 target=0.5296 q_pi=0.2575 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.691 general=0.820 blocked=0.329 chaser=0.484 shell=1.000 escape=0.838 crash=0.251
+step=6307840 replay=1000000 updates=788231 eps/sec=16822.1 curriculum=1.00
+  critic=0.0014 actor=-0.2552 act_pen=0.0093 target=0.5286 q_pi=0.2571 q1_gn=0.015 actor_gn=0.027
+step=6356992 replay=1000000 updates=794375 eps/sec=19592.5 curriculum=1.00
+  critic=0.0014 actor=-0.2563 act_pen=0.0095 target=0.5294 q_pi=0.2582 q1_gn=0.015 actor_gn=0.026
+  [eval val] mu_w=0.682 general=0.810 blocked=0.305 chaser=0.484 shell=0.999 escape=0.832 crash=0.258
+step=6406144 replay=1000000 updates=800519 eps/sec=18988.5 curriculum=1.00
+  critic=0.0014 actor=-0.2562 act_pen=0.0094 target=0.5298 q_pi=0.2581 q1_gn=0.015 actor_gn=0.027
+step=6455296 replay=1000000 updates=806663 eps/sec=18951.4 curriculum=1.00
+  critic=0.0014 actor=-0.2560 act_pen=0.0095 target=0.5294 q_pi=0.2579 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.682 general=0.807 blocked=0.313 chaser=0.481 shell=1.000 escape=0.846 crash=0.260
+step=6504448 replay=1000000 updates=812807 eps/sec=18496.2 curriculum=1.00
+  critic=0.0014 actor=-0.2562 act_pen=0.0096 target=0.5299 q_pi=0.2582 q1_gn=0.015 actor_gn=0.028
+step=6553600 replay=1000000 updates=818951 eps/sec=18436.1 curriculum=1.00
+  critic=0.0014 actor=-0.2552 act_pen=0.0092 target=0.5283 q_pi=0.2571 q1_gn=0.015 actor_gn=0.028
+  [eval val] mu_w=0.695 general=0.819 blocked=0.341 chaser=0.496 shell=0.999 escape=0.842 crash=0.248
+step=6602752 replay=1000000 updates=825095 eps/sec=17909.5 curriculum=1.00
+  critic=0.0015 actor=-0.2551 act_pen=0.0093 target=0.5281 q_pi=0.2570 q1_gn=0.015 actor_gn=0.028
+step=6651904 replay=1000000 updates=831239 eps/sec=17830.3 curriculum=1.00
+  critic=0.0014 actor=-0.2554 act_pen=0.0093 target=0.5279 q_pi=0.2573 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.673 general=0.800 blocked=0.293 chaser=0.473 shell=1.000 escape=0.859 crash=0.267
+step=6701056 replay=1000000 updates=837383 eps/sec=17337.2 curriculum=1.00
+  critic=0.0014 actor=-0.2568 act_pen=0.0097 target=0.5303 q_pi=0.2588 q1_gn=0.015 actor_gn=0.027
+step=6750208 replay=1000000 updates=843527 eps/sec=17231.9 curriculum=1.00
+  critic=0.0014 actor=-0.2565 act_pen=0.0096 target=0.5300 q_pi=0.2584 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.693 general=0.818 blocked=0.339 chaser=0.492 shell=1.000 escape=0.862 crash=0.248
+step=6807552 replay=1000000 updates=850695 eps/sec=16752.4 curriculum=1.00
+  critic=0.0014 actor=-0.2563 act_pen=0.0097 target=0.5309 q_pi=0.2583 q1_gn=0.015 actor_gn=0.028
+step=6856704 replay=1000000 updates=856839 eps/sec=19454.7 curriculum=1.00
+  critic=0.0014 actor=-0.2568 act_pen=0.0090 target=0.5299 q_pi=0.2586 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.685 general=0.811 blocked=0.324 chaser=0.478 shell=1.000 escape=0.860 crash=0.258
+step=6905856 replay=1000000 updates=862983 eps/sec=18921.8 curriculum=1.00
+  critic=0.0014 actor=-0.2567 act_pen=0.0096 target=0.5296 q_pi=0.2586 q1_gn=0.016 actor_gn=0.028
+step=6955008 replay=1000000 updates=869127 eps/sec=18865.0 curriculum=1.00
+  critic=0.0014 actor=-0.2573 act_pen=0.0098 target=0.5323 q_pi=0.2593 q1_gn=0.015 actor_gn=0.027
+  [eval val] mu_w=0.667 general=0.796 blocked=0.293 chaser=0.448 shell=1.000 escape=0.843 crash=0.265
+step=7004160 replay=1000000 updates=875271 eps/sec=18367.9 curriculum=1.00
+  critic=0.0014 actor=-0.2569 act_pen=0.0092 target=0.5309 q_pi=0.2587 q1_gn=0.016 actor_gn=0.028
+step=7053312 replay=1000000 updates=881415 eps/sec=18343.7 curriculum=1.00
+  critic=0.0014 actor=-0.2555 act_pen=0.0092 target=0.5296 q_pi=0.2574 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.690 general=0.814 blocked=0.320 chaser=0.500 shell=1.000 escape=0.861 crash=0.256
+step=7102464 replay=1000000 updates=887559 eps/sec=17892.2 curriculum=1.00
+  critic=0.0014 actor=-0.2557 act_pen=0.0095 target=0.5282 q_pi=0.2576 q1_gn=0.015 actor_gn=0.028
+step=7151616 replay=1000000 updates=893703 eps/sec=17746.6 curriculum=1.00
+  critic=0.0014 actor=-0.2557 act_pen=0.0094 target=0.5286 q_pi=0.2575 q1_gn=0.016 actor_gn=0.029
+  [eval val] mu_w=0.687 general=0.819 blocked=0.324 chaser=0.475 shell=1.000 escape=0.871 crash=0.257
+step=7200768 replay=1000000 updates=899847 eps/sec=17274.5 curriculum=1.00
+  critic=0.0014 actor=-0.2573 act_pen=0.0101 target=0.5314 q_pi=0.2593 q1_gn=0.016 actor_gn=0.028
+step=7258112 replay=1000000 updates=907015 eps/sec=17115.6 curriculum=1.00
+  critic=0.0013 actor=-0.2570 act_pen=0.0100 target=0.5316 q_pi=0.2590 q1_gn=0.015 actor_gn=0.028
+  [eval val] mu_w=0.694 general=0.822 blocked=0.335 chaser=0.490 shell=1.000 escape=0.868 crash=0.252
+step=7307264 replay=1000000 updates=913159 eps/sec=19397.1 curriculum=1.00
+  critic=0.0014 actor=-0.2570 act_pen=0.0100 target=0.5319 q_pi=0.2590 q1_gn=0.016 actor_gn=0.027
+step=7356416 replay=1000000 updates=919303 eps/sec=19361.3 curriculum=1.00
+  critic=0.0014 actor=-0.2572 act_pen=0.0102 target=0.5321 q_pi=0.2592 q1_gn=0.016 actor_gn=0.030
+  [eval val] mu_w=0.689 general=0.818 blocked=0.316 chaser=0.492 shell=1.000 escape=0.862 crash=0.258
+step=7405568 replay=1000000 updates=925447 eps/sec=18900.1 curriculum=1.00
+  critic=0.0014 actor=-0.2580 act_pen=0.0100 target=0.5327 q_pi=0.2600 q1_gn=0.016 actor_gn=0.028
+step=7454720 replay=1000000 updates=931591 eps/sec=18829.5 curriculum=1.00
+  critic=0.0014 actor=-0.2586 act_pen=0.0103 target=0.5340 q_pi=0.2607 q1_gn=0.016 actor_gn=0.029
+  [eval val] mu_w=0.682 general=0.812 blocked=0.313 chaser=0.473 shell=1.000 escape=0.841 crash=0.255
+step=7503872 replay=1000000 updates=937735 eps/sec=18272.6 curriculum=1.00
+  critic=0.0014 actor=-0.2586 act_pen=0.0098 target=0.5339 q_pi=0.2605 q1_gn=0.016 actor_gn=0.027
+step=7553024 replay=1000000 updates=943879 eps/sec=18156.4 curriculum=1.00
+  critic=0.0014 actor=-0.2573 act_pen=0.0089 target=0.5331 q_pi=0.2591 q1_gn=0.016 actor_gn=0.028
+  [eval val] mu_w=0.684 general=0.817 blocked=0.309 chaser=0.478 shell=1.000 escape=0.869 crash=0.262
+step=7602176 replay=1000000 updates=950023 eps/sec=17687.4 curriculum=1.00
+  critic=0.0013 actor=-0.2550 act_pen=0.0092 target=0.5276 q_pi=0.2569 q1_gn=0.016 actor_gn=0.027
+step=7651328 replay=1000000 updates=956167 eps/sec=17641.9 curriculum=1.00
+  critic=0.0014 actor=-0.2554 act_pen=0.0093 target=0.5279 q_pi=0.2572 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.690 general=0.816 blocked=0.327 chaser=0.492 shell=1.000 escape=0.872 crash=0.256
+step=7700480 replay=1000000 updates=962311 eps/sec=17222.7 curriculum=1.00
+  critic=0.0014 actor=-0.2560 act_pen=0.0091 target=0.5290 q_pi=0.2578 q1_gn=0.016 actor_gn=0.027
+step=7757824 replay=1000000 updates=969479 eps/sec=17062.0 curriculum=1.00
+  critic=0.0014 actor=-0.2549 act_pen=0.0095 target=0.5275 q_pi=0.2568 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.690 general=0.821 blocked=0.324 chaser=0.485 shell=1.000 escape=0.856 crash=0.255
+step=7806976 replay=1000000 updates=975623 eps/sec=19361.8 curriculum=1.00
+  critic=0.0014 actor=-0.2560 act_pen=0.0098 target=0.5283 q_pi=0.2580 q1_gn=0.016 actor_gn=0.028
+step=7856128 replay=1000000 updates=981767 eps/sec=19357.4 curriculum=1.00
+  critic=0.0014 actor=-0.2559 act_pen=0.0096 target=0.5288 q_pi=0.2578 q1_gn=0.016 actor_gn=0.029
+  [eval val] mu_w=0.680 general=0.814 blocked=0.302 chaser=0.468 shell=1.000 escape=0.860 crash=0.266
+step=7905280 replay=1000000 updates=987911 eps/sec=18822.5 curriculum=1.00
+  critic=0.0014 actor=-0.2550 act_pen=0.0093 target=0.5284 q_pi=0.2568 q1_gn=0.016 actor_gn=0.027
+step=7954432 replay=1000000 updates=994055 eps/sec=18758.0 curriculum=1.00
+  critic=0.0014 actor=-0.2538 act_pen=0.0091 target=0.5249 q_pi=0.2556 q1_gn=0.016 actor_gn=0.028
+  [eval val] mu_w=0.691 general=0.821 blocked=0.318 chaser=0.493 shell=1.000 escape=0.857 crash=0.255
+step=8003584 replay=1000000 updates=1000199 eps/sec=18191.1 curriculum=1.00
+  critic=0.0014 actor=-0.2536 act_pen=0.0099 target=0.5248 q_pi=0.2556 q1_gn=0.016 actor_gn=0.028
+step=8052736 replay=1000000 updates=1006343 eps/sec=18191.9 curriculum=1.00
+  critic=0.0014 actor=-0.2546 act_pen=0.0100 target=0.5269 q_pi=0.2566 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.686 general=0.815 blocked=0.312 chaser=0.490 shell=1.000 escape=0.850 crash=0.256
+step=8101888 replay=1000000 updates=1012487 eps/sec=17682.5 curriculum=1.00
+  critic=0.0014 actor=-0.2555 act_pen=0.0097 target=0.5287 q_pi=0.2574 q1_gn=0.016 actor_gn=0.028
+step=8151040 replay=1000000 updates=1018631 eps/sec=17578.0 curriculum=1.00
+  critic=0.0014 actor=-0.2563 act_pen=0.0097 target=0.5311 q_pi=0.2582 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.696 general=0.824 blocked=0.334 chaser=0.497 shell=1.000 escape=0.870 crash=0.250
+step=8200192 replay=1000000 updates=1024775 eps/sec=17119.6 curriculum=1.00
+  critic=0.0014 actor=-0.2552 act_pen=0.0097 target=0.5288 q_pi=0.2572 q1_gn=0.017 actor_gn=0.027
+step=8257536 replay=1000000 updates=1031943 eps/sec=17031.7 curriculum=1.00
+  critic=0.0014 actor=-0.2547 act_pen=0.0097 target=0.5274 q_pi=0.2567 q1_gn=0.016 actor_gn=0.028
+  [eval val] mu_w=0.694 general=0.824 blocked=0.332 chaser=0.488 shell=1.000 escape=0.868 crash=0.256
+step=8306688 replay=1000000 updates=1038087 eps/sec=19302.4 curriculum=1.00
+  critic=0.0013 actor=-0.2570 act_pen=0.0094 target=0.5308 q_pi=0.2589 q1_gn=0.016 actor_gn=0.027
+step=8355840 replay=1000000 updates=1044231 eps/sec=19224.8 curriculum=1.00
+  critic=0.0013 actor=-0.2559 act_pen=0.0096 target=0.5299 q_pi=0.2578 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.698 general=0.826 blocked=0.331 chaser=0.508 shell=1.000 escape=0.852 crash=0.253
+step=8404992 replay=1000000 updates=1050375 eps/sec=18760.0 curriculum=1.00
+  critic=0.0013 actor=-0.2564 act_pen=0.0099 target=0.5301 q_pi=0.2584 q1_gn=0.016 actor_gn=0.027
+step=8454144 replay=1000000 updates=1056519 eps/sec=18647.6 curriculum=1.00
+  critic=0.0013 actor=-0.2567 act_pen=0.0098 target=0.5312 q_pi=0.2587 q1_gn=0.016 actor_gn=0.027
+  [eval val] mu_w=0.694 general=0.819 blocked=0.328 chaser=0.502 shell=1.000 escape=0.868 crash=0.254
+step=8503296 replay=1000000 updates=1062663 eps/sec=18126.8 curriculum=1.00
+  critic=0.0014 actor=-0.2572 act_pen=0.0099 target=0.5328 q_pi=0.2592 q1_gn=0.017 actor_gn=0.028
+step=8552448 replay=1000000 updates=1068807 eps/sec=17946.2 curriculum=1.00
+  critic=0.0014 actor=-0.2589 act_pen=0.0105 target=0.5354 q_pi=0.2610 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.691 general=0.822 blocked=0.312 chaser=0.500 shell=1.000 escape=0.878 crash=0.257
+step=8601600 replay=1000000 updates=1074951 eps/sec=17523.2 curriculum=1.00
+  critic=0.0013 actor=-0.2602 act_pen=0.0096 target=0.5367 q_pi=0.2622 q1_gn=0.016 actor_gn=0.028
+step=8650752 replay=1000000 updates=1081095 eps/sec=17481.0 curriculum=1.00
+  critic=0.0014 actor=-0.2596 act_pen=0.0097 target=0.5367 q_pi=0.2616 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.701 general=0.832 blocked=0.346 chaser=0.497 shell=1.000 escape=0.869 crash=0.247
+step=8708096 replay=1000000 updates=1088263 eps/sec=16963.3 curriculum=1.00
+  critic=0.0013 actor=-0.2598 act_pen=0.0097 target=0.5369 q_pi=0.2617 q1_gn=0.017 actor_gn=0.028
+step=8757248 replay=1000000 updates=1094407 eps/sec=19640.4 curriculum=1.00
+  critic=0.0013 actor=-0.2593 act_pen=0.0100 target=0.5365 q_pi=0.2613 q1_gn=0.016 actor_gn=0.028
+  [eval val] mu_w=0.680 general=0.806 blocked=0.297 chaser=0.492 shell=1.000 escape=0.865 crash=0.262
+step=8806400 replay=1000000 updates=1100551 eps/sec=19095.8 curriculum=1.00
+  critic=0.0013 actor=-0.2593 act_pen=0.0097 target=0.5365 q_pi=0.2612 q1_gn=0.016 actor_gn=0.029
+step=8855552 replay=1000000 updates=1106695 eps/sec=19096.4 curriculum=1.00
+  critic=0.0013 actor=-0.2606 act_pen=0.0094 target=0.5383 q_pi=0.2625 q1_gn=0.017 actor_gn=0.029
+  [eval val] mu_w=0.698 general=0.821 blocked=0.337 chaser=0.509 shell=1.000 escape=0.868 crash=0.248
+step=8904704 replay=1000000 updates=1112839 eps/sec=18526.3 curriculum=1.00
+  critic=0.0013 actor=-0.2599 act_pen=0.0095 target=0.5376 q_pi=0.2618 q1_gn=0.017 actor_gn=0.028
+step=8953856 replay=1000000 updates=1118983 eps/sec=18529.5 curriculum=1.00
+  critic=0.0013 actor=-0.2608 act_pen=0.0092 target=0.5388 q_pi=0.2626 q1_gn=0.017 actor_gn=0.026
+  [eval val] mu_w=0.694 general=0.825 blocked=0.317 chaser=0.503 shell=1.000 escape=0.872 crash=0.255
+step=9003008 replay=1000000 updates=1125127 eps/sec=17978.0 curriculum=1.00
+  critic=0.0013 actor=-0.2610 act_pen=0.0096 target=0.5386 q_pi=0.2630 q1_gn=0.017 actor_gn=0.027
+step=9052160 replay=1000000 updates=1131271 eps/sec=17956.4 curriculum=1.00
+  critic=0.0013 actor=-0.2616 act_pen=0.0095 target=0.5403 q_pi=0.2635 q1_gn=0.017 actor_gn=0.027
+  [eval val] mu_w=0.698 general=0.826 blocked=0.327 chaser=0.513 shell=1.000 escape=0.873 crash=0.248
+step=9101312 replay=1000000 updates=1137415 eps/sec=17429.1 curriculum=1.00
+  critic=0.0013 actor=-0.2619 act_pen=0.0099 target=0.5408 q_pi=0.2639 q1_gn=0.016 actor_gn=0.027
+step=9150464 replay=1000000 updates=1143559 eps/sec=17308.5 curriculum=1.00
+  critic=0.0014 actor=-0.2612 act_pen=0.0097 target=0.5402 q_pi=0.2631 q1_gn=0.018 actor_gn=0.028
+  [eval val] mu_w=0.697 general=0.825 blocked=0.328 chaser=0.509 shell=1.000 escape=0.875 crash=0.252
+step=9207808 replay=1000000 updates=1150727 eps/sec=16878.9 curriculum=1.00
+  critic=0.0013 actor=-0.2624 act_pen=0.0096 target=0.5426 q_pi=0.2643 q1_gn=0.017 actor_gn=0.027
+step=9256960 replay=1000000 updates=1156871 eps/sec=19568.4 curriculum=1.00
+  critic=0.0013 actor=-0.2618 act_pen=0.0093 target=0.5407 q_pi=0.2637 q1_gn=0.018 actor_gn=0.028
+  [eval val] mu_w=0.700 general=0.829 blocked=0.339 chaser=0.501 shell=1.000 escape=0.870 crash=0.250
+step=9306112 replay=1000000 updates=1163015 eps/sec=19037.5 curriculum=1.00
+  critic=0.0013 actor=-0.2614 act_pen=0.0093 target=0.5404 q_pi=0.2633 q1_gn=0.017 actor_gn=0.028
+step=9355264 replay=1000000 updates=1169159 eps/sec=19017.6 curriculum=1.00
+  critic=0.0013 actor=-0.2631 act_pen=0.0097 target=0.5430 q_pi=0.2650 q1_gn=0.017 actor_gn=0.028
+  [eval val] mu_w=0.686 general=0.811 blocked=0.316 chaser=0.491 shell=1.000 escape=0.867 crash=0.257
+step=9404416 replay=1000000 updates=1175303 eps/sec=18434.9 curriculum=1.00
+  critic=0.0013 actor=-0.2630 act_pen=0.0098 target=0.5424 q_pi=0.2650 q1_gn=0.017 actor_gn=0.026
+step=9453568 replay=1000000 updates=1181447 eps/sec=18415.0 curriculum=1.00
+  critic=0.0013 actor=-0.2616 act_pen=0.0098 target=0.5407 q_pi=0.2635 q1_gn=0.017 actor_gn=0.028
+  [eval val] mu_w=0.680 general=0.807 blocked=0.306 chaser=0.480 shell=1.000 escape=0.862 crash=0.258
+step=9502720 replay=1000000 updates=1187591 eps/sec=17865.9 curriculum=1.00
+  critic=0.0013 actor=-0.2620 act_pen=0.0100 target=0.5399 q_pi=0.2640 q1_gn=0.018 actor_gn=0.027
+step=9551872 replay=1000000 updates=1193735 eps/sec=17898.5 curriculum=1.00
+  critic=0.0013 actor=-0.2600 act_pen=0.0096 target=0.5388 q_pi=0.2619 q1_gn=0.017 actor_gn=0.028
+  [eval val] mu_w=0.697 general=0.826 blocked=0.318 chaser=0.514 shell=1.000 escape=0.868 crash=0.251
+step=9601024 replay=1000000 updates=1199879 eps/sec=17340.6 curriculum=1.00
+  critic=0.0014 actor=-0.2605 act_pen=0.0094 target=0.5391 q_pi=0.2623 q1_gn=0.018 actor_gn=0.027
+step=9650176 replay=1000000 updates=1206023 eps/sec=17300.6 curriculum=1.00
+  critic=0.0013 actor=-0.2603 act_pen=0.0095 target=0.5379 q_pi=0.2622 q1_gn=0.018 actor_gn=0.028
+  [eval val] mu_w=0.702 general=0.831 blocked=0.335 chaser=0.514 shell=1.000 escape=0.878 crash=0.253
+step=9707520 replay=1000000 updates=1213191 eps/sec=16791.9 curriculum=1.00
+  critic=0.0014 actor=-0.2598 act_pen=0.0099 target=0.5374 q_pi=0.2618 q1_gn=0.018 actor_gn=0.028
+step=9756672 replay=1000000 updates=1219335 eps/sec=19428.3 curriculum=1.00
+  critic=0.0014 actor=-0.2622 act_pen=0.0099 target=0.5412 q_pi=0.2642 q1_gn=0.018 actor_gn=0.028
+  [eval val] mu_w=0.700 general=0.827 blocked=0.341 chaser=0.505 shell=1.000 escape=0.880 crash=0.246
+step=9805824 replay=1000000 updates=1225479 eps/sec=18935.6 curriculum=1.00
+  critic=0.0013 actor=-0.2623 act_pen=0.0101 target=0.5426 q_pi=0.2643 q1_gn=0.018 actor_gn=0.029
+step=9854976 replay=1000000 updates=1231623 eps/sec=18842.0 curriculum=1.00
+  critic=0.0013 actor=-0.2623 act_pen=0.0094 target=0.5422 q_pi=0.2642 q1_gn=0.018 actor_gn=0.028
+  [eval val] mu_w=0.708 general=0.836 blocked=0.349 chaser=0.518 shell=1.000 escape=0.883 crash=0.246
+step=9904128 replay=1000000 updates=1237767 eps/sec=18393.5 curriculum=1.00
+  critic=0.0014 actor=-0.2621 act_pen=0.0100 target=0.5415 q_pi=0.2641 q1_gn=0.018 actor_gn=0.029
+step=9953280 replay=1000000 updates=1243911 eps/sec=18312.4 curriculum=1.00
+  critic=0.0013 actor=-0.2631 act_pen=0.0102 target=0.5438 q_pi=0.2652 q1_gn=0.018 actor_gn=0.030
+  [eval val] mu_w=0.705 general=0.841 blocked=0.339 chaser=0.506 shell=1.000 escape=0.886 crash=0.250
+step=10000000 replay=1000000 updates=1249751 eps/sec=10854.8 curriculum=1.00
+  critic=0.0013 actor=-0.2629 act_pen=0.0098 target=0.5439 q_pi=0.2648 q1_gn=0.018 actor_gn=0.027
+[done] test, learned vs LQR: general 0.844 vs 0.556 | blocked 0.358 vs 0.001 | chaser 0.476 vs 0.079 | shell 1.000 vs 1.000 | escape 0.870 vs 0.314 | mu_w 0.704 vs 0.438 (best step 9900000); 10.0 min on gpu; outputs/strike_final/p1/td3_a0p2_seed2

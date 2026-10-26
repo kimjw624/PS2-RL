@@ -33,6 +33,7 @@ OUTCOMES = ("strike", "crash_obstacle", "crash_floor", "crash_chaser", "out_of_a
 # (group, filter label, eval run, mode); the run names are the ones docker_batch/run_strike_final_eval.sh writes
 MAIN = [
     ("Pursuit (6 m/s)", "none", "pursuit_static", "none"),
+    ("Pursuit (6 m/s)", "filter blind to the chaser", "pursuit_blind", "learned"),
     ("Pursuit (6 m/s)", "static chaser ball", "pursuit_static", "learned"),
     ("Pursuit (6 m/s)", "guidance set, 1 escape", "pursuit_guid1", "learned"),
     ("Pursuit (6 m/s)", "bCBF", "pursuit_bcbf", "learned"),
@@ -40,6 +41,7 @@ MAIN = [
     ("Residual SAC, no PS2", "none", "residual_final", "none"),
     ("Residual SAC, no PS2", "ours", "residual_final", "learned"),
     ("PS2 (ours)", "none", "ps2_final", "none"),
+    ("PS2 (ours)", "filter blind to the chaser", "ps2_blind", "learned"),
     ("PS2 (ours)", "guidance set, 1 escape", "ps2_guid1", "learned"),
     ("PS2 (ours)", "bCBF", "ps2_bcbf", "learned"),
     ("PS2 (ours)", "ours", "ps2_final", "learned"),
@@ -51,6 +53,7 @@ ABLATION = [
     ("no committed chaser prediction", "ps2_nocp", "learned"),
     ("no hover latch", "ps2_nolatch", "learned"),
     ("static chaser ball instead of h_c", "ps2_static", "learned"),
+    ("filter blind to the chaser (obstacles only)", "ps2_blind", "learned"),
 ]
 
 
@@ -106,7 +109,7 @@ def aggregate(root: Path, seeds, run: str, mode: str, t_max: float | None = None
         return None
     n = sum(p["n"] for p in per)
     out = {"seeds": len(per), "n": n}
-    for key in ("strike", "contact", "timeout", "chaser", "obstacle"):
+    for key in ("strike", "contact", "timeout", "chaser", "obstacle", "out"):
         rates = np.array([p[key] / p["n"] for p in per])
         k = sum(p[key] for p in per)
         out[key] = (float(rates.mean()), float(rates.std()), k, cp_interval(k, n))
@@ -199,16 +202,25 @@ def training_figure(root, seeds, out_png):
             p = root / stage / f"striker_rs0p1_s{s}" / "history.json"
             if p.exists():
                 h = json.loads(p.read_text())
-                curves.append((np.asarray(h["eval/step"]), np.asarray(h["eval/strike_rate"]), np.asarray(h["eval/crash_rate"])))
+                sm = root / stage / f"striker_rs0p1_s{s}" / "summary.json"
+                best = json.loads(sm.read_text()).get("best_step") if sm.exists() else None
+                curves.append((s, np.asarray(h["eval/step"]), np.asarray(h["eval/strike_rate"]), np.asarray(h["eval/crash_rate"]), best))
         if not curves:
             ax.set_visible(False)
             continue
-        n = min(len(c[0]) for c in curves)
-        x = curves[0][0][:n] / 1e6
+        # every seed (thin), the mean (thick) and each seed's selected checkpoint (best training evaluation, dot)
+        n = min(len(c[1]) for c in curves)
+        x = curves[0][1][:n] / 1e6
         for j, (lab, col) in enumerate((("strike", "#2a78d6"), ("crash", "#c4553f"))):
-            Y = np.stack([c[1 + j][:n] for c in curves])
-            ax.plot(x, Y.mean(0), color=col, lw=1.8, label=f"{lab} (mean of {len(curves)})")
-            ax.fill_between(x, Y.min(0), Y.max(0), color=col, alpha=0.18, lw=0)
+            Y = np.stack([c[2 + j][:n] for c in curves])
+            for (s, xs, *_rest), y in zip(curves, Y):
+                ax.plot(x, y, color=col, lw=0.8, alpha=0.45)
+            ax.plot(x, Y.mean(0), color=col, lw=2.0, label=f"{lab} (mean of {len(curves)} seeds; thin: each seed)")
+        for s, xs, ys, _cs, best in curves:
+            if best is not None:
+                k = int(np.argmin(np.abs(xs - best)))
+                ax.plot(xs[k] / 1e6, ys[k], "o", color="#2a78d6", mec="#0b0b0b", ms=5, zorder=5)
+        ax.plot([], [], "o", color="#2a78d6", mec="#0b0b0b", ms=5, label="checkpoint used (best evaluation)")
         ax.set_title(title, fontsize=10)
         ax.set_xlabel("environment steps [M]")
         ax.set_ylim(-0.02, 1.02)
@@ -230,7 +242,8 @@ def outcome_figure(root, seeds, out_png):
     fig, ax = plt.subplots(figsize=(10, 0.42 * len(rows) + 1.0))
     y = np.arange(len(rows))[::-1]
     left = np.zeros(len(rows))
-    for key, col, lab in (("strike", "#2a78d6", "strike"), ("contact", "#3d3c39", "contact"), ("timeout", "#c99a06", "time-up")):
+    for key, col, lab in (("strike", "#2a78d6", "strike"), ("contact", "#3d3c39", "contact"), ("timeout", "#c99a06", "time-up"),
+                          ("out", "#b9b7b0", "left the arena")):
         v = np.array([a[key][0] for _, _, a in rows])
         ax.barh(y, v, left=left, color=col, label=lab, height=0.7)
         left = left + v
@@ -238,10 +251,25 @@ def outcome_figure(root, seeds, out_png):
     ax.set_yticklabels([f"{g}: {l}" for g, l, _ in rows], fontsize=8)
     ax.set_xlim(0, 1)
     ax.set_xlabel("fraction of episodes (mean over seeds)")
-    ax.legend(fontsize=8, ncol=3, loc="lower right")
+    ax.legend(fontsize=8, ncol=4, loc="lower right")
     fig.tight_layout()
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
+
+
+def chaser_note(root: Path, seeds) -> str:
+    """The evaluated chaser (radius, top speed, acceleration), from the evaluation tables (eval_strike_filter.py meta)."""
+    for s in seeds:
+        d = root / "eval" / f"s{s}"
+        runs = ["ps2_final", "pursuit_final", "residual_final"] + (sorted(q.name for q in d.iterdir() if q.is_dir()) if d.is_dir() else [])
+        for run in runs:
+            p = d / run / "strike_filter_table.json"
+            ch = json.loads(p.read_text()).get("chaser") if p.exists() else None
+            if ch:
+                return (f"Chaser: radius {ch['actual_radius']:g} m, top speed {ch['actual_speed']:g} m/s, acceleration "
+                        f"{ch['accel']:g} m/s² (the filter assumes radius {ch['assumed_radius']:g} m, speed "
+                        f"{ch['assumed_speed']:g} m/s). ")
+    return ""
 
 
 def main(argv=None):
@@ -253,7 +281,8 @@ def main(argv=None):
     root = Path(a.root)
     out = root / "report"
     out.mkdir(parents=True, exist_ok=True)
-    note = (f"Seeds {a.seeds}; rates are mean ± std over seeds, [pooled Clopper-Pearson 95 % interval]; contact = left the "
+    note = (chaser_note(root, a.seeds) +
+            f"Seeds {a.seeds}; rates are mean ± std over seeds, [pooled Clopper-Pearson 95 % interval]; contact = left the "
             "safe set (obstacle, floor, chaser); kept = mean fraction of the nominal command kept; lost certificate = "
             "fraction of episodes with at least one step without a certified plan.\n\n")
     (out / "results.md").write_text(note + main_table(root, a.seeds, MAIN) + "\n")

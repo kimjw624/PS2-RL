@@ -1,8 +1,12 @@
 # Strike task — final pipeline (the report)
 
-(Branch `strike-reduced-arena`: the reduced arena only. Start with `STRIKE_HANDOFF.md` at the repository root.)
+The report's arena: 40 × 20 m, 3 tall obstacles, 1 free chaser (radius 0.4 m, 2 m/s, 2 m/s²), a drifting target at
+x 32–37 m, 15 s episodes.
 
-The report's arena: 40 × 20 m, 3 tall obstacles, 1 free chaser at 2 m/s, a drifting target at x 32–37 m, 15 s episodes.
+**The report's run is in `results/strike_reduced/final/`**: the trained models of the three seeds, every evaluation
+(tables and per-episode records), the report tables, and the paper's tables, figures and trajectory figures
+(`results/strike_reduced/final/README.md`). Use it as `ROOT` for the scripts below, e.g.
+`ROOT=results/strike_reduced/final/run STEPS=tables bash docker_batch/run_strike_paper.sh`.
 One driver trains every stage for every seed on the GPU (one run at a time), evaluates everything on 1000 test scenes and
 writes the tables and figures:
 
@@ -24,10 +28,89 @@ The deployed filter is `tracker.filter_guidance` of `strike_final_ps2.json` (sin
 evaluation). Evaluations (per seed): pursuit with no filter / static chaser balls / guidance with one escape / bCBF / the
 deployed filter; the residual striker without and with the deployed filter; the PS2 striker without the filter, with the
 deployed filter, with one escape, with the bCBF, and the ablations (hover-LQR backup, no committed chaser prediction, no
-hover latch, static chaser balls). Per-episode records (`strike_filter_episodes.json`) give the 10 s numbers from the
-same runs (`report/horizon.md`).
+hover latch, static chaser balls). The `*_blind` runs (pursuit and PS2) use the same filter blind to the chaser
+(obstacles only): what ignoring the chaser costs. Per-episode records (`strike_filter_episodes.json`) give the 10 s
+numbers from the same runs (`report/horizon.md`). Each seed is evaluated with the chaser its striker was trained with
+(read from its PS2 run's `configs.json`), whatever chaser the task file holds now; `ENV='{...}'` overrides it.
 
-Report only (CPU is fine): `python scripts/report_strike.py --root outputs/strike_final --seeds 0 1 2`.
+Report only (CPU is fine): `python scripts/report_strike.py --root outputs/strike_final --seeds 0 1 2`. Missing runs are
+skipped (the "seeds x episodes" column says how many seeds a row has).
+
+## Looking at specific episodes
+
+Episode i is the same scene and perturbation in every evaluation of a root (same N and scene seed), so one episode can
+be compared across methods:
+
+```bash
+# the episodes under PS2 without the filter, PS2 / pursuit / residual striker with the deployed filter, PS2 with the
+# static chaser ball and with the bCBF: <ROOT>/episodes/s<seed>/episode<i>.png / .pdf / .gif and episodes.md
+docker exec -it px4sitl bash -c "cd ~/ws_shared/PS2-RL && EPISODES='1 6 473 845' bash docker_batch/run_strike_episodes.sh"
+# episodes whose outcome differs between runs, and a pick of interesting ones (contacts, changed outcomes, close calls)
+python scripts/compare_strike_episodes.py --runs outputs/strike_final/eval/s0/pursuit_final outputs/strike_final/eval/s0/ps2_final \
+    --out outputs/strike_final/compare_s0
+```
+
+`run_strike_episodes.sh` simulates all N episodes per method and records the chosen ones (`--record_episodes`), so they
+are exactly the evaluated episodes (about 6 min per method on the laptop GPU). `EXACT=0` replays only the chosen
+episodes (`--only_episodes`, fast); on another device or batch size the closed loop can differ in the last digits, and
+borderline episodes (slow strikes near the time limit) can then end differently.
+
+## Paper kit (tables, figures, episode figures and GIFs, methods document)
+
+Everything for the paper from the final root, with Korean labels by default:
+
+```bash
+docker exec -it px4sitl bash -c "cd ~/ws_shared/PS2-RL && bash docker_batch/run_strike_paper.sh"
+# tables, figures and quoted numbers only (seconds, CPU is fine):  STEPS=tables bash docker_batch/run_strike_paper.sh
+# English labels: PAPER_LANG=en;  chosen episodes: EPISODES="845 392";  episodes picked automatically: N_PICK=8
+# fast replay of only the chosen episodes (CPU possible): EXACT=0 (default 1: exactly the evaluated episodes)
+# filter snapshots of other episodes (after the replays): STEPS=snap SNAP_EPISODES="845 994"
+```
+
+| output (`outputs/strike_final/paper/…`) | content |
+|---|---|
+| `tables/table1_10s`, `table1_15s` | main comparison at 10 s and 15 s: success, contact % (count), time-up, mean strike time |
+| `tables/table2_final` | the final filter against the bCBF and one escape (seeds where every row was evaluated) |
+| `tables/table3_ablation` | ablations of the final filter with the PS2 striker (common seeds) |
+| `tables/table4_phase1` | Phase-I recovered fraction per region, learned backup vs hover LQR |
+| `tables/table5_paired` | paired comparisons on the same scenes, exact McNemar test |
+| `figures/fig_*.png` / `.pdf` | outcomes, strike time, chaser clearance, filter activity, training curves, ablation, Phase I |
+| `numbers.md` | the numbers quoted in the text: rates with 95 % Clopper–Pearson intervals, counts, paired tests |
+| `episode_picks.json` | representative episodes (filter saves, close evasion, the contact, time-ups, baselines failing) |
+| `episodes/ep<i>/` | `compare2d` (png, gif), `signals`, `detail_<tag>`, `view3d`, `view3d_<tag>`, `anim3d_<tag>.gif`; `overview.png`, `overview_main.png` |
+| `snapshots/` | the filter's check redrawn at chosen steps (`scripts/strike_filter_snapshot.py`): the seven backup plans on the top view and the 7 × 5 certification matrix (backup × blend) with the chosen cell |
+
+### Trajectory figures of the paper's four configurations
+
+The paper compares 잔차 정책, 잔차 + 최종 필터, PS2 + 단일 회피 필터 and PS2 + 최종 필터. `STEPS="episodes traj4"`
+replays the chosen scenes for exactly those (the residual policy with and without the filter, `ps2_one` = the final
+filter without the escape variants, PS2 with the final filter) and draws them in the paper's terms and sizes
+(`scripts/strike_paper_traj.py`: column 8 cm, page 17 cm, 600 dpi PNG and PDF):
+
+```bash
+docker exec -it px4sitl bash -c "cd ~/ws_shared/PS2-RL && STEPS='episodes traj4' METHODS='residual ps2_one ps2' \
+  RES_MODES='none learned' EPISODES='827 69 601 271 576 972 845' TRAJ_GRID='827 576 845' TRAJ_SINGLE='827 576 845' \
+  TRAJ_PAIRS='filter:res,res_f:827,69:clear,hc backup:one,ours:827,601:hc,variant backup:one,ours:576:dist,variant phase2:res_f,ours:271,972:dist,eta' \
+  TRAJ_SNAP=845 bash docker_batch/run_strike_paper.sh"
+```
+
+| output (`outputs/strike_final/paper/traj4/…`) | content |
+|---|---|
+| `grid_main`, `grid_all` | rows = scenes (배치), columns = the four configurations (page width) |
+| `episode_<i>_col` / `_page`, `signals_<i>` | one scene: 2 × 2 (column) or one row (page); target distance, clearance and h_c of all four |
+| `pair_<name>_<i>_col` / `_page` | two configurations with the signals of the claim: filter effect (clear, h_c), seven backups (h_c or target distance, backup index j), Phase II (target distance, normalised correction ‖η_k‖) |
+| `snapshots/` | the filter's check of PS2 + 최종 필터 in the paper's terms (`--terms paper`) |
+| `episodes.json` | the drawn outcome and time of every configuration and scene |
+
+Every table comes as `.md`, `.csv` (opens in Excel), `.tsv` (paste into an HWP table) and `.tex`. Korean labels need a
+Korean font for matplotlib in the container (`.venv/bin/pip install koreanize-matplotlib`, or `apt-get install
+fonts-nanum`); without one the figures fall back to English labels.
+
+The methods document (Korean, paper style: model, safe set and the h_c derivation, base set, Phase I, backup family,
+discrete filter with its algorithm, bCBF comparison, striker, PS2, evaluation protocol and statistics, results,
+hyper-parameters, what differs from the draft) is `results/strike_paper/strike_methods_ko.tex`. It reads the tables and
+figures of `results/strike_reduced/final/paper` by default: `cd results/strike_paper && xelatex strike_methods_ko.tex && xelatex strike_methods_ko.tex` (XeLaTeX and the
+Noto CJK fonts), or `xelatex "\def\paperdir{/path/to/paper}\input{strike_methods_ko.tex}"` for another output folder.
 
 # Strike task — Phase I (safe-arrival backup)
 
