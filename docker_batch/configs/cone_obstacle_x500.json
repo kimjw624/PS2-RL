@@ -1,0 +1,17 @@
+{
+  "_comment": "Cone-obstacle task (outside of an apex-down funnel is safe) for the x500 limits. Read by scripts/cone_obstacle_reference_candidates.py (--task) and meant for the Phase-II env. min_altitude 0.5 m = about two rotor diameters (10-inch props): ground effect below 1 %, and room for altitude-estimate error; the references and the filtered runs stay above 0.8 m.",
+  "vehicle": "docker_batch/configs/landing_x500_cone45_r0p3.json",
+  "cone_obstacle": {
+    "tip_z": 1.2,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.25,
+    "ground_z": 0.0,
+    "min_altitude": 0.5,
+    "target_radius": 0.25,
+    "target_height": -1.0
+  },
+  "base_set_design": "points:approach_beside@2",
+  "filter": {"alpha": 10.0, "alpha_ground": 20.0},
+  "certificate": "outputs/cone_obstacle/certificate.json",
+  "references": "ps2rl/envs/assets/cone_obstacle"
+}

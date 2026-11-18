@@ -1,0 +1,15 @@
+{
+  "_comment": "Landing inside the cone under a bounded disturbance (UE-bCBF) with the stock-x500 limits (thrust 1.99-14.95 m/s^2, roll/pitch +-3.84 rad/s, yaw +-0.203 rad/s; cone 45 deg, r0 0.3 m, floor, base set c_B 15.1: docker_batch/configs/landing_x500_cone45_r0p3.json). Backup: the plain x500 Phase-I safe-arrival policy (input x only; the best of the x500 Phase-I runs, the 'SA-plain' choice of the outside-cone comparison), used blind to d_hat inside the UE filter. Reference: corner-cut slowed for the x500 (4 s from (-1.6, 0, 2) m, peak 1.53 m/s, tilt 8.9 deg). Disturbance: 0.5 m/s^2 as in the 4 g study, but at 0.025 Hz (rate bound delta_v 0.079 m/s^3). At 0.05 Hz (delta_v 0.157, the first version of this file) the tube left the backup no way to reach the tightened base set from the last 0.2 m above the pad, so the filter could not let the vehicle land (scripts/check_landing_ue_task.py). Read by scripts/train_phase2_landing_ue_cached.py --task and docker_batch/run_landing_ue_twostage.sh; see docker_batch/README_x500_ue.md.",
+  "backup": "checkpoints/landing_phase1/x500_rec10_td3_seed1",
+  "ue": {"delta_d": 0.5, "frequency_hz": 0.025, "observer_lambda": 20.0, "e_bar": 0.02, "tube_scale": 1.2},
+  "filter": {"alpha_cbf": 10.0, "alpha_floor": 20.0},
+  "env": {
+    "reference_path": "ps2rl/envs/assets/quadrotor_landing_cornercut_x500_reference.npz",
+    "extra_sec": 1.0,
+    "init_p_range": 0.2,
+    "init_v_range": 0.3,
+    "init_tilt_deg": 5.0,
+    "init_yaw_deg": 5.0,
+    "nominal_controller": "none"
+  }
+}

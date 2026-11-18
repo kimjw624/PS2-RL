@@ -48,6 +48,41 @@ from ps2rl.cil.quadrotor_ue_bcbf_experimental import (
 Array = jax.Array
 
 
+_UE_DIAGNOSTIC_KEYS = (
+    "max_safe_output_margin",
+    "terminal_safe_output_margin",
+    "terminal_quadratic_margin_used",
+    "max_rho_safe",
+    "terminal_rho",
+)
+
+
+def _selected_ue_diagnostics(
+    diag: Dict[str, Array] | None,
+    *,
+    dtype: Any,
+) -> Dict[str, Array]:
+    """Return a fixed-shape UE diagnostic pytree for JAX conditionals.
+
+    The standard warm-up and UE branches of ``jax.lax.cond`` must expose the
+    same dictionary structure.  NaN therefore means "UE rows not active";
+    it is not substituted into any QP quantity.
+    """
+
+    if diag is None:
+        values = {
+            key: jnp.asarray(jnp.nan, dtype=dtype) for key in _UE_DIAGNOSTIC_KEYS
+        }
+        values["ue_diagnostics_active"] = jnp.asarray(False, dtype=jnp.bool_)
+        return values
+
+    values = {
+        key: jnp.asarray(diag[key], dtype=dtype) for key in _UE_DIAGNOSTIC_KEYS
+    }
+    values["ue_diagnostics_active"] = jnp.asarray(True, dtype=jnp.bool_)
+    return values
+
+
 def _validated_slack_scale(cfg: QuadrotorBCBFConfig) -> float:
     control_weight = float(cfg.control_weight)
     slack_weight = float(cfg.slack_weight)
@@ -223,7 +258,7 @@ class QuadrotorScaledSlackStandardProjector:
         a_rows, b_rows, diag = build_discretized_backup_cbf_rows_with_info(
             x, self.cbf_cfg, self.runtime
         )
-        return _solve_scaled_rows(
+        safe_u, physical_slack, use_solver, info = _solve_scaled_rows(
             x,
             u_ref,
             a_rows,
@@ -237,6 +272,11 @@ class QuadrotorScaledSlackStandardProjector:
             slack_scale=self.slack_scale,
             solve_float64=self.solve_float64,
         )
+        info = {
+            **info,
+            **_selected_ue_diagnostics(None, dtype=x.dtype),
+        }
+        return safe_u, physical_slack, use_solver, info
 
 
 class QuadrotorScaledSlackUEProjector:
@@ -272,7 +312,7 @@ class QuadrotorScaledSlackUEProjector:
             self.runtime,
             self.controller,
         )
-        return _solve_scaled_rows(
+        safe_u, physical_slack, use_solver, info = _solve_scaled_rows(
             x,
             u_ref,
             a_rows,
@@ -286,6 +326,11 @@ class QuadrotorScaledSlackUEProjector:
             slack_scale=self.slack_scale,
             solve_float64=self.solve_float64,
         )
+        info = {
+            **info,
+            **_selected_ue_diagnostics(diag, dtype=x.dtype),
+        }
+        return safe_u, physical_slack, use_solver, info
 
 
 def make_scaled_standard_projection_ops(

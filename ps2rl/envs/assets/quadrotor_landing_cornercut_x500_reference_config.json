@@ -1,0 +1,35 @@
+{
+  "landing_config": {
+    "out": "ps2rl/envs/assets/quadrotor_landing_cornercut_x500_reference.npz",
+    "dt": 0.02,
+    "duration": 4.0,
+    "x0": -1.6,
+    "y0": 0.0,
+    "z0": 2.0,
+    "vx0": 0.0,
+    "vy0": 0.0,
+    "vz0": 0.0,
+    "yaw_deg": 0.0,
+    "xy_delay": 1.2,
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "z_pad": 0.0,
+    "offset": 0.0,
+    "offset_dir_deg": 0.0,
+    "z_touch": 0.0,
+    "vz_touch": 0.0,
+    "r0": 0.3,
+    "theta_deg": 45.0,
+    "eps": 0.015,
+    "a_max_g": 1.5235,
+    "omega_max": 3.84
+  },
+  "landing_trajectory_stats": {
+    "num_points": 201,
+    "total_duration": 4.0,
+    "max_a_cmd": 10.810672636317666,
+    "max_abs_omega": 0.3608446203465266,
+    "max_quat_step_norm": 0.00360856466444734,
+    "max_quat_norm_error": 0.0
+  }
+}

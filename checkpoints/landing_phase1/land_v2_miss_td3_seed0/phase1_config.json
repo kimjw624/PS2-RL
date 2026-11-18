@@ -1,0 +1,60 @@
+{
+  "landing": {
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "pad_z": 0.0,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "dt": 0.02,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "num_steps": 100,
+    "z_des": 1.25
+  },
+  "region": {
+    "v_max": 4.0
+  },
+  "provenance": {
+    "phase2_run": "outputs/landing/land_v2_miss_s1",
+    "reference_path": "ps2rl/envs/assets/quadrotor_landing_reference.npz",
+    "reference_config_path": "ps2rl/envs/assets/quadrotor_landing_reference_config.json",
+    "reference_envelope": {
+      "zeta_max": 2.0,
+      "speed_max": 3.3125953818613563,
+      "tilt_max_deg": 24.768151074595007,
+      "yaw_abs_max_deg": 0.0,
+      "duration_sec": 2.0
+    },
+    "phase2_initial_perturbation": {
+      "pz": 0.3,
+      "v": 0.5,
+      "tilt": 10.0,
+      "yaw": 0.0
+    },
+    "speed_margin": 0.5,
+    "region_reasons": {
+      "zeta_max": "kept 3.0 (task needs 2.5)",
+      "v_max": "widened 2.0 -> 4.0 to cover the reference envelope + initial perturbation",
+      "tilt_max_deg": "kept 35.0 (task needs 35.0)",
+      "yaw_max_deg": "kept 45.0 (task needs 0.0)"
+    },
+    "base_set_check": {
+      "z_des": 1.25,
+      "moved_from": null,
+      "c_B": 12.0,
+      "c_U": 17.881373955059992,
+      "c_chart": 23.17844680381027,
+      "c_cone": 31.825253831304792,
+      "c_ground": 18.71050105140306
+    },
+    "reference_cone_margin": {
+      "h_start": 0.2999436855316162,
+      "h_min": -0.5001406073570251,
+      "steps_outside": 30,
+      "steps_total": 101
+    }
+  }
+}

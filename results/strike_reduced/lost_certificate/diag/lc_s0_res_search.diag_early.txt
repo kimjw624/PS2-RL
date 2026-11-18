@@ -1,0 +1,202 @@
+== episode 352: strike at 12.8 s, 67 steps without certificate, onsets [8.44, 8.54, 8.64, 8.74, 8.84, 8.94, 9.04, 9.14, 9.24, 9.34, 9.44, 9.54, 9.64, 9.74] s
+  t  8.44 s (onset): h_c 1.57, range 1.57 m, chasers within 6 m 1, obstacle 0.46 m, wall 4.15 m, z 1.46, speed 3.89
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  8.54 s (onset): h_c 1.77, range 1.77 m, chasers within 6 m 1, obstacle 0.57 m, wall 3.80 m, z 1.57, speed 3.75
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  8.64 s (onset): h_c 1.96, range 1.96 m, chasers within 6 m 1, obstacle 0.67 m, wall 3.46 m, z 1.67, speed 3.55
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  8.74 s (onset): h_c 2.13, range 2.13 m, chasers within 6 m 1, obstacle 0.76 m, wall 3.15 m, z 1.76, speed 3.25
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  8.84 s (onset): h_c 2.26, range 2.26 m, chasers within 6 m 1, obstacle 0.85 m, wall 2.86 m, z 1.85, speed 2.88
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  8.94 s (onset): h_c 2.34, range 2.34 m, chasers within 6 m 1, obstacle 0.93 m, wall 2.60 m, z 1.93, speed 2.51
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.04 s (onset): h_c 2.39, range 2.39 m, chasers within 6 m 1, obstacle 0.99 m, wall 2.38 m, z 1.99, speed 2.19
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.14 s (onset): h_c 2.37, range 2.41 m, chasers within 6 m 1, obstacle 1.03 m, wall 2.18 m, z 2.03, speed 1.85
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.24 s (onset): h_c 2.25, range 2.38 m, chasers within 6 m 1, obstacle 1.05 m, wall 2.01 m, z 2.05, speed 1.51
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.34 s (onset): h_c 2.07, range 2.32 m, chasers within 6 m 1, obstacle 1.05 m, wall 1.87 m, z 2.05, speed 1.17
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.44 s (onset): h_c 1.84, range 2.22 m, chasers within 6 m 1, obstacle 1.06 m, wall 1.77 m, z 2.06, speed 0.82
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.54 s (onset): h_c 1.56, range 2.08 m, chasers within 6 m 1, obstacle 1.06 m, wall 1.70 m, z 2.06, speed 0.51
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.64 s (onset): h_c 1.24, range 1.92 m, chasers within 6 m 1, obstacle 1.06 m, wall 1.67 m, z 2.06, speed 0.45
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  9.74 s (onset): h_c 0.88, range 1.73 m, chasers within 6 m 1, obstacle 1.07 m, wall 1.67 m, z 2.07, speed 0.78
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 8}
+== episode 480: strike at 11.2 s, 125 steps without certificate, onsets [3.64, 3.74, 3.84, 3.94, 4.04, 4.14, 4.24, 4.34, 4.44, 4.54, 4.64, 4.74, 4.84, 4.94, 5.04, 5.14, 5.24, 5.34, 5.44, 5.54, 5.64, 5.74, 5.84, 5.94, 6.04] s
+  t  3.64 s (onset): h_c 5.34, range 5.34 m, chasers within 6 m 1, obstacle 0.37 m, wall 2.43 m, z 1.37, speed 4.75
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 6}
+  t  3.74 s (onset): h_c 5.53, range 5.53 m, chasers within 6 m 1, obstacle 0.39 m, wall 2.04 m, z 1.39, speed 3.21
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  3.84 s (onset): h_c 5.51, range 5.57 m, chasers within 6 m 1, obstacle 0.43 m, wall 1.81 m, z 1.43, speed 2.09
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  3.94 s (onset): h_c 5.30, range 5.52 m, chasers within 6 m 1, obstacle 0.50 m, wall 1.65 m, z 1.50, speed 1.67
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  4.04 s (onset): h_c 5.19, range 5.44 m, chasers within 6 m 1, obstacle 0.57 m, wall 1.53 m, z 1.57, speed 1.38
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.14 s (onset): h_c 5.05, range 5.35 m, chasers within 6 m 1, obstacle 0.61 m, wall 1.42 m, z 1.61, speed 1.14
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.24 s (onset): h_c 4.88, range 5.24 m, chasers within 6 m 1, obstacle 0.64 m, wall 1.33 m, z 1.64, speed 0.91
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.34 s (onset): h_c 4.68, range 5.12 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.25 m, z 1.66, speed 0.71
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.44 s (onset): h_c 4.47, range 4.99 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.19 m, z 1.66, speed 0.53
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.54 s (onset): h_c 4.24, range 4.83 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.15 m, z 1.66, speed 0.37
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.64 s (onset): h_c 4.00, range 4.67 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.12 m, z 1.66, speed 0.23
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.74 s (onset): h_c 3.76, range 4.49 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.10 m, z 1.66, speed 0.12
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.84 s (onset): h_c 3.52, range 4.30 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.09 m, z 1.66, speed 0.04
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  4.94 s (onset): h_c 3.28, range 4.10 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.09 m, z 1.65, speed 0.05
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  5.04 s (onset): h_c 3.05, range 3.90 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.10 m, z 1.65, speed 0.09
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  5.14 s (onset): h_c 2.83, range 3.69 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.10 m, z 1.65, speed 0.12
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  5.24 s (onset): h_c 2.61, range 3.49 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.12 m, z 1.65, speed 0.14
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  5.34 s (onset): h_c 2.39, range 3.28 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.13 m, z 1.65, speed 0.15
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 1}
+  t  5.44 s (onset): h_c 2.18, range 3.07 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.14 m, z 1.65, speed 0.15
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  5.54 s (onset): h_c 1.98, range 2.86 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.16 m, z 1.65, speed 0.14
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  5.64 s (onset): h_c 1.76, range 2.65 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.17 m, z 1.65, speed 0.15
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+  t  5.74 s (onset): h_c 1.52, range 2.44 m, chasers within 6 m 1, obstacle 0.65 m, wall 1.18 m, z 1.65, speed 0.21
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  5.84 s (onset): h_c 1.21, range 2.22 m, chasers within 6 m 1, obstacle 0.66 m, wall 1.21 m, z 1.66, speed 0.37
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  5.94 s (onset): h_c 0.83, range 1.98 m, chasers within 6 m 1, obstacle 0.67 m, wall 1.25 m, z 1.67, speed 0.65
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  6.04 s (onset): h_c 0.38, range 1.72 m, chasers within 6 m 1, obstacle 0.69 m, wall 1.31 m, z 1.69, speed 1.08
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 7}
+== episode 543: strike at 8.2 s, 27 steps without certificate, onsets [3.9, 4.0, 4.1, 4.2, 4.3, 4.4] s
+  t  3.90 s (onset): h_c 6.13, range 6.13 m, chasers within 6 m 0, obstacle 1.73 m, wall 8.30 m, z 3.27, speed 3.67
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  4.00 s (onset): h_c 6.27, range 6.27 m, chasers within 6 m 0, obstacle 1.39 m, wall 8.15 m, z 3.21, speed 2.96
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  4.10 s (onset): h_c 6.33, range 6.33 m, chasers within 6 m 0, obstacle 1.13 m, wall 8.01 m, z 3.15, speed 2.35
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  4.20 s (onset): h_c 6.29, range 6.34 m, chasers within 6 m 0, obstacle 0.92 m, wall 7.90 m, z 3.09, speed 1.85
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 7}
+  t  4.30 s (onset): h_c 6.15, range 6.30 m, chasers within 6 m 0, obstacle 0.76 m, wall 7.82 m, z 3.05, speed 1.44
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 6}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 6}
+  t  4.40 s (onset): h_c 5.97, range 6.23 m, chasers within 6 m 0, obstacle 0.64 m, wall 7.75 m, z 3.01, speed 1.13
+    base: any variant certified with slack False, with zero slack True; zero-slack failures {'path h_c': 5}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 5}
+== episode 795: strike at 14.1 s, 2 steps without certificate, onsets [4.56] s
+  t  4.56 s (onset): h_c 1.55, range 2.45 m, chasers within 6 m 1, obstacle 1.14 m, wall 4.81 m, z 2.14, speed 0.35
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path h_c': 8}
+== episode 934: strike at 10.3 s, 64 steps without certificate, onsets [4.66, 4.92, 5.02, 6.02, 6.12, 6.22, 6.32, 6.42, 6.52, 6.62, 6.72, 6.82, 6.92] s
+  t  4.66 s (onset): h_c 3.77, range 3.77 m, chasers within 6 m 1, obstacle 0.36 m, wall 4.34 m, z 1.36, speed 4.87
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  4.92 s (onset): h_c 4.01, range 4.01 m, chasers within 6 m 1, obstacle 0.47 m, wall 3.36 m, z 1.47, speed 3.21
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  5.02 s (onset): h_c 4.05, range 4.05 m, chasers within 6 m 1, obstacle 0.53 m, wall 3.08 m, z 1.53, speed 2.95
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.02 s (onset): h_c 3.26, range 3.53 m, chasers within 6 m 1, obstacle 1.20 m, wall 1.48 m, z 2.20, speed 1.67
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack True, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.12 s (onset): h_c 3.08, range 3.43 m, chasers within 6 m 1, obstacle 1.20 m, wall 1.38 m, z 2.20, speed 1.30
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.22 s (onset): h_c 2.86, range 3.31 m, chasers within 6 m 1, obstacle 1.20 m, wall 1.31 m, z 2.20, speed 0.95
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.32 s (onset): h_c 2.61, range 3.16 m, chasers within 6 m 1, obstacle 1.19 m, wall 1.25 m, z 2.19, speed 0.62
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.42 s (onset): h_c 2.35, range 3.00 m, chasers within 6 m 1, obstacle 1.18 m, wall 1.22 m, z 2.18, speed 0.35
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack True; zero-slack failures {'path wall': 6, 'path h_c': 2}
+  t  6.52 s (onset): h_c 2.09, range 2.83 m, chasers within 6 m 1, obstacle 1.18 m, wall 1.20 m, z 2.18, speed 0.14
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 2, 'path obstacle': 1}
+  t  6.62 s (onset): h_c 1.84, range 2.64 m, chasers within 6 m 1, obstacle 1.18 m, wall 1.19 m, z 2.18, speed 0.04
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 8, 'path obstacle': 1}
+  t  6.72 s (onset): h_c 1.56, range 2.44 m, chasers within 6 m 1, obstacle 1.18 m, wall 1.20 m, z 2.18, speed 0.15
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 8, 'path obstacle': 1}
+  t  6.82 s (onset): h_c 1.25, range 2.23 m, chasers within 6 m 1, obstacle 1.18 m, wall 1.22 m, z 2.18, speed 0.30
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 8, 'path obstacle': 1}
+  t  6.92 s (onset): h_c 0.89, range 2.01 m, chasers within 6 m 1, obstacle 1.19 m, wall 1.26 m, z 2.19, speed 0.57
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 8, 'path obstacle': 1}
+
+onsets:
+   ('base', 'n') 59
+   ('base', 'path h_c') 243
+   ('base', 'path wall') 162
+   ('base', 'slack') 0
+   ('base', 'zero') 7
+   ('extra', 'n') 59
+   ('extra', 'only variant', 'learned + escape (3.5 v_c, +60 deg, from h_c 6 m)') 23
+   ('extra', 'path h_c') 278
+   ('extra', 'path obstacle') 5
+   ('extra', 'path wall') 162
+   ('extra', 'slack') 46
+   ('extra', 'variant ok', 'learned + escape (3.5 v_c, +60 deg, from h_c 6 m)') 46
+   ('extra', 'variant ok', 'learned + escape (3.5 v_c, -60 deg, from h_c 6 m)') 23
+   ('extra', 'zero') 54
+   ('geo', '2+ chasers<6m') 0
+   ('geo', 'obst<1') 38
+   ('geo', 'range<1') 0
+   ('geo', 'wall<1.5') 30

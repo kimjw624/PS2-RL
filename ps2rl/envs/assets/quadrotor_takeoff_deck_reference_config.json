@@ -1,0 +1,38 @@
+{
+  "output_paths": {
+    "config_json": "quadrotor_takeoff_deck_reference_config.json",
+    "diagnostic_figure": "quadrotor_takeoff_deck_reference.png",
+    "reference_bundle_npz": "quadrotor_takeoff_deck_reference.npz",
+    "trajectory_npy": "quadrotor_takeoff_deck_reference_legacy.npy"
+  },
+  "takeoff_config": {
+    "a_cmd_max_g": 4.0,
+    "a_cmd_min": 0.0,
+    "climb_duration": 5.625,
+    "dt": 0.02,
+    "gravity": 9.81,
+    "hold_end": 2.0,
+    "hold_start": 0.5,
+    "omega_max": 18.0,
+    "x_center": 0.0,
+    "y_center": 0.0,
+    "z_end": 3.5,
+    "z_max": 3.0,
+    "z_start": 0.5
+  },
+  "takeoff_trajectory_stats": {
+    "deck_excess": 0.5,
+    "max_a_cmd": 10.35738996241012,
+    "max_abs_az": 0.5474093165563783,
+    "max_abs_omega": 0.0,
+    "max_abs_vz": 0.999985777828345,
+    "max_quat_norm_error": 0.0,
+    "max_quat_step_norm": 0.0,
+    "min_a_cmd": 9.262590683443623,
+    "num_points": 408,
+    "steps_above_deck": 186,
+    "total_duration": 8.125,
+    "z_max_reached": 3.5,
+    "z_min": 0.5
+  }
+}

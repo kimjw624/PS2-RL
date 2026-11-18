@@ -1,0 +1,16 @@
+== episode 627: strike at 10.4 s, 14 steps without certificate, onsets [5.32, 5.42, 5.52] s
+  t  5.32 s (onset): h_c 2.29, range 2.89 m, chasers within 6 m 1, obstacle 1.19 m, wall 1.36 m, z 2.19, speed 1.47
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 10, 'path h_c': 1}
+  t  5.42 s (onset): h_c 2.11, range 2.73 m, chasers within 6 m 1, obstacle 1.19 m, wall 1.32 m, z 2.19, speed 1.13
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 10, 'path h_c': 1}
+  t  5.52 s (onset): h_c 1.91, range 2.56 m, chasers within 6 m 1, obstacle 1.19 m, wall 1.29 m, z 2.19, speed 0.81
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 7}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path h_c': 11}
+== episode 845: strike at 14.4 s, 2 steps without certificate, onsets [8.58] s
+  t  8.58 s (onset): h_c 1.85, range 2.39 m, chasers within 6 m 1, obstacle 1.52 m, wall 0.19 m, z 2.52, speed 1.61
+    base: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 6, 'path h_c': 1}
+    extra: any variant certified with slack False, with zero slack False; zero-slack failures {'path wall': 10, 'path h_c': 1}
+
+onsets: {('geo', 'range<1'): 0, ('geo', 'obst<1'): 0, ('geo', 'wall<1.5'): 4, ('geo', '2+ chasers<6m'): 0, ('base', 'slack'): 0, ('base', 'zero'): 0, ('base', 'n'): 4, ('base', 'path wall'): 18, ('base', 'path h_c'): 10, ('extra', 'slack'): 0, ('extra', 'zero'): 0, ('extra', 'n'): 4, ('extra', 'path wall'): 30, ('extra', 'path h_c'): 14}

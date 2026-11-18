@@ -1,0 +1,359 @@
+{
+  "backup": "checkpoints/landing_phase1/floor_rec10_td3_seed0",
+  "landing_config": {
+    "dt": 0.02,
+    "T": 2.0,
+    "num_steps": 100,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "pad_z": 0.0,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "floor_constraint": true,
+    "recovery_rate_cone": 10.0,
+    "recovery_rate_floor": 10.0,
+    "z_des": 1.25,
+    "base_set_c": 12.0,
+    "base_set_smooth_gain": 20.0,
+    "z_clear": 0.5,
+    "lqr_q_x": 1.0,
+    "lqr_q_y": 1.0,
+    "lqr_q_z": 1.0,
+    "lqr_q_vx": 0.16,
+    "lqr_q_vy": 0.16,
+    "lqr_q_vz": 0.4,
+    "lqr_q_thetax": 0.8,
+    "lqr_q_thetay": 0.8,
+    "lqr_q_thetaz": 0.5,
+    "lqr_r_a_cmd": 0.02,
+    "lqr_r_omega_x": 0.012,
+    "lqr_r_omega_y": 0.012,
+    "lqr_r_omega_z": 0.04
+  },
+  "design_region": {
+    "zeta_min": 0.0,
+    "zeta_max": 3.0,
+    "v_max": 4.0,
+    "tilt_max_deg": 35.0,
+    "yaw_max_deg": 45.0,
+    "edge_margin": 0.25,
+    "edge_zeta_low": 1.0,
+    "edge_outward_prob": 0.7,
+    "edge_floor_prob": 0.3,
+    "shell_kappa": 1.8,
+    "general_scale_min": 0.35,
+    "mix_general_low": 0.45,
+    "mix_edge_low": 0.1,
+    "mix_shell_low": 0.45,
+    "mix_general_high": 0.4,
+    "mix_edge_high": 0.45,
+    "mix_shell_high": 0.15,
+    "weight_general": 1.0,
+    "weight_edge": 3.0,
+    "weight_shell": 0.5,
+    "max_resample_tries": 64,
+    "heldout_general": 1024,
+    "heldout_edge": 1024,
+    "heldout_shell": 512,
+    "heldout_seed": 1234
+  },
+  "side_direction": [
+    -1.0,
+    0.0
+  ],
+  "steps": 300,
+  "dt": 0.02,
+  "zeta_touch": 0.02,
+  "v_touch": 0.3,
+  "phase1_summary": {
+    "test_mu_w": 0.5088975694444444,
+    "test_general": 0.78515625,
+    "test_edge": 0.3349609375,
+    "test_shell": 1.0
+  },
+  "settings": {
+    "a10_f20": {
+      "overrides": {
+        "alpha": 10.0,
+        "alpha_floor": 20.0
+      },
+      "floor_constraint": true,
+      "alpha": 10.0,
+      "sensitivity_propagation": "discrete",
+      "discrete_safeguard": true,
+      "alpha_per_constraint": [
+        10.0,
+        20.0
+      ],
+      "relative_time_per_constraint": [
+        true,
+        true
+      ],
+      "hover": {
+        "lowest_feasible_height_on_axis": 0.05,
+        "feasible_fraction_inside_cone": 0.9726688102893891,
+        "feasible_fraction_lower_half": 0.9502487562189055
+      },
+      "lqr": {
+        "per_case_filtered": {
+          "reference start -> pad centre": {
+            "n": 1,
+            "touchdown_rate": 1.0,
+            "touchdown_time": {
+              "mean": 2.8000000000000003,
+              "median": 2.8000000000000003,
+              "min": 2.8000000000000003,
+              "max": 2.8000000000000003
+            },
+            "min_h_cone": 0.02482903003692627,
+            "min_height": 0.003914026077836752,
+            "final_height": {
+              "mean": 0.003917435184121132,
+              "median": 0.003917435184121132,
+              "min": 0.003917435184121132,
+              "max": 0.003917435184121132
+            },
+            "final_radial": {
+              "mean": 0.0001148626627049064,
+              "median": 0.0001148626627049064,
+              "min": 0.0001148626627049064,
+              "max": 0.0001148626627049064
+            },
+            "max_slack": 0.00013057039177510887,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "reference start -> pad edge (0.9 r0)": {
+            "n": 1,
+            "touchdown_rate": 0.0,
+            "touchdown_time": null,
+            "min_h_cone": 0.02457404136657715,
+            "min_height": 0.021688513457775116,
+            "final_height": {
+              "mean": 0.02170240692794323,
+              "median": 0.02170240692794323,
+              "min": 0.02170240692794323,
+              "max": 0.02170240692794323
+            },
+            "final_radial": {
+              "mean": 0.2693676777369634,
+              "median": 0.2693676777369634,
+              "min": 0.2693676777369634,
+              "max": 0.2693676777369634
+            },
+            "max_slack": 0.00014376149920281023,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "reference start -> below the floor (apex depth)": {
+            "n": 1,
+            "touchdown_rate": 1.0,
+            "touchdown_time": {
+              "mean": 1.6,
+              "median": 1.6,
+              "min": 1.6,
+              "max": 1.6
+            },
+            "min_h_cone": 0.024242520332336426,
+            "min_height": 0.0013116673799231648,
+            "final_height": {
+              "mean": 0.003867228515446186,
+              "median": 0.003867228515446186,
+              "min": 0.003867228515446186,
+              "max": 0.003867228515446186
+            },
+            "final_radial": {
+              "mean": 0.009087035612498363,
+              "median": 0.009087035612498363,
+              "min": 0.009087035612498363,
+              "max": 0.009087035612498363
+            },
+            "max_slack": 0.0001779055455699563,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "hover over the pad -> pad centre": {
+            "n": 1,
+            "touchdown_rate": 1.0,
+            "touchdown_time": {
+              "mean": 2.74,
+              "median": 2.74,
+              "min": 2.74,
+              "max": 2.74
+            },
+            "min_h_cone": 0.2889159023761749,
+            "min_height": 0.003915917128324509,
+            "final_height": {
+              "mean": 0.003917432390153408,
+              "median": 0.003917432390153408,
+              "min": 0.003917432390153408,
+              "max": 0.003917432390153408
+            },
+            "final_radial": {
+              "mean": 0.00011484009541888184,
+              "median": 0.00011484009541888184,
+              "min": 0.00011484009541888184,
+              "max": 0.00011484009541888184
+            },
+            "max_slack": 8.327801879204344e-06,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "hover over the pad -> pad edge (0.9 r0)": {
+            "n": 1,
+            "touchdown_rate": 0.0,
+            "touchdown_time": null,
+            "min_h_cone": 0.05191636085510254,
+            "min_height": 0.02168259024620056,
+            "final_height": {
+              "mean": 0.02170245721936226,
+              "median": 0.02170245721936226,
+              "min": 0.02170245721936226,
+              "max": 0.02170245721936226
+            },
+            "final_radial": {
+              "mean": 0.26936878506836576,
+              "median": 0.26936878506836576,
+              "min": 0.26936878506836576,
+              "max": 0.26936878506836576
+            },
+            "max_slack": 8.684562089911196e-06,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "hover over the pad -> below the floor (apex depth)": {
+            "n": 1,
+            "touchdown_rate": 1.0,
+            "touchdown_time": {
+              "mean": 1.26,
+              "median": 1.26,
+              "min": 1.26,
+              "max": 1.26
+            },
+            "min_h_cone": 0.28632980585098267,
+            "min_height": 0.0038439854979515076,
+            "final_height": {
+              "mean": 0.0038672485388815403,
+              "median": 0.0038672485388815403,
+              "min": 0.0038672485388815403,
+              "max": 0.0038672485388815403
+            },
+            "final_radial": {
+              "mean": 0.009086367892024095,
+              "median": 0.009086367892024095,
+              "min": 0.009086367892024095,
+              "max": 0.009086367892024095
+            },
+            "max_slack": 0.00017068750457838178,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.0
+          },
+          "random C_N start -> pad centre": {
+            "n": 16,
+            "touchdown_rate": 1.0,
+            "touchdown_time": {
+              "mean": 2.36375,
+              "median": 2.4699999999999998,
+              "min": 0.9,
+              "max": 3.4
+            },
+            "min_h_cone": 3.2067298889160156e-05,
+            "min_height": 0.0009903828613460064,
+            "final_height": {
+              "mean": 0.003917436406482011,
+              "median": 0.003917435882613063,
+              "min": 0.003917426336556673,
+              "max": 0.003917442634701729
+            },
+            "final_radial": {
+              "mean": 0.00011483877920187761,
+              "median": 0.00011487259738385323,
+              "min": 0.00011440437677874832,
+              "max": 0.0001149146519184251
+            },
+            "max_slack": 0.0005692085833288729,
+            "qp_fallbacks": 0,
+            "safeguard_active_rate": 0.000625
+          }
+        },
+        "per_case_unfiltered_min_height": {
+          "reference start -> pad centre": 6.182659126352519e-05,
+          "reference start -> pad edge (0.9 r0)": 7.37646987545304e-05,
+          "reference start -> below the floor (apex depth)": -0.29992175102233887,
+          "hover over the pad -> pad centre": 7.542089588241652e-05,
+          "hover over the pad -> pad edge (0.9 r0)": 7.467242539860308e-05,
+          "hover over the pad -> below the floor (apex depth)": -0.2999062240123749,
+          "random C_N start -> pad centre": -209.59515380859375
+        },
+        "random_starts_found": 16,
+        "fixed_starts_not_in_CN": []
+      },
+      "lqr_centre_all": {
+        "n": 18,
+        "touchdown_rate": 1.0,
+        "touchdown_time": {
+          "mean": 2.4088888888888893,
+          "median": 2.54,
+          "min": 0.9,
+          "max": 3.4
+        },
+        "min_h_cone": 3.2067298889160156e-05,
+        "min_height": 0.0009903828613460064,
+        "final_height": {
+          "mean": 0.0039174361154437065,
+          "median": 0.003917435649782419,
+          "min": 0.003917426336556673,
+          "max": 0.003917442634701729
+        },
+        "final_radial": {
+          "mean": 0.0001148401791863239,
+          "median": 0.00011486860381427629,
+          "min": 0.00011440437677874832,
+          "max": 0.0001149146519184251
+        },
+        "max_slack": 0.0005692085833288729,
+        "qp_fallbacks": 0,
+        "safeguard_active_rate": 0.0005555555555555556
+      },
+      "tracking": {
+        "starts": 9,
+        "starts_in_CN": 9,
+        "filtered_in_CN": {
+          "n": 9,
+          "touchdown_rate": 1.0,
+          "touchdown_time": {
+            "mean": 1.9888888888888887,
+            "median": 2.0,
+            "min": 1.86,
+            "max": 2.12
+          },
+          "min_h_cone": 0.015478372573852539,
+          "min_height": 0.003909253049641848,
+          "final_height": {
+            "mean": 0.0039174337353971266,
+            "median": 0.003917433321475983,
+            "min": 0.0039174314588308334,
+            "max": 0.0039174375124275684
+          },
+          "final_radial": {
+            "mean": 0.00011490122015568745,
+            "median": 0.00011490154008105697,
+            "min": 0.00011489977639692638,
+            "max": 0.00011490266869542232
+          },
+          "max_slack": 0.00017576153913978487,
+          "qp_fallbacks": 0,
+          "safeguard_active_rate": 0.0
+        },
+        "unfiltered_leaves_cone_rate": 1.0,
+        "unfiltered_touchdown_rate": 1.0
+      }
+    }
+  },
+  "wall_time_sec": 103.76525259017944
+}

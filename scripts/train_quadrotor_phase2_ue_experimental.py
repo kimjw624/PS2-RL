@@ -27,6 +27,7 @@ import sys
 from typing import Any
 
 import numpy as np
+import jax
 
 from ps2rl.cil.quadrotor_backup_cbf import QuadrotorBCBFConfig
 from ps2rl.cil.quadrotor_ue_bcbf_experimental import ExperimentalUEConfig
@@ -238,6 +239,73 @@ def _plot_training_history(history: dict[str, Any], eval_every: int, output_path
     plt.close(fig)
 
 
+def _plot_live_metrics(rows: list[dict[str, float]], output_path: Path) -> None:
+    """Write one compact progress figure without affecting training state."""
+    if not rows:
+        return
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:
+        print(f"Warning: matplotlib unavailable; skipping live training plot: {exc}")
+        return
+
+    step = np.asarray([row["step"] for row in rows], dtype=np.float64)
+    panels = (
+        ("perf/steps_per_sec", "Training throughput", "steps/s"),
+        ("episode/pos_error_norm", "Episode position error", "error norm [m]"),
+        ("episode/hard_deck_margin_min", "Episode ceiling margin", "margin [m]"),
+        ("eval/pos_xyz_rmse_mean", "Evaluation position RMSE", "RMSE [m]"),
+        ("train/slack_mean", "Mean physical QP slack", "slack"),
+        ("eval/violation_free_episode_rate", "Evaluation safety", "violation-free rate"),
+    )
+    fig, axes = plt.subplots(2, 3, figsize=(13.5, 7.6))
+    for axis, (key, title, ylabel) in zip(axes.ravel(), panels):
+        value = np.asarray([row.get(key, np.nan) for row in rows], dtype=np.float64)
+        finite = np.isfinite(value)
+        if np.any(finite):
+            axis.plot(step[finite], value[finite], linewidth=1.5)
+        if key == "episode/hard_deck_margin_min":
+            axis.axhline(0.0, color="black", linewidth=1.0)
+        if key == "eval/violation_free_episode_rate":
+            axis.set_ylim(-0.03, 1.03)
+        axis.set_title(title)
+        axis.set_xlabel("Environment step")
+        axis.set_ylabel(ylabel)
+        axis.grid(True, alpha=0.25)
+    fig.suptitle("UE-bCBF Phase-II fine-tuning progress")
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
+
+
+class _LiveMetricRecorder:
+    def __init__(self, run_dir: Path, *, plot_every: int) -> None:
+        self.run_dir = run_dir
+        self.plot_every = int(plot_every)
+        self.next_plot = int(plot_every) if plot_every > 0 else 0
+        self.rows: list[dict[str, float]] = []
+        self.jsonl_path = run_dir / "training" / "live_metrics.jsonl"
+        self.plot_path = run_dir / "plots" / "training_progress.png"
+
+    def __call__(self, step: int, metrics: dict[str, float]) -> None:
+        row = {"step": float(step), **{key: float(value) for key, value in metrics.items()}}
+        self.rows.append(row)
+        with self.jsonl_path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(row, sort_keys=True) + "\n")
+        if self.plot_every > 0 and step >= self.next_plot:
+            _plot_live_metrics(self.rows, self.plot_path)
+            while self.next_plot <= step:
+                self.next_plot += self.plot_every
+
+    def finalize(self) -> None:
+        if self.plot_every > 0:
+            _plot_live_metrics(self.rows, self.plot_path)
+
+
 def _save_eval_artifacts(
     run_dir: Path,
     label: str,
@@ -330,6 +398,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=3_500_000)
     p.add_argument("--eval-every", type=int, default=10_000)
     p.add_argument("--eval-episodes", type=int, default=3)
+    p.add_argument(
+        "--live-plot-every",
+        type=int,
+        default=0,
+        help=(
+            "Refresh plots/training_progress.png at this many environment steps; "
+            "0 preserves the previous no-live-plot behavior."
+        ),
+    )
 
     p.add_argument("--disturbance-amplitude", type=float, default=0.5)
     p.add_argument("--disturbance-frequency-hz", type=float, default=0.05)
@@ -339,6 +416,37 @@ def parse_args() -> argparse.Namespace:
         choices=("axis_set7", "random_unit", "fixed"),
         default="axis_set7",
         help="axis_set7 matches the x/y/z/xy/xz/yz/xyz diagnostic sweep",
+    )
+    p.add_argument("--disturbance-direction-x", type=float, default=1.0)
+    p.add_argument("--disturbance-direction-y", type=float, default=0.0)
+    p.add_argument("--disturbance-direction-z", type=float, default=0.0)
+    p.add_argument(
+        "--ue-delta-d",
+        type=float,
+        default=None,
+        help=(
+            "UE disturbance-magnitude bound. By default this equals the actual "
+            "training disturbance amplitude; override it to keep the same UE "
+            "filter while changing only the training environment disturbance."
+        ),
+    )
+    p.add_argument(
+        "--ue-delta-v",
+        type=float,
+        default=None,
+        help="UE disturbance-rate bound; default is 2*pi*f*A from the training disturbance.",
+    )
+    p.add_argument(
+        "--z-max-override",
+        type=float,
+        default=None,
+        help="Apply one common ceiling to both the training environment and bCBF.",
+    )
+    p.add_argument(
+        "--slack-weight-override",
+        type=float,
+        default=None,
+        help="Override the saved bCBF slack weight for this fine-tuning run.",
     )
 
     p.add_argument("--ue-horizon", type=float, default=1.0)
@@ -355,6 +463,19 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Compute expensive full-state spectral-norm radius diagnostics during training. "
             "Disabled by default; the actual UE QP support margins are unchanged."
+        ),
+    )
+    p.add_argument(
+        "--scaled-slack-qp",
+        action="store_true",
+        help="Use the exact scaled-slack UE QP parameterization during training.",
+    )
+    p.add_argument(
+        "--scaled-slack-qp-float64",
+        action="store_true",
+        help=(
+            "Solve only the scaled five-variable QP in float64; requires "
+            "--scaled-slack-qp and JAX_ENABLE_X64=1."
         ),
     )
 
@@ -374,6 +495,35 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.scaled_slack_qp_float64 and not args.scaled_slack_qp:
+        raise ValueError("--scaled-slack-qp-float64 requires --scaled-slack-qp")
+    if args.scaled_slack_qp_float64 and not bool(jax.config.x64_enabled):
+        raise RuntimeError(
+            "--scaled-slack-qp-float64 requires JAX_ENABLE_X64=1 before Python starts"
+        )
+    if args.live_plot_every < 0:
+        raise ValueError("--live-plot-every must be nonnegative")
+    direction = np.asarray(
+        [
+            args.disturbance_direction_x,
+            args.disturbance_direction_y,
+            args.disturbance_direction_z,
+        ],
+        dtype=np.float64,
+    )
+    if not np.all(np.isfinite(direction)):
+        raise ValueError("Fixed disturbance direction must be finite")
+    if args.disturbance_direction_mode == "fixed" and np.linalg.norm(direction) <= 1e-12:
+        raise ValueError("Fixed disturbance direction must be nonzero")
+    if args.z_max_override is not None and (
+        not np.isfinite(args.z_max_override) or args.z_max_override <= 0.0
+    ):
+        raise ValueError("--z-max-override must be positive and finite")
+    if args.slack_weight_override is not None and (
+        not np.isfinite(args.slack_weight_override)
+        or args.slack_weight_override <= 0.0
+    ):
+        raise ValueError("--slack-weight-override must be positive and finite")
     run_dir = Path(args.run_dir).expanduser().resolve()
     output_dir = _prepare_output_dir(args)
 
@@ -409,16 +559,37 @@ def main() -> None:
 
     amp = float(args.disturbance_amplitude)
     freq = float(args.disturbance_frequency_hz)
-    delta_v = 2.0 * pi * freq * amp
+    if amp < 0.0 or not np.isfinite(amp):
+        raise ValueError("--disturbance-amplitude must be nonnegative and finite")
+    if freq < 0.0 or not np.isfinite(freq):
+        raise ValueError("--disturbance-frequency-hz must be nonnegative and finite")
+    actual_delta_v = 2.0 * pi * freq * amp
+    ue_delta_d = amp if args.ue_delta_d is None else float(args.ue_delta_d)
+    ue_delta_v = actual_delta_v if args.ue_delta_v is None else float(args.ue_delta_v)
+    if ue_delta_d < 0.0 or not np.isfinite(ue_delta_d):
+        raise ValueError("--ue-delta-d must be nonnegative and finite")
+    if ue_delta_v < 0.0 or not np.isfinite(ue_delta_v):
+        raise ValueError("--ue-delta-v must be nonnegative and finite")
+    effective_env_z_max = (
+        float(env_saved.z_max)
+        if args.z_max_override is None
+        else float(args.z_max_override)
+    )
+    effective_cbf_z_max = (
+        float(cbf_saved.z_max)
+        if args.z_max_override is None
+        else float(args.z_max_override)
+    )
     env_cfg = replace(
         env_saved,
+        z_max=effective_env_z_max,
         disturbance_mode="sinusoidal" if amp > 0.0 else "none",
         disturbance_amplitude=amp,
         disturbance_frequency_hz=freq,
         disturbance_phase=float(args.disturbance_phase),
-        disturbance_direction_x=1.0,
-        disturbance_direction_y=0.0,
-        disturbance_direction_z=0.0,
+        disturbance_direction_x=float(direction[0]),
+        disturbance_direction_y=float(direction[1]),
+        disturbance_direction_z=float(direction[2]),
         disturbance_direction_mode=str(args.disturbance_direction_mode),
         terminate_on_violation=False,
     )
@@ -426,11 +597,21 @@ def main() -> None:
     n_steps = int(round(float(args.ue_horizon) / float(cbf_saved.dt)))
     if n_steps <= 0:
         raise ValueError("--ue-horizon must produce at least one backup step")
-    cbf_cfg = replace(cbf_saved, T=n_steps * float(cbf_saved.dt), num_steps=n_steps)
+    cbf_cfg = replace(
+        cbf_saved,
+        T=n_steps * float(cbf_saved.dt),
+        num_steps=n_steps,
+        z_max=effective_cbf_z_max,
+        **(
+            {"slack_weight": float(args.slack_weight_override)}
+            if args.slack_weight_override is not None
+            else {}
+        ),
+    )
 
     ue_cfg = ExperimentalUEConfig(
-        delta_d=amp,
-        delta_v=delta_v,
+        delta_d=ue_delta_d,
+        delta_v=ue_delta_v,
         observer_lambda=float(args.ue_observer_lambda),
         tube_scale=float(args.ue_tube_scale),
         rho_scale=float(args.ue_rho_scale),
@@ -453,8 +634,14 @@ def main() -> None:
         "design": {
             "disturbance_amplitude": amp,
             "disturbance_frequency_hz": freq,
-            "delta_v": delta_v,
+            "actual_disturbance_delta_v": actual_delta_v,
+            "ue_delta_d": ue_delta_d,
+            "ue_delta_v": ue_delta_v,
             "disturbance_direction_mode": env_cfg.disturbance_direction_mode,
+            "disturbance_direction": direction.tolist(),
+            "environment_z_max": effective_env_z_max,
+            "bcbf_z_max": effective_cbf_z_max,
+            "slack_weight": float(cbf_cfg.slack_weight),
             "ue_horizon_sec": cbf_cfg.T,
             "ue_num_steps": cbf_cfg.num_steps,
             "ue_tube_scale": ue_cfg.tube_scale,
@@ -467,6 +654,9 @@ def main() -> None:
             "compute_radius_diagnostics": ue_cfg.compute_radius_diagnostics,
             "project_actor_actions": sac_cfg.project_actor_actions,
             "project_target_actions": sac_cfg.project_target_actions,
+            "scaled_slack_qp": bool(args.scaled_slack_qp),
+            "scaled_slack_qp_float64": bool(args.scaled_slack_qp_float64),
+            "live_plot_every": int(args.live_plot_every),
         },
         "note": "Empirical first-order UE tube; not yet a formal nonlinear certificate.",
     }
@@ -476,24 +666,52 @@ def main() -> None:
     print(f"warm start: {warm_weights}")
     print(f"output: {output_dir}")
     print(f"steps={sac_cfg.total_steps} num_envs={sac_cfg.num_envs} steps_per_jit={sac_cfg.steps_per_jit}")
-    print(f"disturbance: A={amp:.3f}, f={freq:.3f} Hz, delta_v={delta_v:.6f}")
-    print(f"direction mode: {env_cfg.disturbance_direction_mode}")
+    print(
+        f"actual disturbance: A={amp:.3f}, f={freq:.3f} Hz, "
+        f"rate bound={actual_delta_v:.6f}"
+    )
+    print(f"UE bounds: delta_d={ue_delta_d:.6f}, delta_v={ue_delta_v:.6f}")
+    print(
+        f"direction mode: {env_cfg.disturbance_direction_mode}; "
+        f"vector={direction.tolist()}"
+    )
+    print(
+        f"z_max env/bCBF={effective_env_z_max:.3f}/{effective_cbf_z_max:.3f}, "
+        f"slack weight={cbf_cfg.slack_weight:g}"
+    )
     print(f"T={cbf_cfg.T:.3f}s N={cbf_cfg.num_steps} dt={cbf_cfg.dt:.3f}s")
     print(f"tube scale={ue_cfg.tube_scale:.3f} terminal mode={ue_cfg.terminal_mode}")
     print(f"rho scales={ue_cfg.rho_scale:.3f}/{ue_cfg.safe_rho_scale:.3f}/{ue_cfg.terminal_rho_scale:.3f}")
     print(f"observer lambda={ue_cfg.observer_lambda:.3f}, warmup={args.ue_observer_warmup_sec:.3f}s")
     print(f"project_actor_actions={sac_cfg.project_actor_actions}, project_target_actions={sac_cfg.project_target_actions}")
     print(f"full-radius diagnostics={ue_cfg.compute_radius_diagnostics}")
+    print(
+        "QP mode="
+        + (
+            "scaled slack, float64 solve"
+            if args.scaled_slack_qp_float64
+            else "scaled slack, float32 solve"
+            if args.scaled_slack_qp
+            else "original"
+        )
+    )
     print("NOTE: empirical first-order UE tube; not yet a formal nonlinear certificate.\n")
 
+    live_recorder = _LiveMetricRecorder(
+        output_dir, plot_every=int(args.live_plot_every)
+    )
     result = run_ue_training(
         sac_cfg,
         env_cfg,
         cbf_cfg,
         ue_cfg,
         observer_warmup_sec=float(args.ue_observer_warmup_sec),
+        scaled_slack_qp=bool(args.scaled_slack_qp),
+        scaled_slack_qp_float64=bool(args.scaled_slack_qp_float64),
         output_dir=str(output_dir),
+        metric_logger=live_recorder,
     )
+    live_recorder.finalize()
 
     manifest["completed_at"] = datetime.now().astimezone().isoformat()
     manifest["summary"] = result["summary"]
@@ -512,6 +730,9 @@ def main() -> None:
     print(f"  best policy:       {output_dir / 'checkpoints' / 'best_weights.pkl'}")
     print(f"  final policy:      {output_dir / 'checkpoints' / 'final_weights.pkl'}")
     print(f"  training curves:   {output_dir / 'plots' / 'training_curves.png'}")
+    if args.live_plot_every > 0:
+        print(f"  progress plot:     {output_dir / 'plots' / 'training_progress.png'}")
+        print(f"  live metrics:      {output_dir / 'training' / 'live_metrics.jsonl'}")
     print(f"  best trajectory:   {output_dir / 'evaluation' / 'best' / 'trajectory.png'}")
     print(f"  final trajectory:  {output_dir / 'evaluation' / 'final' / 'trajectory.png'}")
     print(f"  manifest:          {output_dir / 'metadata' / 'run_manifest.json'}")

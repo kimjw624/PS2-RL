@@ -1,0 +1,132 @@
+{
+  "notes": "Strike task, full arena, Phase I (safe-arrival backup) with moving chasers: the chasers pursue the drone at v_c during every episode, the safe set holds the guidance-law escape margin h_c >= 0 (a_e 5 m/s^2 after 0.2 s) instead of the static reach ball, the base set is a hover clear of obstacles / walls whose hover ellipsoid keeps h_c >= 2 m from every chaser (1 s at v_c), the arena walls and ceiling are part of the scene. Observation per chaser: offset, h_c, closing speed, present; plus the 5 wall distances. Horizon T = 3 s (the filter's). Five regions incl. escape (slow, chaser 0.8..3.5 m beyond contact). Backup = flee-then-hover heuristic (strike_scene.flee_action: hover LQR while the hover keeps its chaser margin + 1 m, else fly away from the chaser at 6 m/s, pushed off obstacles / walls) + learned residual, initialized at du = 0 (base_bc), anchor 0.2. The braking LQR as the base never learned to flee in CPU probes (chaser / escape regions stayed at 0).",
+  "strike": {
+    "dt": 0.02,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "T": 3.0,
+    "z_floor": 1.0,
+    "r_drone": 0.3,
+    "chaser_radius": 0.4,
+    "chaser_speed": 2.0,
+    "lqr_q": [
+      2.0,
+      2.0,
+      8.0,
+      0.01,
+      0.01,
+      0.5,
+      8.0,
+      8.0,
+      2.0
+    ],
+    "lqr_r": [
+      0.06,
+      0.15,
+      0.15,
+      0.12
+    ],
+    "c_B": 50.0,
+    "wind_accel_max": 0.3,
+    "n_obstacle_slots": 8,
+    "n_chaser_slots": 2,
+    "backup_action": "residual_flee",
+    "chaser_set": "guidance",
+    "chaser_a_evade": 5.0,
+    "chaser_delay": 0.2,
+    "chaser_base_margin": 2.0,
+    "arena_walls": true,
+    "wall_obs_cap": 20.0,
+    "flee_speed": 6.0,
+    "flee_switch_margin": 1.0,
+    "flee_push_dist": 1.5,
+    "flee_z_min": 1.0,
+    "flee_ceiling_margin": 3.0
+  },
+  "region": {
+    "mix_low": [
+      0.35,
+      0.1,
+      0.15,
+      0.2,
+      0.2
+    ],
+    "mix_high": [
+      0.3,
+      0.15,
+      0.2,
+      0.15,
+      0.2
+    ],
+    "escape_gap_min": 0.8,
+    "escape_gap_max": 3.5,
+    "wall_prob": 0.5,
+    "wall_dist_min": 0.5,
+    "wall_dist_max": 12.0,
+    "wall_span_x": [
+      30.0,
+      50.0
+    ],
+    "wall_span_y": [
+      16.0,
+      24.0
+    ],
+    "ceiling_z_min": 8.0,
+    "ceiling_z_max": 12.0,
+    "pool_per_region": 50000,
+    "heldout_val": 1000,
+    "heldout_test": 2000
+  },
+  "sa": {
+    "sa_backbone": "td3",
+    "total_steps": 20000000,
+    "episode_max_steps": 225,
+    "curriculum_start_scale": 1.0,
+    "eval_every": 250000,
+    "log_every": 100000,
+    "action_smoothness_weight": 0.2,
+    "actor_init": "base_bc",
+    "actor_start_update": 20000
+  },
+  "env": {
+    "arena_x": 40.0,
+    "arena_y_half": 10.0,
+    "z_max": 10.0,
+    "start_z_min": 2.0,
+    "start_z_max": 4.0,
+    "start_speed_min": 4.0,
+    "start_speed_max": 6.0,
+    "target_x_min": 32.0,
+    "target_x_max": 37.0,
+    "target_y_half": 5.0,
+    "target_z_min": 1.6,
+    "target_z_max": 2.5,
+    "target_speed_min": 0.2,
+    "target_speed_max": 0.8,
+    "strike_radius": 0.6,
+    "obstacles_min": 6,
+    "obstacles_max": 10,
+    "chasers_max": 2,
+    "episode_seconds": 15.0,
+    "w_progress": 2.0,
+    "w_time": 0.05,
+    "w_action": 0.05,
+    "strike_bonus": 100.0,
+    "crash_penalty": 150.0,
+    "pool_size": 10000,
+    "chasers_active_min": 0,
+    "chasers_active_max": 2
+  },
+  "tracker": {
+    "total_steps": 10000000,
+    "num_envs": 64,
+    "update_every": 2,
+    "replay_size": 1000000,
+    "eval_every": 250000,
+    "eval_episodes": 128,
+    "gamma": 0.995,
+    "reward_scale": 0.1
+  }
+}

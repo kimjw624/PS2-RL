@@ -53,6 +53,7 @@ from evaluate_quadrotor_ue_upward_safety_threshold import (
     _parse_csv_floats,
     _rollout_episode,
     _runtime_metadata,
+    _summarize_ue_diagnostic_steps,
 )
 from evaluate_quadrotor_ue_weak_paired import (
     ConditionRuntime,
@@ -353,6 +354,254 @@ def _plot_sweep(rows: list[dict[str, Any]], output_path: Path, *, complete: bool
     plt.close(fig)
 
 
+def _plot_token(value: float) -> str:
+    return f"{value:g}".replace("-", "m").replace(".", "p")
+
+
+def _select_representative_pairs(
+    episode_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Choose one deterministic paired seed for every (z_max, amplitude) cell.
+
+    A standard-unsafe/UE-safe seed is preferred when that separation exists.
+    Within the selected pool, the seed closest to the median standard minimum
+    ceiling margin is used, avoiding an extreme best- or worst-case example.
+    """
+
+    index = {
+        (
+            float(row["z_max"]),
+            float(row["amplitude"]),
+            int(row["episode_seed"]),
+            str(row["filter"]),
+        ): row
+        for row in episode_rows
+    }
+    cells = sorted({key[:2] for key in index})
+    output: list[dict[str, Any]] = []
+    for z_max, amplitude in cells:
+        seeds = sorted(
+            {
+                key[2]
+                for key in index
+                if key[0] == z_max and key[1] == amplitude
+            }
+        )
+        pairs: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        for seed in seeds:
+            standard = index.get((z_max, amplitude, seed, "standard"))
+            ue = index.get((z_max, amplitude, seed, "ue"))
+            if standard is not None and ue is not None:
+                pairs.append((seed, standard, ue))
+        if not pairs:
+            continue
+
+        separated = [
+            pair
+            for pair in pairs
+            if float(pair[1]["violation_free"]) < 0.5
+            and float(pair[2]["violation_free"]) >= 0.5
+        ]
+        pool = separated if separated else pairs
+        target_margin = float(
+            np.median([float(pair[1]["hard_deck_margin_min"]) for pair in pool])
+        )
+        seed, standard, ue = min(
+            pool,
+            key=lambda pair: (
+                abs(float(pair[1]["hard_deck_margin_min"]) - target_margin),
+                pair[0],
+            ),
+        )
+        stem = (
+            f"representative_zmax{_plot_token(z_max)}_"
+            f"A{_plot_token(amplitude)}_seed{seed}"
+        )
+        output.append(
+            {
+                "z_max": z_max,
+                "amplitude": amplitude,
+                "episode_seed": seed,
+                "selection_rule": (
+                    "median_standard_margin_among_standard_unsafe_ue_safe"
+                    if separated
+                    else "median_standard_margin_among_all_paired_seeds"
+                ),
+                "candidate_pairs": len(pool),
+                "standard_violation_free": float(standard["violation_free"]),
+                "ue_violation_free": float(ue["violation_free"]),
+                "standard_min_ceiling_margin": float(standard["hard_deck_margin_min"]),
+                "ue_min_ceiling_margin": float(ue["hard_deck_margin_min"]),
+                "time_position_plot": f"plots/{stem}_position_time.png",
+                "trajectory_3d_plot": f"plots/{stem}_trajectory_3d.png",
+            }
+        )
+    return output
+
+
+def _plot_representative_pairs(
+    step_rows: list[dict[str, Any]],
+    representatives: list[dict[str, Any]],
+    output_dir: Path,
+) -> None:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:
+        print(f"Warning: matplotlib unavailable; skipping representative plots: {exc}")
+        return
+
+    colors = {"standard": "#1f77b4", "ue": "#d97706"}
+    labels = {"standard": "Standard bCBF", "ue": "UE-bCBF"}
+    for representative in representatives:
+        z_max = float(representative["z_max"])
+        amplitude = float(representative["amplitude"])
+        seed = int(representative["episode_seed"])
+        selected = [
+            row
+            for row in step_rows
+            if float(row["z_max"]) == z_max
+            and float(row["amplitude"]) == amplitude
+            and int(row["episode_seed"]) == seed
+        ]
+        traces = {
+            filter_name: sorted(
+                [row for row in selected if row["filter"] == filter_name],
+                key=lambda row: int(row["step"]),
+            )
+            for filter_name in ("standard", "ue")
+        }
+        if not all(traces.values()):
+            continue
+
+        reference_rows = traces["standard"]
+        reference = np.asarray(
+            [
+                [row["reference_x"], row["reference_y"], row["reference_z"]]
+                for row in reference_rows
+            ],
+            dtype=np.float64,
+        )
+        reference_time = np.asarray(
+            [row["time_sec"] for row in reference_rows], dtype=np.float64
+        )
+
+        fig, axes = plt.subplots(3, 1, figsize=(9.2, 8.0), sharex=True)
+        coordinate_labels = ("x position [m]", "y position [m]", "z position [m]")
+        for coordinate, axis in enumerate(axes):
+            axis.plot(
+                reference_time,
+                reference[:, coordinate],
+                color="black",
+                linestyle="--",
+                linewidth=1.4,
+                label="Reference",
+            )
+            for filter_name in ("standard", "ue"):
+                rows = traces[filter_name]
+                time = np.asarray([row["time_sec"] for row in rows], dtype=np.float64)
+                position = np.asarray(
+                    [
+                        [row["position_x"], row["position_y"], row["position_z"]]
+                        for row in rows
+                    ],
+                    dtype=np.float64,
+                )
+                axis.plot(
+                    time,
+                    position[:, coordinate],
+                    color=colors[filter_name],
+                    linewidth=1.7,
+                    label=labels[filter_name],
+                )
+            axis.set_ylabel(coordinate_labels[coordinate])
+            axis.grid(True, alpha=0.25)
+        axes[2].axhline(z_max, color="#b91c1c", linestyle=":", linewidth=1.6, label="Ceiling")
+        axes[2].set_xlabel("Time [s]")
+        handles, legend_labels = axes[2].get_legend_handles_labels()
+        axes[0].legend(handles, legend_labels, loc="best", ncol=2)
+        fig.suptitle(
+            f"Representative paired trajectory: z_max={z_max:g} m, "
+            f"A={amplitude:g} m/s², seed={seed}"
+        )
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+        time_path = output_dir / str(representative["time_position_plot"])
+        time_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(time_path, dpi=180)
+        plt.close(fig)
+
+        fig = plt.figure(figsize=(9.0, 7.2))
+        axis = fig.add_subplot(111, projection="3d")
+        axis.plot(
+            reference[:, 0],
+            reference[:, 1],
+            reference[:, 2],
+            color="black",
+            linestyle="--",
+            linewidth=1.4,
+            label="Reference",
+        )
+        all_positions = [reference]
+        for filter_name in ("standard", "ue"):
+            rows = traces[filter_name]
+            position = np.asarray(
+                [
+                    [row["position_x"], row["position_y"], row["position_z"]]
+                    for row in rows
+                ],
+                dtype=np.float64,
+            )
+            all_positions.append(position)
+            axis.plot(
+                position[:, 0],
+                position[:, 1],
+                position[:, 2],
+                color=colors[filter_name],
+                linewidth=1.8,
+                label=labels[filter_name],
+            )
+            axis.scatter(
+                position[0, 0], position[0, 1], position[0, 2],
+                color=colors[filter_name], marker="o", s=24,
+            )
+
+        combined = np.concatenate(all_positions, axis=0)
+        x_min, x_max = float(np.min(combined[:, 0])), float(np.max(combined[:, 0]))
+        y_min, y_max = float(np.min(combined[:, 1])), float(np.max(combined[:, 1]))
+        x_pad = max(0.15 * (x_max - x_min), 0.25)
+        y_pad = max(0.15 * (y_max - y_min), 0.25)
+        xx, yy = np.meshgrid(
+            [x_min - x_pad, x_max + x_pad],
+            [y_min - y_pad, y_max + y_pad],
+        )
+        axis.plot_surface(
+            xx,
+            yy,
+            np.full_like(xx, z_max),
+            color="#ef4444",
+            alpha=0.12,
+            linewidth=0,
+        )
+        axis.set_xlabel("x [m]")
+        axis.set_ylabel("y [m]")
+        axis.set_zlabel("z [m]")
+        axis.set_title(
+            f"3-D representative trajectory | z_max={z_max:g} m, "
+            f"A={amplitude:g} m/s², seed={seed}"
+        )
+        axis.view_init(elev=24, azim=-55)
+        axis.legend(loc="best")
+        axis.grid(True, alpha=0.25)
+        spans = np.ptp(combined, axis=0)
+        axis.set_box_aspect(tuple(np.maximum(spans, 0.5)))
+        trajectory_path = output_dir / str(representative["trajectory_3d_plot"])
+        fig.tight_layout()
+        fig.savefig(trajectory_path, dpi=180)
+        plt.close(fig)
+
+
 def _save_progress(
     output_dir: Path,
     episode_rows: list[dict[str, Any]],
@@ -367,9 +616,19 @@ def _save_progress(
     _write_csv(output_dir / "comparisons" / "ue_minus_standard_paired.csv", _paired_rows(episode_rows))
     _write_csv(output_dir / "results" / "critical_ceilings.csv", _critical_ceilings(episode_rows))
     _write_csv(output_dir / "diagnostics" / "observer_steps.csv", observer_rows)
+    _write_csv(
+        output_dir / "diagnostics" / "ue_qp_terms_summary.csv",
+        _summarize_ue_diagnostic_steps(observer_rows),
+    )
     _plot_sweep(episode_rows, output_dir / "plots" / "ceiling_safety_progress.png", complete=complete)
     if complete:
         _plot_sweep(episode_rows, output_dir / "plots" / "ceiling_safety.png", complete=True)
+        representatives = _select_representative_pairs(episode_rows)
+        _write_csv(
+            output_dir / "diagnostics" / "representative_cases.csv",
+            representatives,
+        )
+        _plot_representative_pairs(observer_rows, representatives, output_dir)
 
 
 def parse_args() -> argparse.Namespace:
@@ -659,9 +918,31 @@ def main() -> None:
             f"p05_margin={row['hard_deck_margin_p05_across_episodes']:.4f} "
             f"tracking={row['pos_error_norm_rmse_mean']:.4f}"
         )
+    print("\nUE-QP term diagnostics (median / p95 / max over controller steps)")
+    for row in _summarize_ue_diagnostic_steps(observer_rows):
+        if row["filter"] != "ue":
+            continue
+        print(
+            f"zmax={row['z_max']:g} A={row['amplitude']:g}: "
+            f"epsSmax={row['max_safe_epsilon_median']:.4g}/"
+            f"{row['max_safe_epsilon_p95']:.4g}/{row['max_safe_epsilon_max']:.4g} "
+            f"epsSN={row['terminal_safe_epsilon_median']:.4g}/"
+            f"{row['terminal_safe_epsilon_p95']:.4g}/{row['terminal_safe_epsilon_max']:.4g}"
+        )
+        print(
+            f"  epsB={row['terminal_base_epsilon_median']:.4g}/"
+            f"{row['terminal_base_epsilon_p95']:.4g}/{row['terminal_base_epsilon_max']:.4g} "
+            f"rhoSmax={row['max_safe_rho_median']:.4g}/"
+            f"{row['max_safe_rho_p95']:.4g}/{row['max_safe_rho_max']:.4g} "
+            f"rhoB={row['terminal_rho_median']:.4g}/"
+            f"{row['terminal_rho_p95']:.4g}/{row['terminal_rho_max']:.4g}"
+        )
     print(f"\nSaved results to: {output_dir}")
     print(f"Main plot: {output_dir / 'plots' / 'ceiling_safety.png'}")
     print(f"Paired rows: {output_dir / 'comparisons' / 'ue_minus_standard_paired.csv'}")
+    print(f"UE-QP terms: {output_dir / 'diagnostics' / 'ue_qp_terms_summary.csv'}")
+    print(f"Representative cases: {output_dir / 'diagnostics' / 'representative_cases.csv'}")
+    print(f"Representative plots: {output_dir / 'plots' / 'representative_*'}")
 
 
 if __name__ == "__main__":

@@ -104,6 +104,89 @@ def _finite_max(values: list[float]) -> float:
     return float(np.max(finite)) if finite.size else float("nan")
 
 
+def _finite_percentile(values: list[float], percentile: float) -> float:
+    array = np.asarray(values, dtype=np.float64)
+    finite = array[np.isfinite(array)]
+    return float(np.percentile(finite, percentile)) if finite.size else float("nan")
+
+
+def _distribution_fields(
+    rows: list[dict[str, Any]],
+    source: str,
+    prefix: str,
+) -> dict[str, Any]:
+    values = np.asarray(
+        [float(row.get(source, float("nan"))) for row in rows],
+        dtype=np.float64,
+    )
+    values = values[np.isfinite(values)]
+    if not values.size:
+        return {
+            f"{prefix}_count": 0,
+            f"{prefix}_mean": float("nan"),
+            f"{prefix}_median": float("nan"),
+            f"{prefix}_p95": float("nan"),
+            f"{prefix}_max": float("nan"),
+        }
+    return {
+        f"{prefix}_count": int(values.size),
+        f"{prefix}_mean": float(np.mean(values)),
+        f"{prefix}_median": float(np.median(values)),
+        f"{prefix}_p95": float(np.percentile(values, 95.0)),
+        f"{prefix}_max": float(np.max(values)),
+    }
+
+
+def _summarize_ue_diagnostic_steps(
+    step_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Summarize physical slack and UE terms over controller evaluations."""
+
+    grouped: dict[tuple[float | None, float, float, float, str], list[dict[str, Any]]] = {}
+    for row in step_rows:
+        z_max = float(row["z_max"]) if "z_max" in row else None
+        key = (
+            z_max,
+            float(row["amplitude"]),
+            float(row["frequency_hz"]),
+            float(row["phase_deg"]),
+            str(row["filter"]),
+        )
+        grouped.setdefault(key, []).append(row)
+
+    metrics = (
+        ("slack", "qp_physical_slack"),
+        ("ue_max_safe_epsilon", "max_safe_epsilon"),
+        ("ue_terminal_safe_epsilon", "terminal_safe_epsilon"),
+        ("ue_terminal_base_epsilon", "terminal_base_epsilon"),
+        ("ue_max_safe_rho", "max_safe_rho"),
+        ("ue_terminal_rho", "terminal_rho"),
+    )
+    output: list[dict[str, Any]] = []
+    sort_key = lambda item: (
+        float("-inf") if item[0][0] is None else item[0][0],
+        *item[0][1:],
+    )
+    for (z_max, amplitude, frequency_hz, phase_deg, filter_name), group in sorted(
+        grouped.items(), key=sort_key
+    ):
+        row: dict[str, Any] = {
+            "z_max": float("nan") if z_max is None else z_max,
+            "amplitude": amplitude,
+            "frequency_hz": frequency_hz,
+            "phase_deg": phase_deg,
+            "filter": filter_name,
+            "controller_steps": len(group),
+            "ue_diagnostic_steps": int(
+                sum(float(item.get("ue_diagnostics_active", 0.0)) > 0.5 for item in group)
+            ),
+        }
+        for source, prefix in metrics:
+            row.update(_distribution_fields(group, source, prefix))
+        output.append(row)
+    return output
+
+
 def _prepare_output_dir(args: argparse.Namespace) -> Path:
     if args.output_dir:
         output_dir = Path(args.output_dir).expanduser().resolve()
@@ -169,6 +252,8 @@ def _rollout_episode(
             d_hat = np.full((3,), np.nan, dtype=np.float64)
             e_bar = float("nan")
             elapsed = float(step_idx) * float(env_dt)
+        diagnostic_window_active = elapsed >= float(observer_warmup_sec) - 1e-9
+        observer_active = condition.filter_name == "ue" and diagnostic_window_active
 
         safe_action, raw_action, slack, use_solver, qp_info = condition.eval_action_fn(
             condition.policy.actor_params, jnp.asarray(obs, dtype=jnp.float32)
@@ -179,6 +264,8 @@ def _rollout_episode(
 
         safe_np = np.asarray(safe_action, dtype=np.float64)
         raw_np = np.asarray(raw_action, dtype=np.float64)
+        position = np.asarray(next_obs_true[:3], dtype=np.float64)
+        reference_position = np.asarray(env_info.ref_state[:3], dtype=np.float64)
         disturbance = np.asarray(env_info.disturbance_accel, dtype=np.float64)
         margin = _scalar(env_info.hard_deck_margin)
         is_safe = _scalar(env_info.is_safe)
@@ -191,6 +278,22 @@ def _rollout_episode(
         )
         solve_bits = _optional_info_scalar(qp_info, "qp_solve_dtype_bits")
         solve_float64 = _optional_info_scalar(qp_info, "qp_solve_float64")
+        ue_diag_active = _optional_info_scalar(qp_info, "ue_diagnostics_active")
+        if not np.isfinite(ue_diag_active):
+            ue_diag_active = float(
+                observer_active and "max_safe_output_margin" in qp_info
+            )
+        ue_max_safe_epsilon = _optional_info_scalar(
+            qp_info, "max_safe_output_margin"
+        )
+        ue_terminal_safe_epsilon = _optional_info_scalar(
+            qp_info, "terminal_safe_output_margin"
+        )
+        ue_terminal_base_epsilon = _optional_info_scalar(
+            qp_info, "terminal_quadratic_margin_used"
+        )
+        ue_max_safe_rho = _optional_info_scalar(qp_info, "max_rho_safe")
+        ue_terminal_rho = _optional_info_scalar(qp_info, "terminal_rho")
 
         total_return += _scalar(reward)
         safe_steps.append(is_safe)
@@ -208,7 +311,6 @@ def _rollout_episode(
 
         observer_error = float("nan")
         observer_covered = float("nan")
-        observer_active = condition.filter_name == "ue" and elapsed >= float(observer_warmup_sec) - 1e-9
         if condition.filter_name == "ue":
             observer_error = float(np.linalg.norm(disturbance - d_hat))
             observer_covered = float(observer_error <= e_bar + float(observer_tolerance))
@@ -230,6 +332,12 @@ def _rollout_episode(
                 "episode_seed": int(episode_seed),
                 "step": int(step_idx),
                 "time_sec": _scalar(env_info.ref_time_sec),
+                "position_x": float(position[0]),
+                "position_y": float(position[1]),
+                "position_z": float(position[2]),
+                "reference_x": float(reference_position[0]),
+                "reference_y": float(reference_position[1]),
+                "reference_z": float(reference_position[2]),
                 "disturbance_x": float(disturbance[0]),
                 "disturbance_y": float(disturbance[1]),
                 "disturbance_z": float(disturbance[2]),
@@ -239,7 +347,14 @@ def _rollout_episode(
                 "observer_error_norm": observer_error,
                 "observer_error_bound": e_bar,
                 "observer_bound_covered": observer_covered,
+                "diagnostic_window_active": float(diagnostic_window_active),
                 "ue_filter_active": float(observer_active),
+                "ue_diagnostics_active": ue_diag_active,
+                "ue_max_safe_epsilon": ue_max_safe_epsilon,
+                "ue_terminal_safe_epsilon": ue_terminal_safe_epsilon,
+                "ue_terminal_base_epsilon": ue_terminal_base_epsilon,
+                "ue_max_safe_rho": ue_max_safe_rho,
+                "ue_terminal_rho": ue_terminal_rho,
                 "hard_deck_margin": margin,
                 "is_safe": is_safe,
                 "intervention_norm": intervention,
@@ -284,6 +399,8 @@ def _rollout_episode(
         "qp_fallback_steps": int(sum(fallback_flags)),
         "qp_fallback_rate": _safe_mean(fallback_flags),
         "qp_physical_slack_mean": _safe_mean(physical_slacks),
+        "qp_physical_slack_median": _finite_percentile(physical_slacks, 50.0),
+        "qp_physical_slack_p95": _finite_percentile(physical_slacks, 95.0),
         "qp_physical_slack_max": float(np.max(physical_slacks)),
         "qp_solver_physical_slack_mean": _finite_mean(solver_physical_slacks),
         "qp_solver_cbf_row_residual_max": _finite_max(solver_cbf_residuals),
@@ -536,6 +653,10 @@ def _save_progress(output_dir: Path, episode_rows: list[dict[str, Any]], step_ro
     _write_csv(output_dir / "comparisons" / "ue_minus_standard_paired.csv", _paired_rows(episode_rows))
     _write_csv(output_dir / "results" / "critical_amplitudes.csv", _critical_amplitudes(episode_rows))
     _write_csv(output_dir / "diagnostics" / "observer_steps.csv", step_rows)
+    _write_csv(
+        output_dir / "diagnostics" / "ue_qp_terms_summary.csv",
+        _summarize_ue_diagnostic_steps(step_rows),
+    )
     _plot_threshold(episode_rows, output_dir / "plots" / "safety_threshold_progress.png", complete=complete)
     if complete:
         _plot_threshold(episode_rows, output_dir / "plots" / "safety_threshold.png", complete=True)

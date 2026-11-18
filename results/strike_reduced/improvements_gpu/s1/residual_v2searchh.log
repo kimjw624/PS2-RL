@@ -1,0 +1,19 @@
+[models] environment / striker observation from the striker run (chaser_set ball, walls False); filter from the backup run (chaser_set guidance, walls True)
+[scenes] 1000 evaluation scenes (seed 9001) in 1 s
+[backup input] obstacles within 10 m, chaser balls within 12 m (the Phase-I training range)
+[learned] strike 0.988 (t 6.31 s) contact 0.000 [obstacle 0.000 floor 0.000 chaser 0.000 out 0.000] timeout 0.012 | kept 0.97 no-certificate steps 0.0018 (0.024 of episodes) | 453 s
+[learned] smoothness: filter active 0.067, kept/changed switches 0.89/s, sum |dlam| 0.98/s, ||du|| / nominal 1.63, backup switches 0.26/s
+Nominal: striker striker_rs0p1_s1 (residual on pursuit at 6 m/s); 1000 arena scenes (seed 9001); filter: discrete backup-set check with a committed plan, T = 3.0 s, backup trained with moving chasers (h_c, hover margin 2 m) and arena walls; chaser model guidance, hover latch True, free pursuit.
+
+Contact = left the safe set (obstacle, floor, chaser); leaving the arena and running out of time end the mission but are not contacts.
+
+| mode | strike | contact | obstacle | floor | chaser | out of arena | timeout | strike time [s] | kept | no-certificate episodes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| filter, learned backup | 0.988 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.012 | 6.31 | 0.97 | 0.024 |
+
+By scene type (strike / contact / episodes that lost the certificate):
+
+| mode | no chaser | with chasers |
+|---|---|---|
+| filter, learned backup | nan / nan / nan (n = 0) | 0.988 / 0.000 / 0.024 (n = 1000) |
+wrote outputs/strike_improve/s1/residual_v2searchh/strike_filter_table.md

@@ -85,12 +85,22 @@ class QuadrotorEnvConfig:
     a_cmd_min: float = 0.0
     a_cmd_max: float | None = None  # Defaults to 4g.
     omega_max: float = 18.0
+    # Separate yaw-rate limit (0 = off: yaw uses omega_max like roll and pitch); see
+    # QuadrotorLandingConfig.omega_z_max.
+    omega_z_max: float = 0.0
 
     # Safety constraints.
     z_max: float = 3.0
     terminate_on_violation: bool = False
+    # Tracking-failure termination (0 = off): the episode ends when |p - p_ref| exceeds this [m].
+    # It keeps a policy that cannot fly yet near the reference instead of collecting transitions
+    # tens of metres away, where the reward is saturated. With reward_mode="landing_v2" the
+    # reported return of such an episode is completed with the reward floor for the steps not
+    # flown, so reported returns stay comparable with full-length episodes.
+    terminate_pos_error: float = 0.0
 
-    # Optional world-frame translational acceleration disturbance.
+    # Optional fixed world-frame translational acceleration disturbance.
+    # This is intentionally deterministic; no domain randomization is used.
     disturbance_mode: str = "none"
     disturbance_amplitude: float = 0.0
     disturbance_frequency_hz: float = 0.1
@@ -98,13 +108,9 @@ class QuadrotorEnvConfig:
     disturbance_direction_x: float = 1.0
     disturbance_direction_y: float = 0.0
     disturbance_direction_z: float = 0.0
-    # ``fixed`` preserves the original deterministic behavior. ``axis_set7``
-    # samples one normalized direction per episode from
-    # {x, y, z, xy, xz, yz, xyz}; ``random_unit`` samples uniformly by
-    # normalizing a 3-D Gaussian vector.
-    disturbance_direction_mode: str = "fixed"
 
-    # Nominal objective.
+    # Nominal objective: "trajectory_following" (quadratic cost below) or "landing_v2"
+    # (normalised Charbonnier cost below, the landing reward the Phase-II landing trackers use).
     reward_mode: str = "trajectory_following"
     reference_path: str = ""
     reference_dt: float | None = None
@@ -122,6 +128,45 @@ class QuadrotorEnvConfig:
     w_ref_omega_z: float = 0.0
     w_control_a: float = 0.01
     w_control_omega: float = 0.01
+    # Landing reward (reward_mode="landing_v2"), rho(e) = sqrt(e^2 + delta^2) - delta:
+    #   cost = w_xy rho(|e_xy|/s_pos) + w_z rho(e_z/s_z) + w_vel rho(|e_v|/s_vel)
+    #        + w_tilt rho(|e_att,xy|/s_tilt) + w_yaw rho(e_att,z/s_yaw)
+    #        + w_omega sum(((w - w_ref)_xy/s_omega)^2) + w_omega_z (w_z/s_omega_z)^2 + w_a ((a - g)/g)^2
+    #   reward = max(-cost, -floor)
+    landing_reward_s_pos: float = 0.3
+    landing_reward_s_z: float = 0.1
+    landing_reward_s_vel: float = 0.5
+    landing_reward_s_tilt: float = 0.1
+    landing_reward_s_yaw: float = 0.5
+    landing_reward_s_omega: float = 2.0
+    landing_reward_s_omega_z: float = 0.5
+    landing_reward_w_xy: float = 1.0
+    landing_reward_w_z: float = 1.0
+    landing_reward_w_vel: float = 0.5
+    landing_reward_w_tilt: float = 0.5
+    landing_reward_w_yaw: float = 0.05
+    landing_reward_w_omega: float = 0.05
+    landing_reward_w_omega_z: float = 1.0
+    landing_reward_w_a: float = 0.01
+    landing_reward_delta: float = 0.1
+    landing_reward_floor: float = 50.0
+
+    # Safety constraint behind is_safe / hard_deck_margin: "ceiling" (z_max - z >= 0) or
+    # "landing" (approach cone h = r0 + tan(theta)(z - z_pad) - sqrt(|p_xy - p_pad|^2 + eps^2) >= 0,
+    # and z - z_pad >= 0 if landing_floor). The margin reported is the smallest of these.
+    safety_mode: str = "ceiling"
+    landing_pad_x: float = 0.0
+    landing_pad_y: float = 0.0
+    landing_pad_z: float = 0.0
+    landing_cone_r0: float = 0.3
+    landing_cone_theta_deg: float = 45.0
+    landing_cone_eps: float = 0.015
+    landing_floor: bool = True
+
+    # Optional library of initial states: an .npz with key "states" (M, 10). If set, every
+    # reset draws one of them uniformly (e.g. starts pre-filtered to lie in the safe set and in
+    # the backup-recoverable set); the init_* ranges below are then not used.
+    init_state_library: str = ""
     # Initial-state sampling around reference.
     init_px_range: float = 0.1
     init_py_range: float = 0.1
@@ -149,6 +194,9 @@ class QuadrotorEnvConfig:
         omega_max = float(self.omega_max)
         if (not isfinite(omega_max)) or omega_max <= 0.0:
             raise ValueError(f"omega_max must be a positive finite value, got {self.omega_max}")
+        omega_z_max = float(self.omega_z_max)
+        if (not isfinite(omega_z_max)) or omega_z_max < 0.0 or omega_z_max > omega_max:
+            raise ValueError(f"omega_z_max must lie in [0, omega_max] (0 = use omega_max), got {self.omega_z_max}")
 
         disturbance_mode = str(self.disturbance_mode).strip().lower()
         if disturbance_mode not in ("none", "sinusoidal"):
@@ -176,12 +224,6 @@ class QuadrotorEnvConfig:
             raise ValueError("disturbance_phase must be finite")
         if disturbance_mode == "sinusoidal" and np.linalg.norm(disturbance_direction) <= 1e-12:
             raise ValueError("sinusoidal disturbance direction must be nonzero")
-        disturbance_direction_mode = str(self.disturbance_direction_mode).strip().lower()
-        if disturbance_direction_mode not in ("fixed", "axis_set7", "random_unit"):
-            raise ValueError(
-                "disturbance_direction_mode must be 'fixed', 'axis_set7', or 'random_unit', "
-                f"got {self.disturbance_direction_mode!r}"
-            )
 
         z_max = float(self.z_max)
         z_des = float(self.z_des)
@@ -193,10 +235,25 @@ class QuadrotorEnvConfig:
             raise ValueError(f"z_des must be less than z_max for hard-deck mode, got z_des={z_des}, z_max={z_max}")
 
         reward_mode = str(self.reward_mode).strip().lower()
-        if reward_mode != "trajectory_following":
+        if reward_mode not in ("trajectory_following", "landing_v2"):
             raise ValueError(
-                f"reward_mode must be 'trajectory_following' (the hover mode was removed in Batch 6b-4), got {self.reward_mode}"
+                f"reward_mode must be 'trajectory_following' or 'landing_v2' (the hover mode was removed in Batch 6b-4), got {self.reward_mode}"
             )
+        for name in ("s_pos", "s_z", "s_vel", "s_tilt", "s_yaw", "s_omega", "s_omega_z", "delta", "floor"):
+            v = float(getattr(self, f"landing_reward_{name}"))
+            if (not isfinite(v)) or v <= 0.0:
+                raise ValueError(f"landing_reward_{name} must be positive and finite, got {v}")
+        tpe = float(self.terminate_pos_error)
+        if (not isfinite(tpe)) or tpe < 0.0:
+            raise ValueError(f"terminate_pos_error must be finite and >= 0 (0 = off), got {self.terminate_pos_error}")
+        safety_mode = str(self.safety_mode).strip().lower()
+        if safety_mode not in ("ceiling", "landing"):
+            raise ValueError(f"safety_mode must be 'ceiling' or 'landing', got {self.safety_mode!r}")
+        if safety_mode == "landing":
+            if not (0.0 < float(self.landing_cone_theta_deg) < 90.0) or float(self.landing_cone_r0) <= 0.0:
+                raise ValueError("landing cone needs r0 > 0 and 0 < theta_deg < 90")
+            if float(self.landing_cone_eps) < 0.0:
+                raise ValueError("landing_cone_eps must be nonnegative")
 
         reference_path = self.reference_path.strip() if self.reference_path.strip() else _default_reference_path()
         ref_dt = dt if self.reference_dt is None else float(self.reference_dt)
@@ -222,21 +279,41 @@ class QuadrotorEnvConfig:
         object.__setattr__(self, "a_cmd_min", a_cmd_min)
         object.__setattr__(self, "a_cmd_max", a_cmd_max)
         object.__setattr__(self, "omega_max", omega_max)
+        object.__setattr__(self, "omega_z_max", omega_z_max)
         object.__setattr__(self, "disturbance_mode", disturbance_mode)
         object.__setattr__(self, "disturbance_amplitude", disturbance_amplitude)
         object.__setattr__(self, "disturbance_frequency_hz", disturbance_frequency_hz)
         object.__setattr__(self, "disturbance_phase", disturbance_phase)
-        object.__setattr__(self, "disturbance_direction_mode", disturbance_direction_mode)
         object.__setattr__(self, "z_max", z_max)
         object.__setattr__(self, "z_des", z_des)
         object.__setattr__(self, "reward_mode", reward_mode)
+        object.__setattr__(self, "safety_mode", safety_mode)
+        object.__setattr__(self, "landing_floor", bool(self.landing_floor))
+        object.__setattr__(self, "init_state_library", str(self.init_state_library).strip())
         object.__setattr__(self, "reference_path", reference_path)
         object.__setattr__(self, "reference_dt", ref_dt)
+
+    # ----------------------------------------------------------------- action box
+    @property
+    def omega_limits(self) -> tuple[float, float, float]:
+        """Body-rate limits (roll, pitch, yaw) [rad/s]."""
+        w = float(self.omega_max)
+        return (w, w, float(self.omega_z_max) if float(self.omega_z_max) > 0.0 else w)
+
+    @property
+    def action_low(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_min), -wx, -wy, -wz)
+
+    @property
+    def action_high(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_limits
+        return (float(self.a_cmd_max), wx, wy, wz)
+
 
 
 class QuadrotorEnvState(NamedTuple):
     x: Array
-    disturbance_direction: Array
     steps: Array
     ep_return: Array
     ep_len: Array
@@ -282,6 +359,8 @@ class QuadrotorEnvFns(NamedTuple):
         [QuadrotorEnvState, Array, Array],
         tuple[QuadrotorEnvState, Array, Array, Array, Array, QuadrotorStepInfo],
     ]
+    # observation of physical state x at env step index k (batched over leading axes via vmap)
+    observe: Callable[[Array, Array], Array] | None = None
 
 
 def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> QuadrotorEnvFns:
@@ -302,49 +381,26 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
     gravity = jnp.asarray(cfg.gravity, dtype=dtype)
     a_cmd_min = jnp.asarray(cfg.a_cmd_min, dtype=dtype)
     a_cmd_max = jnp.asarray(cfg.a_cmd_max, dtype=dtype)
-    omega_max = jnp.asarray(cfg.omega_max, dtype=dtype)
+    omega_max = jnp.asarray(cfg.omega_limits if cfg.omega_z_max > 0.0 else cfg.omega_max, dtype=dtype)  # scalar or per axis
 
     max_steps_i32 = jnp.int32(cfg.max_steps)
     terminate_on_violation = jnp.asarray(cfg.terminate_on_violation, dtype=jnp.bool_)
+    terminate_pos_error = float(cfg.terminate_pos_error)
 
     z_max = jnp.asarray(cfg.z_max, dtype=dtype)
 
     disturbance_enabled = cfg.disturbance_mode == "sinusoidal"
-    disturbance_amplitude = jnp.asarray(cfg.disturbance_amplitude if disturbance_enabled else 0.0, dtype=dtype)
-    disturbance_omega = jnp.asarray(2.0 * np.pi * cfg.disturbance_frequency_hz, dtype=dtype)
-    disturbance_phase = jnp.asarray(cfg.disturbance_phase, dtype=dtype)
-    fixed_disturbance_direction_np = np.asarray(
-        [cfg.disturbance_direction_x, cfg.disturbance_direction_y, cfg.disturbance_direction_z],
-        dtype=np.float32,
-    )
-    fixed_norm = float(np.linalg.norm(fixed_disturbance_direction_np))
-    if fixed_norm <= 1e-12:
-        fixed_disturbance_direction_np = np.asarray([1.0, 0.0, 0.0], dtype=np.float32)
-    else:
-        fixed_disturbance_direction_np = fixed_disturbance_direction_np / fixed_norm
-    fixed_disturbance_direction = jnp.asarray(fixed_disturbance_direction_np, dtype=dtype)
-    axis_set7 = jnp.asarray(
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [1.0 / np.sqrt(2.0), 1.0 / np.sqrt(2.0), 0.0],
-            [1.0 / np.sqrt(2.0), 0.0, 1.0 / np.sqrt(2.0)],
-            [0.0, 1.0 / np.sqrt(2.0), 1.0 / np.sqrt(2.0)],
-            [1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0)],
-        ],
+    disturbance_params = make_sinusoidal_disturbance_params(
+        amplitude=cfg.disturbance_amplitude if disturbance_enabled else 0.0,
+        frequency_hz=cfg.disturbance_frequency_hz if disturbance_enabled else 0.0,
+        phase=cfg.disturbance_phase,
+        direction=(
+            cfg.disturbance_direction_x,
+            cfg.disturbance_direction_y,
+            cfg.disturbance_direction_z,
+        ) if disturbance_enabled else (1.0, 0.0, 0.0),
         dtype=dtype,
     )
-
-    def _sample_disturbance_direction(key: Array) -> Array:
-        if cfg.disturbance_direction_mode == "fixed":
-            return fixed_disturbance_direction
-        if cfg.disturbance_direction_mode == "axis_set7":
-            idx = jax.random.randint(key, (), 0, axis_set7.shape[0], dtype=jnp.int32)
-            return axis_set7[idx]
-        vec = jax.random.normal(key, (3,), dtype=dtype)
-        norm = jnp.linalg.norm(vec)
-        return jnp.where(norm > jnp.asarray(1e-8, dtype=dtype), vec / norm, fixed_disturbance_direction)
 
     w_pos_xy = jnp.asarray(cfg.w_pos_xy, dtype=dtype)
     w_pos_z = jnp.asarray(cfg.w_pos_z, dtype=dtype)
@@ -386,8 +442,21 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         x_dot = x_dot.at[6:10].add(g[6:10, 1:4] @ u[1:4])
         return x_dot
 
+    landing_safety = cfg.safety_mode == "landing"
+    pad_xy = jnp.asarray([cfg.landing_pad_x, cfg.landing_pad_y], dtype=dtype)
+    pad_z = jnp.asarray(cfg.landing_pad_z, dtype=dtype)
+    cone_r0 = jnp.asarray(cfg.landing_cone_r0, dtype=dtype)
+    cone_tan = jnp.asarray(np.tan(np.deg2rad(cfg.landing_cone_theta_deg)), dtype=dtype)
+    cone_eps2 = jnp.asarray(float(cfg.landing_cone_eps) ** 2, dtype=dtype)
+
     def _hard_deck_value(x: Array) -> Array:
-        return z_max - x[2]
+        if not landing_safety:
+            return z_max - x[2]
+        d_xy = x[0:2] - pad_xy
+        h = cone_r0 + cone_tan * (x[2] - pad_z) - jnp.sqrt(jnp.dot(d_xy, d_xy) + cone_eps2)
+        if cfg.landing_floor:
+            h = jnp.minimum(h, x[2] - pad_z)
+        return h
 
     def _is_safe_state(x: Array) -> Array:
         return _hard_deck_value(x) >= 0.0
@@ -419,7 +488,18 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
             return jnp.concatenate([x, ref_state, ref_omega, time_feats], axis=0)
         return jnp.concatenate([x, ref_state, ref_omega], axis=0)
 
+    init_library = None
+    if cfg.init_state_library:
+        with np.load(cfg.init_state_library) as payload:
+            lib_np = np.asarray(payload["states"], dtype=np.float64)
+        if lib_np.ndim != 2 or lib_np.shape[1] != 10 or lib_np.shape[0] == 0 or not np.all(np.isfinite(lib_np)):
+            raise ValueError(f"init_state_library {cfg.init_state_library} must hold finite states of shape (M>0, 10)")
+        lib_np[:, 6:10] /= np.linalg.norm(lib_np[:, 6:10], axis=1, keepdims=True)
+        init_library = jnp.asarray(lib_np, dtype=dtype)
+
     def _sample_initial_state(key: Array) -> Array:
+        if init_library is not None:
+            return init_library[jax.random.randint(key, (), 0, init_library.shape[0])]
         ref0 = ref_states[jnp.int32(0)]
 
         px0, py0, pz0 = ref0[0], ref0[1], ref0[2]
@@ -446,12 +526,39 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
 
         return jnp.array([px, py, pz, vx, vy, vz, q[0], q[1], q[2], q[3]], dtype=dtype)
 
+    lr = {k: jnp.asarray(getattr(cfg, f"landing_reward_{k}"), dtype=dtype)
+          for k in ("s_pos", "s_z", "s_vel", "s_tilt", "s_yaw", "s_omega", "s_omega_z", "w_xy", "w_z", "w_vel",
+                    "w_tilt", "w_yaw", "w_omega", "w_omega_z", "w_a", "delta", "floor")}
+
+    def _charbonnier(e: Array) -> Array:
+        return jnp.sqrt(e * e + lr["delta"] * lr["delta"]) - lr["delta"]
+
+    def _reward_landing_v2(x_next: Array, u: Array, ref_state: Array, reward_ref_omega_cmd: Array):
+        pos_err = x_next[0:3] - ref_state[0:3]
+        vel_err = x_next[3:6] - ref_state[3:6]
+        q_err = _quat_mul(_normalize_quaternion(ref_state[6:10]), _quat_conj(_normalize_quaternion(x_next[6:10])))
+        att = jnp.where(q_err[0] >= 0.0, 1.0, -1.0).astype(dtype) * q_err[1:4]
+        omega_ref_err = u[1:4] - reward_ref_omega_cmd
+        cost = (lr["w_xy"] * _charbonnier(jnp.linalg.norm(pos_err[:2]) / lr["s_pos"])
+                + lr["w_z"] * _charbonnier(pos_err[2] / lr["s_z"])
+                + lr["w_vel"] * _charbonnier(jnp.linalg.norm(vel_err) / lr["s_vel"])
+                + lr["w_tilt"] * _charbonnier(jnp.linalg.norm(att[:2]) / lr["s_tilt"])
+                + lr["w_yaw"] * _charbonnier(att[2] / lr["s_yaw"])
+                + lr["w_omega"] * jnp.sum((omega_ref_err[:2] / lr["s_omega"]) ** 2)
+                + lr["w_omega_z"] * (u[3] / lr["s_omega_z"]) ** 2
+                + lr["w_a"] * ((u[0] - gravity) / gravity) ** 2)
+        reward = jnp.maximum(-cost, -lr["floor"])
+        return (reward.astype(dtype), jnp.linalg.norm(pos_err), jnp.linalg.norm(vel_err),
+                jnp.linalg.norm(att), jnp.linalg.norm(omega_ref_err))
+
     def _reward(
         x_next: Array,
         u: Array,
         ref_state: Array,
         reward_ref_omega_cmd: Array,
     ) -> tuple[Array, Array, Array, Array, Array]:
+        if cfg.reward_mode == "landing_v2":
+            return _reward_landing_v2(x_next, u, ref_state, reward_ref_omega_cmd)
         pos_err = x_next[0:3] - ref_state[0:3]
         vel_err = x_next[3:6] - ref_state[3:6]
 
@@ -483,18 +590,9 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         )
 
     def env_reset(key: Array) -> tuple[QuadrotorEnvState, Array]:
-        if disturbance_direction_mode == "fixed":
-            # Preserve the original reset-key path exactly when the new
-            # per-episode direction randomization is not requested.
-            x0 = _sample_initial_state(key)
-            disturbance_direction = fixed_disturbance_direction
-        else:
-            key_x, key_d = jax.random.split(key)
-            x0 = _sample_initial_state(key_x)
-            disturbance_direction = _sample_disturbance_direction(key_d)
+        x0 = _sample_initial_state(key)
         state = QuadrotorEnvState(
             x=x0,
-            disturbance_direction=disturbance_direction,
             steps=jnp.int32(0),
             ep_return=jnp.asarray(0.0, dtype=dtype),
             ep_len=jnp.int32(0),
@@ -511,8 +609,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         u = _clip_action(action)
         x_dot = _state_derivative(state.x, u)
         disturbance_t = state.steps.astype(dtype) * dt
-        disturbance_scalar = disturbance_amplitude * jnp.sin(disturbance_omega * disturbance_t + disturbance_phase)
-        d_world = disturbance_scalar * state.disturbance_direction
+        d_world = disturbance_value(disturbance_t, disturbance_params)
         x_dot = x_dot.at[3:6].add(d_world)
         x_next = state.x + dt * x_dot
         x_next = x_next.at[6:10].set(_normalize_quaternion(x_next[6:10]))
@@ -534,6 +631,15 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
             reward_ref_omega,
         )
 
+        if terminate_pos_error > 0.0:
+            lost = pos_err_norm > jnp.asarray(terminate_pos_error, dtype=dtype)
+            done = done | lost
+            # report the episode as if the remaining steps had been flown at the reward floor
+            unflown = (max_steps_i32 - next_steps).astype(dtype) * (lost & (~done_time)).astype(dtype)
+            return_fill = -unflown * lr["floor"] if cfg.reward_mode == "landing_v2" else jnp.asarray(0.0, dtype=dtype)
+        else:
+            return_fill = jnp.asarray(0.0, dtype=dtype)
+
         ep_return = state.ep_return + reward
         ep_len = state.ep_len + jnp.int32(1)
         ep_safe_sum = state.ep_safe_sum + safe.astype(dtype)
@@ -545,7 +651,7 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         done_f = done.astype(dtype)
         ep_len_f = jnp.maximum(ep_len.astype(dtype), jnp.asarray(1.0, dtype=dtype))
 
-        completed_return = done_f * ep_return
+        completed_return = done_f * (ep_return + return_fill)
         completed_len = done_f * ep_len.astype(dtype)
         completed_safe_rate = done_f * (ep_safe_sum / ep_len_f)
         completed_pos_error_norm = done_f * (ep_pos_err_sum / ep_len_f)
@@ -553,21 +659,13 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         completed_att_error_norm = done_f * (ep_att_err_sum / ep_len_f)
         completed_hard_deck_margin_min = done_f * ep_hard_deck_margin_min
 
-        if disturbance_direction_mode == "fixed":
-            reset_x = _sample_initial_state(key)
-            reset_disturbance_direction = fixed_disturbance_direction
-        else:
-            key_reset_x, key_reset_d = jax.random.split(key)
-            reset_x = _sample_initial_state(key_reset_x)
-            reset_disturbance_direction = _sample_disturbance_direction(key_reset_d)
+        reset_x = _sample_initial_state(key)
 
         x_out = jnp.where(done, reset_x, x_next)
-        disturbance_direction_out = jnp.where(done, reset_disturbance_direction, state.disturbance_direction)
         steps_out = jnp.where(done, jnp.int32(0), next_steps)
 
         state_out = QuadrotorEnvState(
             x=x_out,
-            disturbance_direction=disturbance_direction_out,
             steps=steps_out,
             ep_return=jnp.where(done, jnp.asarray(0.0, dtype=dtype), ep_return),
             ep_len=jnp.where(done, jnp.int32(0), ep_len),
@@ -617,4 +715,5 @@ def build_quadrotor_env(cfg: QuadrotorEnvConfig, dtype=jnp.float32) -> Quadrotor
         step=step,
         reset_batched=reset_batched,
         step_batched=step_batched,
+        observe=jax.jit(jax.vmap(lambda x, k: _observation(jnp.asarray(x, dtype=dtype), jnp.asarray(k, dtype=jnp.int32)))),
     )

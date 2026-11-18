@@ -27,6 +27,8 @@ from ps2rl.utils.replay_buffer import (
 )
 
 PS2_REPLAY_FIELDS: Tuple[str, ...] = ("obs", "act", "rew", "next_obs", "done")
+# log-probabilities are clipped to +-LOGP_CLIP wherever they enter a loss
+LOGP_CLIP = 20.0
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,24 @@ class SACConfig:
     target_entropy: float = -2.0
     max_grad_norm: float = 5.0
     q_clip_abs: float = 1e3
+    # The critics learn the return of reward_shift + reward_scale * r (logged returns keep the
+    # env's units). Adam moves a critic's output at a rate set by the learning rate, not by the
+    # loss, so returns in the thousands are fitted slowly; a reward range of order one is not.
+    # With early termination a shift that makes rewards non-negative also makes ending worst.
+    reward_scale: float = 1.0
+    reward_shift: float = 0.0
+    # If > 0 (for rewards <= 0, i.e. negative costs): the critics learn exp(r / temperature) in
+    # (0, 1] instead; reward_scale / reward_shift are then not used. An error-free step is worth 1
+    # and a cost of one temperature 1/e, so most of the range resolves small costs.
+    reward_exp_temperature: float = 0.0
+    # Bounds of the critic targets (None: +-q_clip_abs). With bounded rewards the return is
+    # bounded, so targets outside the bound are estimation error and are cut off.
+    q_target_min: float | None = None
+    q_target_max: float | None = None
+    # Also clip the critics' predictions to +-q_clip_abs (True: the original behaviour). A
+    # prediction beyond the clip then has zero gradient, so a critic that overshoots stays there
+    # and the actor gets no gradient either; False clips the targets only.
+    q_clip_predictions: bool = True
 
     hidden_size: int = 128
 
@@ -69,9 +89,19 @@ class SACConfig:
     steps_per_jit: int = 128
     warm_start: bool = False
     warm_start_weights: str = ""
+    # Stop collecting after this many seconds of training (0 = no limit); the run then finishes
+    # normally (final evaluation, checkpoints) at the step it reached.
+    wall_time_budget_sec: float = 0.0
+    # Store each visited state's QP rows in the replay buffer and let the actor update reuse them
+    # (needs a layer whose binding provides rows_fn / project_from_rows_with_info_fn). The rows
+    # depend on the state only, so this is exact; it removes the backup rollout from every update.
+    # Critic-target projections (project_target_actions) are not cached and stay full projections.
+    cache_cbf_rows: bool = False
 
 
-def ps2_replay_init(capacity: int, obs_dim: int, act_dim: int) -> JaxReplayState:
+def ps2_replay_init(
+    capacity: int, obs_dim: int, act_dim: int, extra_fields: Dict[str, Tuple[int, ...]] | None = None
+) -> JaxReplayState:
     return jax_replay_init(
         capacity,
         {
@@ -80,8 +110,17 @@ def ps2_replay_init(capacity: int, obs_dim: int, act_dim: int) -> JaxReplayState
             "rew": (),
             "next_obs": (obs_dim,),
             "done": (),
+            **(extra_fields or {}),
         },
     )
+
+
+def cbf_row_cache_enabled(sac_cfg: Any, proj: BCBFProjectionOps) -> bool:
+    """Row caching is on iff requested, the layer supports it and actor actions are projected."""
+    want = bool(getattr(sac_cfg, "cache_cbf_rows", False)) and bool(sac_cfg.use_projection and sac_cfg.project_actor_actions)
+    if want and (proj.rows is None or proj.project_from_rows_with_info is None):
+        raise ValueError("cache_cbf_rows=True needs a layer with rows_fn and project_from_rows_with_info_fn")
+    return want
 
 
 def validate_action_scale(name: str, actual: np.ndarray | jax.Array, expected: np.ndarray, atol: float = 1e-6) -> None:
@@ -217,12 +256,17 @@ def make_projection_ops(
     project_with_info_fn: Callable[..., Any],
     project_fn: Callable[..., Any],
     backup_policy_fn: Callable[..., Any],
+    rows_fn: Callable[..., Any] | None = None,
+    project_from_rows_with_info_fn: Callable[..., Any] | None = None,
 ) -> BCBFProjectionOps:
     """Assemble the trainer-facing projection ops from a system's backup-CBF QP callables."""
     return BCBFProjectionOps(
         project_with_info=lambda obs_phys, act: project_with_info_fn(obs_phys, act, cbf_cfg, runtime=backup_runtime),
         project=lambda obs_phys, act: project_fn(obs_phys, act, cbf_cfg, runtime=backup_runtime),
         backup_policy=lambda obs_phys: backup_policy_fn(obs_phys, cbf_cfg, runtime=backup_runtime),
+        rows=None if rows_fn is None else (lambda obs_phys: rows_fn(obs_phys, cbf_cfg, runtime=backup_runtime)),
+        project_from_rows_with_info=None if project_from_rows_with_info_fn is None else (
+            lambda obs_phys, act, rows: project_from_rows_with_info_fn(obs_phys, act, rows, cbf_cfg, runtime=backup_runtime)),
     )
 
 
@@ -236,6 +280,15 @@ class PS2SystemBinding(NamedTuple):
     backup_policy_fn: Callable[..., Any]
     action_bounds_fn: Callable[[jax.Array, Any], Tuple[jax.Array, jax.Array]]
     disable_backup_fallback_fn: Callable[[Any], bool]
+    # optional row caching (see SACConfig.cache_cbf_rows)
+    rows_fn: Callable[..., Any] | None = None
+    project_from_rows_with_info_fn: Callable[..., Any] | None = None
+    row_shapes_fn: Callable[[Any], Dict[str, Tuple[int, ...]]] | None = None
+    #: Optional actor action box (low, high). None = the safe-action box (original behaviour).
+    actor_bounds_fn: Callable[[jax.Array, Any], Tuple[jax.Array, jax.Array]] | None = None
+    #: Optional map (obs, actor action) -> reference action u_ref that the CIL filters, e.g. residual
+    #: RL u_ref = u_nom(obs) + a. None = identity (original behaviour).
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None
 
     def projection_ops(self, cbf_cfg: Any, backup_runtime: Any) -> BCBFProjectionOps:
         return make_projection_ops(
@@ -244,7 +297,23 @@ class PS2SystemBinding(NamedTuple):
             project_with_info_fn=self.project_with_info_fn,
             project_fn=self.project_fn,
             backup_policy_fn=self.backup_policy_fn,
+            rows_fn=self.rows_fn,
+            project_from_rows_with_info_fn=self.project_from_rows_with_info_fn,
         )
+
+
+
+def _actor_box_and_reference(action_low, action_high, actor_low, actor_high, reference_action_fn):
+    """Actor sampling box and actor-action -> reference-action map (identity / safe box by default)."""
+    a_low = action_low if actor_low is None else actor_low
+    a_high = action_high if actor_high is None else actor_high
+
+    def to_reference(obs_b: jax.Array, act_b: jax.Array) -> jax.Array:
+        if reference_action_fn is None:
+            return act_b
+        return jnp.clip(reference_action_fn(obs_b, act_b), action_low, action_high)
+
+    return a_low, a_high, to_reference
 
 
 def build_ps2_update_fn(
@@ -258,19 +327,17 @@ def build_ps2_update_fn(
     phys_dim: int,
     disable_backup_fallback: bool = False,
     extended_qp_diagnostics: bool = False,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
     """Create one JITed SAC update step."""
-
-    def network_obs(obs_b: jax.Array) -> jax.Array:
-        return obs_b if network_obs_fn is None else network_obs_fn(obs_b)
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
 
     def physical_obs(obs_b: jax.Array) -> jax.Array:
-        # Safety modules normally use the physical state only.  Experimental
-        # projectors may request extra replayed context (e.g. d_hat, e_bar).
-        if projection_obs_fn is not None:
-            return projection_obs_fn(obs_b)
+        # Safety modules (backup policy / CIL) only use the physical state.
         return obs_b[..., :phys_dim]
 
     log_alpha_min = float(np.log(max(float(sac_cfg.min_alpha), 1e-8)))
@@ -285,6 +352,27 @@ def build_ps2_update_fn(
         if q_clip_enabled:
             return jnp.clip(x, -q_clip_abs, q_clip_abs)
         return x
+
+    q_target_lo = getattr(sac_cfg, "q_target_min", None)
+    q_target_hi = getattr(sac_cfg, "q_target_max", None)
+    clip_predictions = bool(getattr(sac_cfg, "q_clip_predictions", True))
+    reward_scale = float(getattr(sac_cfg, "reward_scale", 1.0))
+    reward_shift = float(getattr(sac_cfg, "reward_shift", 0.0))
+    reward_exp_temperature = float(getattr(sac_cfg, "reward_exp_temperature", 0.0))
+
+    def _critic_reward(rew: jax.Array) -> jax.Array:
+        if reward_exp_temperature > 0.0:
+            return jnp.exp(jnp.minimum(rew, 0.0) / reward_exp_temperature)
+        return reward_shift + reward_scale * rew
+
+    def _clip_target(x: jax.Array) -> jax.Array:
+        x = _maybe_clip_q(x)
+        if q_target_lo is not None or q_target_hi is not None:
+            x = jnp.clip(x, q_target_lo, q_target_hi)
+        return x
+
+    def _clip_prediction(x: jax.Array) -> jax.Array:
+        return _maybe_clip_q(x) if clip_predictions else x
 
     def tree_l2_norm(tree) -> jax.Array:
         leaves = jax.tree_util.tree_leaves(tree)
@@ -313,10 +401,15 @@ def build_ps2_update_fn(
             default_qp_finite_info(act_b.shape[0]),
         )
 
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
+
     def maybe_project_actor(
-        obs_b: jax.Array, act_b: jax.Array
+        obs_b: jax.Array, act_b: jax.Array, batch: Dict[str, jax.Array] | None = None
     ) -> Tuple[jax.Array, jax.Array, jax.Array, Dict[str, jax.Array]]:
         if sac_cfg.use_projection and sac_cfg.project_actor_actions:
+            if cache_rows and batch is not None:
+                rows = {k: v for k, v in batch.items() if k not in PS2_REPLAY_FIELDS}
+                return proj.project_from_rows_with_info(physical_obs(obs_b), act_b, rows)
             return proj.project_with_info(physical_obs(obs_b), act_b)
         return (
             act_b,
@@ -359,17 +452,18 @@ def build_ps2_update_fn(
         def critic_loss_fn(q1_params, q2_params):
             next_raw, next_logp, _ = sample_actor_action(
                 state["actor_params"],
-                network_obs(batch["next_obs"]),
+                batch["next_obs"],
                 key_c,
                 action_scale,
                 actor_cfg,
-                action_low=action_low,
-                action_high=action_high,
+                action_low=a_low,
+                action_high=a_high,
             )
             next_raw = jnp.nan_to_num(next_raw, nan=0.0, posinf=0.0, neginf=0.0)
-            next_raw = jnp.clip(next_raw, action_low, action_high)
+            next_raw = jnp.clip(next_raw, a_low, a_high)
+            next_raw = to_reference(batch["next_obs"], next_raw)
             next_logp = jnp.nan_to_num(next_logp, nan=0.0, posinf=10.0, neginf=-10.0)
-            next_logp = jnp.clip(next_logp, -20.0, 20.0)
+            next_logp = jnp.clip(next_logp, -LOGP_CLIP, LOGP_CLIP)
             next_safe, _, target_use_solver, target_finite_info = maybe_project_target(batch["next_obs"], next_raw)
             next_safe, target_bad_rate = sanitize_action(next_safe, batch["next_obs"])
             target_use_solver_rate = jnp.mean(target_use_solver.astype(jnp.float32))
@@ -395,21 +489,21 @@ def build_ps2_update_fn(
                 aux["target_max_abs_q_mean"] = _clipped_diag_mean(target_finite_info["max_abs_q"])
                 aux["target_max_abs_b_mean"] = _clipped_diag_mean(target_finite_info["max_abs_b"])
                 aux["target_delta_min_u_ref_mean"] = _clipped_diag_mean(target_finite_info["delta_min_u_ref"])
-            target_q1 = q_value(state["target_q1_params"], network_obs(batch["next_obs"]), next_safe)
-            target_q2 = q_value(state["target_q2_params"], network_obs(batch["next_obs"]), next_safe)
+            target_q1 = q_value(state["target_q1_params"], batch["next_obs"], next_safe)
+            target_q2 = q_value(state["target_q2_params"], batch["next_obs"], next_safe)
             target_q = jnp.minimum(target_q1, target_q2) - alpha * next_logp
             target_q = _q_nan_to_num(target_q)
-            target_q = _maybe_clip_q(target_q)
-            backup = batch["rew"] + sac_cfg.gamma * (1.0 - batch["done"]) * target_q
+            target_q = _clip_target(target_q)
+            backup = _critic_reward(batch["rew"]) + sac_cfg.gamma * (1.0 - batch["done"]) * target_q
             backup = _q_nan_to_num(backup)
-            backup = _maybe_clip_q(backup)
+            backup = _clip_target(backup)
 
-            q1_pred = q_value(q1_params, network_obs(batch["obs"]), batch["act"])
-            q2_pred = q_value(q2_params, network_obs(batch["obs"]), batch["act"])
+            q1_pred = q_value(q1_params, batch["obs"], batch["act"])
+            q2_pred = q_value(q2_params, batch["obs"], batch["act"])
             q1_pred = _q_nan_to_num(q1_pred)
             q2_pred = _q_nan_to_num(q2_pred)
-            q1_pred = _maybe_clip_q(q1_pred)
-            q2_pred = _maybe_clip_q(q2_pred)
+            q1_pred = _clip_prediction(q1_pred)
+            q2_pred = _clip_prediction(q2_pred)
             q1_loss = jnp.mean((q1_pred - backup) ** 2)
             q2_loss = jnp.mean((q2_pred - backup) ** 2)
             aux["q_backup_mean"] = jnp.mean(backup)
@@ -428,18 +522,19 @@ def build_ps2_update_fn(
         def actor_loss_fn(actor_params):
             raw_action, logp, _ = sample_actor_action(
                 actor_params,
-                network_obs(batch["obs"]),
+                batch["obs"],
                 key_a,
                 action_scale,
                 actor_cfg,
-                action_low=action_low,
-                action_high=action_high,
+                action_low=a_low,
+                action_high=a_high,
             )
             raw_action = jnp.nan_to_num(raw_action, nan=0.0, posinf=0.0, neginf=0.0)
-            raw_action = jnp.clip(raw_action, action_low, action_high)
+            raw_action = jnp.clip(raw_action, a_low, a_high)
+            raw_action = to_reference(batch["obs"], raw_action)
             logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
-            logp = jnp.clip(logp, -20.0, 20.0)
-            safe_action, slack, actor_use_solver, actor_finite_info = maybe_project_actor(batch["obs"], raw_action)
+            logp = jnp.clip(logp, -LOGP_CLIP, LOGP_CLIP)
+            safe_action, slack, actor_use_solver, actor_finite_info = maybe_project_actor(batch["obs"], raw_action, batch)
             safe_action, actor_bad_rate = sanitize_action(safe_action, batch["obs"])
             actor_use_solver_rate = jnp.mean(actor_use_solver.astype(jnp.float32))
             actor_fallback_rate = 1.0 - actor_use_solver_rate
@@ -450,11 +545,11 @@ def build_ps2_update_fn(
             actor_z_finite_rate = jnp.mean(actor_finite_info["z_finite"].astype(jnp.float32))
             slack = jnp.nan_to_num(slack, nan=0.0, posinf=1e3, neginf=0.0)
             slack = jnp.clip(slack, 0.0, 1e3)
-            q1_pi = q_value(q1_params, network_obs(batch["obs"]), safe_action)
-            q2_pi = q_value(q2_params, network_obs(batch["obs"]), safe_action)
+            q1_pi = q_value(q1_params, batch["obs"], safe_action)
+            q2_pi = q_value(q2_params, batch["obs"], safe_action)
             q_pi = jnp.minimum(q1_pi, q2_pi)
             q_pi = _q_nan_to_num(q_pi)
-            q_pi = _maybe_clip_q(q_pi)
+            q_pi = _clip_prediction(q_pi)
             loss = jnp.mean(alpha * logp - q_pi)
             aux = {
                 "logp": logp,
@@ -565,17 +660,16 @@ def build_ps2_action_fns(
     phys_dim: int,
     disable_backup_fallback: bool = False,
     return_solver_info: bool = False,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
     """Build jitted training/eval policy calls."""
-
-    def network_obs(obs_b: jax.Array) -> jax.Array:
-        return obs_b if network_obs_fn is None else network_obs_fn(obs_b)
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
 
     def physical_obs(obs_b: jax.Array) -> jax.Array:
-        if projection_obs_fn is not None:
-            return projection_obs_fn(obs_b)
         return obs_b[..., :phys_dim]
 
     def maybe_project(obs_b: jax.Array, act_b: jax.Array):
@@ -599,13 +693,14 @@ def build_ps2_action_fns(
     def sample_action(params, obs: jax.Array, key: jax.Array):
         raw, logp, _ = sample_actor_action(
             params,
-            network_obs(obs[None, :]),
+            obs[None, :],
             key,
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
+        raw = to_reference(obs[None, :], raw)
         if return_solver_info:
             safe, slack, use_solver, finite_info = maybe_project(obs[None, :], raw)
         else:
@@ -625,12 +720,13 @@ def build_ps2_action_fns(
     def eval_action(params, obs: jax.Array):
         raw = actor_mean_action(
             params,
-            network_obs(obs[None, :]),
+            obs[None, :],
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
+        raw = to_reference(obs[None, :], raw)
         if return_solver_info:
             safe, slack, use_solver, finite_info = maybe_project(obs[None, :], raw)
         else:
@@ -658,35 +754,39 @@ def build_ps2_batched_action_fn(
     *,
     phys_dim: int,
     disable_backup_fallback: bool = False,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
+    actor_low: jax.Array | None = None,
+    actor_high: jax.Array | None = None,
+    reference_action_fn: Callable[[jax.Array, jax.Array], jax.Array] | None = None,
 ):
-    def network_obs(obs_b: jax.Array) -> jax.Array:
-        return obs_b if network_obs_fn is None else network_obs_fn(obs_b)
-
-    def physical_obs(obs_b: jax.Array) -> jax.Array:
-        if projection_obs_fn is not None:
-            return projection_obs_fn(obs_b)
-        return obs_b[..., :phys_dim]
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
+    a_low, a_high, to_reference = _actor_box_and_reference(
+        action_low, action_high, actor_low, actor_high, reference_action_fn
+    )
 
     @jax.jit
     def sample_action_batch(actor_params: Dict[str, Any], obs_b: jax.Array, key: jax.Array):
         raw, logp, _ = sample_actor_action(
             actor_params,
-            network_obs(obs_b),
+            obs_b,
             key,
             action_scale,
             actor_cfg,
-            action_low=action_low,
-            action_high=action_high,
+            action_low=a_low,
+            action_high=a_high,
         )
         raw = jnp.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0)
-        raw = jnp.clip(raw, action_low, action_high)
+        raw = jnp.clip(raw, a_low, a_high)
+        raw = to_reference(obs_b, raw)
         logp = jnp.nan_to_num(logp, nan=0.0, posinf=10.0, neginf=-10.0)
-        logp = jnp.clip(logp, -20.0, 20.0)
+        logp = jnp.clip(logp, -LOGP_CLIP, LOGP_CLIP)
 
-        if sac_cfg.use_projection and sac_cfg.project_actor_actions:
-            safe, slack, use_solver, _ = proj.project_with_info(physical_obs(obs_b), raw)
+        rows = None
+        if cache_rows:
+            # build the rows once: used for this projection and stored with the transition
+            rows = proj.rows(obs_b[..., :phys_dim])
+            safe, slack, use_solver, _ = proj.project_from_rows_with_info(obs_b[..., :phys_dim], raw, rows)
+        elif sac_cfg.use_projection and sac_cfg.project_actor_actions:
+            safe, slack, use_solver, _ = proj.project_with_info(obs_b[..., :phys_dim], raw)
         else:
             safe = raw
             slack = jnp.zeros((raw.shape[0],), dtype=raw.dtype)
@@ -694,10 +794,12 @@ def build_ps2_batched_action_fn(
 
         finite_mask = jnp.all(jnp.isfinite(safe), axis=-1, keepdims=True)
         if not disable_backup_fallback:
-            fallback = proj.backup_policy(physical_obs(obs_b))
+            fallback = proj.backup_policy(obs_b[..., :phys_dim])
             safe = jnp.where(finite_mask, safe, fallback)
         safe = jnp.nan_to_num(safe, nan=0.0, posinf=0.0, neginf=0.0)
         safe = jnp.clip(safe, action_low, action_high)
+        if cache_rows:
+            return safe, raw, logp, slack, use_solver, rows
         return safe, raw, logp, slack, use_solver
 
     return sample_action_batch
@@ -720,6 +822,16 @@ def zero_ps2_chunk_metrics(
     return metrics
 
 
+def _binding_actor_kwargs(binding: PS2SystemBinding, action_scale: jax.Array, cbf_cfg: Any) -> Dict[str, Any]:
+    """Optional actor box / reference-action map of a binding (empty for the original systems)."""
+    kw: Dict[str, Any] = {}
+    if getattr(binding, "actor_bounds_fn", None) is not None:
+        kw["actor_low"], kw["actor_high"] = binding.actor_bounds_fn(action_scale, cbf_cfg)
+    if getattr(binding, "reference_action_fn", None) is not None:
+        kw["reference_action_fn"] = binding.reference_action_fn
+    return kw
+
+
 def build_ps2_update_fn_for(
     binding: PS2SystemBinding,
     sac_cfg: Any,
@@ -727,8 +839,6 @@ def build_ps2_update_fn_for(
     cbf_cfg: Any,
     action_scale: jax.Array,
     backup_runtime: Any = None,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
 ):
     """Build the JITed SAC update step for a system via its binding."""
     action_low, action_high = binding.action_bounds_fn(action_scale, cbf_cfg)
@@ -742,8 +852,7 @@ def build_ps2_update_fn_for(
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
         extended_qp_diagnostics=binding.extended_qp_diagnostics,
-        network_obs_fn=network_obs_fn,
-        projection_obs_fn=projection_obs_fn,
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
 
 
@@ -755,8 +864,6 @@ def build_ps2_action_fns_for(
     action_scale: jax.Array,
     backup_runtime: Any = None,
     return_solver_info: bool = False,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
 ):
     """Build the jitted training/eval policy calls for a system via its binding."""
     action_low, action_high = binding.action_bounds_fn(action_scale, cbf_cfg)
@@ -770,8 +877,7 @@ def build_ps2_action_fns_for(
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
         return_solver_info=return_solver_info,
-        network_obs_fn=network_obs_fn,
-        projection_obs_fn=projection_obs_fn,
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
 
 
@@ -782,8 +888,6 @@ def build_ps2_batched_action_fn_for(
     cbf_cfg: Any,
     action_scale: jax.Array,
     backup_runtime: Any = None,
-    network_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
 ):
     """Build the batched collection policy for a system via its binding."""
     action_low, action_high = binding.action_bounds_fn(action_scale, cbf_cfg)
@@ -796,8 +900,7 @@ def build_ps2_batched_action_fn_for(
         binding.projection_ops(cbf_cfg, backup_runtime),
         phys_dim=binding.phys_dim,
         disable_backup_fallback=binding.disable_backup_fallback_fn(sac_cfg),
-        network_obs_fn=network_obs_fn,
-        projection_obs_fn=projection_obs_fn,
+        **_binding_actor_kwargs(binding, action_scale, cbf_cfg),
     )
     return sample_action_batch, action_low, action_high
 
@@ -816,20 +919,15 @@ def build_ps2_one_vec_step(
     update_metric_pairs: Sequence[Tuple[str, str]],
     episode_fields_fn: Callable[[Any], Dict[str, jax.Array]],
     episode_field_names: Sequence[str],
-    projection_obs_fn: Callable[[jax.Array], jax.Array] | None = None,
 ):
     num_envs = int(sac_cfg.num_envs)
     batch_size_i32 = jnp.int32(sac_cfg.batch_size)
     update_after_i32 = jnp.int32(sac_cfg.update_after)
+    cache_rows = cbf_row_cache_enabled(sac_cfg, proj)
     update_every_i32 = jnp.int32(max(1, sac_cfg.update_every))
     num_envs_i32 = jnp.int32(num_envs)
     max_due_per_vec_step = max(1, int(np.ceil(float(num_envs) / float(max(1, sac_cfg.update_every)))))
     update_sum_names = tuple(sum_name for sum_name, _ in update_metric_pairs)
-
-    def physical_obs(obs_b: jax.Array) -> jax.Array:
-        if projection_obs_fn is not None:
-            return projection_obs_fn(obs_b)
-        return obs_b[..., :phys_dim]
 
     def one_vec_step(carry: PS2LoopState, _):
         state_i = carry.state
@@ -844,18 +942,24 @@ def build_ps2_one_vec_step(
         key_i, key_action, key_random = jax.random.split(key_i, 3)
         rand01 = jax.random.uniform(key_random, shape=(num_envs, env_fns.action_dim), dtype=jnp.float32)
         random_raw = action_low + rand01 * (action_high - action_low)
-        if sac_cfg.use_projection:
-            random_safe, _, _, _ = proj.project_with_info(physical_obs(obs_i), random_raw)
+        # With start_steps <= 0 the random actions are never used; skip their projection (it
+        # would otherwise run every step, doubling the collector's QP cost).
+        if sac_cfg.use_projection and int(sac_cfg.start_steps) > 0:
+            random_safe, _, _, _ = proj.project_with_info(obs_i[..., :phys_dim], random_raw)
         else:
             random_safe = random_raw
         if sanitize_random_actions:
             random_finite = jnp.all(jnp.isfinite(random_safe), axis=-1, keepdims=True)
-            random_fallback = proj.backup_policy(physical_obs(obs_i))
+            random_fallback = proj.backup_policy(obs_i[..., :phys_dim])
             random_safe = jnp.where(random_finite, random_safe, random_fallback)
             random_safe = jnp.nan_to_num(random_safe, nan=0.0, posinf=0.0, neginf=0.0)
             random_safe = jnp.clip(random_safe, action_low, action_high)
 
-        policy_safe, _, _, _, _ = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+        if cache_rows:
+            policy_safe, _, _, _, _, rows_i = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+        else:
+            policy_safe, _, _, _, _ = sample_action_batch_fn(state_i["actor_params"], obs_i, key_action)
+            rows_i = {}
         use_random = global_step_i < jnp.int32(sac_cfg.start_steps)
         act_i = jnp.where(use_random, random_safe, policy_safe)
 
@@ -874,6 +978,7 @@ def build_ps2_one_vec_step(
                 "rew": rew_i.astype(jnp.float32),
                 "next_obs": replay_next_obs_i.astype(jnp.float32),
                 "done": done_i.astype(jnp.float32),
+                **{k: v.astype(jnp.float32) for k, v in rows_i.items()},
             },
         )
         obs_i = next_obs_out_i
@@ -907,13 +1012,13 @@ def build_ps2_one_vec_step(
                 def grad_body(_, grad_inner):
                     state_g, replay_g, key_g, updates_g, step_metrics_g = grad_inner
                     key_g, key_sample, key_upd = jax.random.split(key_g, 3)
-                    batch = jax_replay_sample(replay_g, sac_cfg.batch_size, key_sample, PS2_REPLAY_FIELDS)
+                    batch = jax_replay_sample(replay_g, sac_cfg.batch_size, key_sample, tuple(replay_g.data.keys()))
                     state_g, upd_metrics, _ = update_fn(state_g, batch, key_upd)
                     updates_g = updates_g + jnp.int32(1)
                     step_metrics_g = dict(step_metrics_g)
                     step_metrics_g["update_count"] = step_metrics_g["update_count"] + 1.0
                     for sum_name, metric_key in update_metric_pairs:
-                        step_metrics_g[sum_name] = step_metrics_g[sum_name] + upd_metrics[metric_key]
+                        step_metrics_g[sum_name] = step_metrics_g[sum_name] + jnp.asarray(upd_metrics[metric_key]).astype(step_metrics_g[sum_name].dtype)
                     return state_g, replay_g, key_g, updates_g, step_metrics_g
 
                 return jax.lax.fori_loop(
@@ -974,6 +1079,7 @@ __all__ = [
     "build_ps2_batched_action_fn",
     "build_ps2_one_vec_step",
     "build_ps2_update_fn",
+    "cbf_row_cache_enabled",
     "default_qp_finite_info",
     "init_sac_state",
     "make_ps2_chunk_fn_getter",

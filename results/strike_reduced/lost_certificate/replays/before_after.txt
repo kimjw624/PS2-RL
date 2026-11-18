@@ -1,0 +1,27 @@
+== s1_search
+    97: lc   strike  14.1s nocert  96 | lcA  strike  10.9s nocert   3 | lcB  strike  10.5s nocert   1
+   137: lc   strike  11.0s nocert  26 | lcA  strike   7.3s nocert   0 | lcB  strike   7.3s nocert   0
+   198: lc   strike  11.9s nocert  23 | lcA  strike  12.0s nocert  25 | lcB  strike  12.0s nocert  25
+   320: lc   strike  13.2s nocert 139 | lcA  strike  10.8s nocert   0 | lcB  strike  10.8s nocert   0
+   614: lc   strike  14.5s nocert  33 | lcA  strike  13.0s nocert  32 | lcB  strike  13.0s nocert  30
+   790: lc   strike  11.0s nocert  73 | lcA  strike   6.2s nocert   0 | lcB  strike   6.2s nocert   0
+   795: lc   strike  14.5s nocert  48 | lcA  strike  14.1s nocert   0 | lcB  strike  14.1s nocert   0
+   953: lc   strike  11.4s nocert  76 | lcA  strike   6.3s nocert   0 | lcB  strike   6.3s nocert   0
+== s0_search
+   510: lc   strike  12.5s nocert   0 | lcA  strike   5.9s nocert   0 | lcB  strike   5.9s nocert   0
+   627: lc   strike  10.4s nocert  14 | lcA  strike   8.9s nocert   0 | lcB  strike   8.9s nocert   0
+   845: lc   strike  14.4s nocert   2 | lcA  strike  14.4s nocert   2 | lcB  strike  14.0s nocert   1
+== s0_res_search
+   352: lc   strike  12.8s nocert  67 | lcA  strike  11.7s nocert   0 | lcB  strike  11.7s nocert   0
+   480: lc   strike  11.2s nocert 125 | lcA  strike  10.0s nocert   0 | lcB  strike  10.0s nocert   0
+   543: lc   strike   8.2s nocert  27 | lcA  strike   6.3s nocert   0 | lcB  strike   6.3s nocert   0
+   795: lc   strike  14.1s nocert   2 | lcA  strike  14.2s nocert   0 | lcB  strike  14.2s nocert   0
+   934: lc   strike  10.3s nocert  64 | lcA  strike   9.1s nocert   0 | lcB  strike   9.1s nocert   0
+== s1_res_search
+   181: lc   strike   9.8s nocert 133 | lcA  strike   8.2s nocert  22 | lcB  strike   8.0s nocert  17
+   198: lc   strike  13.8s nocert 127 | lcA  strike  12.0s nocert   0 | lcB  strike  12.0s nocert   0
+   614: lc   crash_   9.1s nocert 166 | lcA  timeou  15.0s nocert  84 | lcB  timeou  15.0s nocert  84
+   626: lc   strike   8.1s nocert 131 | lcA  strike   6.7s nocert  21 | lcB  strike   6.6s nocert  16
+   943: lc   strike   9.3s nocert   0 | lcA  strike   9.3s nocert   0 | lcB  strike   9.3s nocert   0
+   979: lc   strike  13.0s nocert   0 | lcA  strike   9.3s nocert   0 | lcB  strike   9.3s nocert   0
+totals (no-cert steps, contacts, time-ups, episodes with a loss): {'lc_': [1372, 1, 0, 19], 'lcA_': [189, 0, 1, 7], 'lcB_': [174, 0, 1, 7]}

@@ -1,0 +1,104 @@
+{
+  "notes": "Strike task, final pipeline, stage 1. Sparse arena (the report's arena): 40 x 20 m, 3 tall obstacles, 1 free chaser at 2 m/s, moving target at x 32..37 m, 15 s episodes. Phase I: safe-arrival backup = hover LQR + learned residual (TD3, anchor 0.2), static chaser balls r_c + r_d + v_c T (T = 1.5 s), hover base set (c_B 50, certified). In the filter it is blended with the evasion reflex. 10M steps (the 5M run was still improving).",
+  "strike": {
+    "dt": 0.02,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "T": 1.5,
+    "z_floor": 1.0,
+    "r_drone": 0.3,
+    "chaser_radius": 0.4,
+    "chaser_speed": 2.0,
+    "lqr_q": [
+      2.0,
+      2.0,
+      8.0,
+      0.01,
+      0.01,
+      0.5,
+      8.0,
+      8.0,
+      2.0
+    ],
+    "lqr_r": [
+      0.06,
+      0.15,
+      0.15,
+      0.12
+    ],
+    "c_B": 50.0,
+    "wind_accel_max": 0.3,
+    "n_obstacle_slots": 8,
+    "n_chaser_slots": 2,
+    "backup_action": "residual_lqr"
+  },
+  "region": {
+    "mix_low": [
+      0.5,
+      0.1,
+      0.1,
+      0.3
+    ],
+    "mix_high": [
+      0.4,
+      0.2,
+      0.2,
+      0.2
+    ],
+    "pool_per_region": 50000,
+    "heldout_val": 1000,
+    "heldout_test": 2000
+  },
+  "sa": {
+    "sa_backbone": "td3",
+    "total_steps": 10000000,
+    "episode_max_steps": 112,
+    "curriculum_start_scale": 1.0,
+    "eval_every": 100000,
+    "log_every": 50000,
+    "action_smoothness_weight": 0.5,
+    "actor_init": "lqr_bc",
+    "actor_start_update": 20000
+  },
+  "env": {
+    "arena_x": 40.0,
+    "arena_y_half": 10.0,
+    "z_max": 10.0,
+    "start_z_min": 2.0,
+    "start_z_max": 4.0,
+    "start_speed_min": 4.0,
+    "start_speed_max": 6.0,
+    "target_x_min": 32.0,
+    "target_x_max": 37.0,
+    "target_y_half": 5.0,
+    "target_z_min": 1.6,
+    "target_z_max": 2.5,
+    "target_speed_min": 0.2,
+    "target_speed_max": 0.8,
+    "strike_radius": 0.6,
+    "obstacles_min": 3,
+    "obstacles_max": 3,
+    "chasers_max": 2,
+    "episode_seconds": 15.0,
+    "w_progress": 2.0,
+    "w_time": 0.05,
+    "w_action": 0.05,
+    "strike_bonus": 100.0,
+    "crash_penalty": 150.0,
+    "pool_size": 10000,
+    "chasers_active_min": 1,
+    "chasers_active_max": 1
+  },
+  "tracker": {
+    "total_steps": 10000000,
+    "num_envs": 64,
+    "update_every": 2,
+    "replay_size": 1000000,
+    "eval_every": 250000,
+    "eval_episodes": 128,
+    "gamma": 0.995,
+    "reward_scale": 0.1
+  }
+}

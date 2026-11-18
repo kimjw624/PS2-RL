@@ -1,0 +1,35 @@
+| variant | seed | scene | outcome | steps without certificate | min chaser dist [m] | min obstacle dist [m] |
+|---|---|---|---|---|---|---|
+| ps2_ref | 0 | 845 | crash_chaser | 92 | 0.67 | 0.45 |
+| ps2_detour | 0 | 270 | crash_chaser | 46 | 0.68 | 0.45 |
+| ps2_detour | 0 | 845 | crash_chaser | 90 | 0.64 | 0.45 |
+| ps2_ramp20 | 0 | 845 | crash_chaser | 94 | 0.66 | 0.45 |
+| ps2_ramp20 | 1 | 137 | crash_chaser | 31 | 0.67 | 0.45 |
+| ps2_searchh | 0 | 242 | crash_chaser | 178 | 0.67 | 0.77 |
+| ps2_v2 | 0 | 137 | crash_chaser | 168 | 0.67 | 0.45 |
+| ps2_v2 | 0 | 142 | crash_chaser | 174 | 0.68 | 0.45 |
+| ps2_v2 | 0 | 474 | crash_chaser | 164 | 0.66 | 0.45 |
+| ps2_v2 | 0 | 524 | crash_chaser | 168 | 0.69 | 0.45 |
+| ps2_v2 | 1 | 137 | crash_chaser | 170 | 0.70 | 0.45 |
+| ps2_v2 | 1 | 717 | crash_chaser | 161 | 0.67 | 0.45 |
+| ps2_v2 | 1 | 882 | crash_chaser | 172 | 0.62 | 0.45 |
+| ps2_v2detour | 0 | 97 | crash_chaser | 41 | 0.65 | 0.45 |
+| ps2_v2detour | 0 | 137 | crash_chaser | 167 | 0.70 | 0.45 |
+| ps2_v2detour | 0 | 142 | crash_chaser | 174 | 0.68 | 0.45 |
+| ps2_v2detour | 0 | 474 | crash_chaser | 163 | 0.69 | 0.45 |
+| ps2_v2detour | 0 | 524 | crash_chaser | 168 | 0.69 | 0.45 |
+| ps2_v2detour | 1 | 137 | crash_chaser | 171 | 0.68 | 0.45 |
+| ps2_v2detour | 1 | 717 | crash_chaser | 161 | 0.67 | 0.45 |
+| ps2_v2detour | 1 | 882 | crash_chaser | 171 | 0.62 | 0.45 |
+| ps2_v2searchh | 0 | 107 | crash_chaser | 169 | 0.66 | 0.70 |
+| ps2_v2searchh | 1 | 97 | crash_chaser | 77 | 0.68 | 0.50 |
+| ps2_v2searchh | 1 | 242 | crash_chaser | 65 | 0.68 | 0.81 |
+| residual_search | 0 | 795 | crash_chaser | 43 | 0.69 | 1.88 |
+| residual_search_early | 0 | 614 | crash_chaser | 176 | 0.67 | 0.45 |
+| residual_search_ramp20 | 0 | 385 | crash_chaser | 178 | 0.68 | 1.00 |
+| residual_search_ramp20 | 1 | 769 | crash_chaser | 56 | 0.69 | 2.12 |
+| residual_searchfw | 0 | 692 | crash_chaser | 44 | 0.63 | 1.21 |
+| residual_searchfw | 1 | 151 | crash_chaser | 48 | 0.65 | 1.04 |
+| residual_searchfw | 1 | 692 | crash_chaser | 51 | 0.68 | 1.75 |
+| residual_searchfw | 1 | 795 | crash_chaser | 48 | 0.67 | 1.58 |
+| residual_searchh | 0 | 795 | crash_chaser | 43 | 0.69 | 1.88 |

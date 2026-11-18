@@ -1,0 +1,87 @@
+{
+  "checkpoint": "checkpoints/landing_phase1/floor_rec10_td3_seed0/landing_backup_policy_actor.pkl",
+  "landing": {
+    "dt": 0.02,
+    "T": 2.0,
+    "num_steps": 100,
+    "gravity": 9.81,
+    "a_cmd_min": 0.0,
+    "a_cmd_max": 39.24,
+    "omega_max": 18.0,
+    "pad_x": 0.0,
+    "pad_y": 0.0,
+    "pad_z": 0.0,
+    "cone_r0": 0.3,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.015,
+    "floor_constraint": true,
+    "recovery_rate_cone": 10.0,
+    "recovery_rate_floor": 10.0,
+    "z_des": 1.25,
+    "base_set_c": 12.0,
+    "base_set_smooth_gain": 20.0,
+    "z_clear": 0.5,
+    "lqr_q_x": 1.0,
+    "lqr_q_y": 1.0,
+    "lqr_q_z": 1.0,
+    "lqr_q_vx": 0.16,
+    "lqr_q_vy": 0.16,
+    "lqr_q_vz": 0.4,
+    "lqr_q_thetax": 0.8,
+    "lqr_q_thetay": 0.8,
+    "lqr_q_thetaz": 0.5,
+    "lqr_r_a_cmd": 0.02,
+    "lqr_r_omega_x": 0.012,
+    "lqr_r_omega_y": 0.012,
+    "lqr_r_omega_z": 0.04
+  },
+  "qp": {
+    "alpha": 10.0,
+    "base_alpha": 2.0,
+    "slack_weight": 1000000.0,
+    "solver_tol": 0.0005,
+    "qp_solve_dtype": "float64"
+  },
+  "recoverability_wrt_S_only": {
+    "general": 0.8984375,
+    "edge": 0.515625,
+    "shell": 1.0
+  },
+  "recoverability": {
+    "fresh": {
+      "general": 0.7578125,
+      "edge": 0.318359375,
+      "shell": 1.0
+    },
+    "phase1_test": {
+      "general": 0.78515625,
+      "edge": 0.3349609375,
+      "shell": 1.0
+    },
+    "hoeffding_halfwidth": 0.060020174457495044,
+    "ok": true
+  },
+  "filter_stress_test": {
+    "n_start_states": 32,
+    "steps": 150,
+    "unfiltered_leave_cone_frac": 1.0,
+    "filtered_leave_cone_frac": 0.0,
+    "filtered_min_h": 0.0025207996368408203,
+    "filtered_min_h_per_run_median": 0.012963354587554932,
+    "max_slack": 0.0006042691529728472,
+    "frac_steps_slack_gt_1e-3": 0.0,
+    "solver_fallback_steps": 0,
+    "mean_intervention_norm": 0.2013443261384964,
+    "frac_steps_intervening": 0.93375,
+    "qp_batch_solve_ms_median": 181.79082870483398,
+    "ok": true,
+    "solver_fallback_frac": 0.0
+  },
+  "floor_stress_test": {
+    "target_depth": 0.3,
+    "unfiltered_min_height": -4.1898322105407715,
+    "filtered_min_height": 0.0003936309658456594,
+    "max_slack": 0.000411429675295949,
+    "ok": true
+  }
+}

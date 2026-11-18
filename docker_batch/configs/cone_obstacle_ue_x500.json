@@ -1,0 +1,20 @@
+{
+  "_comment": "Outside-cone task under a bounded disturbance (UE-bCBF) with the stock-x500 limits (thrust 1.99-14.95 m/s^2, roll/pitch +-3.84 rad/s, yaw +-0.203 rad/s; hover LQR re-weighted for them, docker_batch/configs/landing_x500_cone45_r0p3.json). Base set: the 9-D hover ellipsoid beside the funnel at c_B = 20 (bounds: c_U 28.66, c_chart 103.1, c_geometric 22.20 binding, c_Lyap >= 28.66). Design region: speed <= 2 m/s and yaw <= 25 deg (what the 0.203 rad/s yaw rate can undo within the 2 s backup horizon). Reference: the slow approach L3-1-s (0.6 m/s average, 1.31 m/s peak, 7.6 s). See docker_batch/README_x500_ue.md for how base_set_c and the disturbance bound were checked.",
+  "vehicle": "docker_batch/configs/landing_x500_cone45_r0p3.json",
+  "cone_obstacle": {
+    "tip_z": 1.2,
+    "cone_theta_deg": 45.0,
+    "cone_eps": 0.25,
+    "ground_z": 0.0,
+    "min_altitude": 0.5,
+    "target_radius": 0.25,
+    "target_height": -1.0,
+    "base_set": "points",
+    "base_set_c": 20.0,
+    "hover_points": [[-2.0, 0.0, 1.7]]
+  },
+  "design_region": {"v_max": 2.0, "yaw_max_deg": 25.0},
+  "ue": {"delta_d": 0.5, "frequency_hz": 0.05, "observer_lambda": 20.0, "e_bar": 0.02, "tube_scale": 1.2},
+  "filter": {"alpha": 10.0, "alpha_ground": 20.0, "base_alpha": 2.0},
+  "reference": "ps2rl/envs/assets/cone_obstacle/quadrotor_cone_obstacle_l3_1_s_reference.npz"
+}
