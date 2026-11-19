@@ -1,0 +1,250 @@
+{
+  "sac": {
+    "seed": 0,
+    "total_steps": 1000000,
+    "start_steps": 10000,
+    "update_after": 5000,
+    "update_every": 2,
+    "batch_size": 256,
+    "replay_size": 1000000,
+    "gamma": 0.99,
+    "tau": 0.005,
+    "actor_lr": 0.0001,
+    "critic_lr": 0.0003,
+    "alpha_lr": 0.0003,
+    "init_alpha": 0.1,
+    "min_alpha": 0.0001,
+    "target_entropy": -4.0,
+    "max_grad_norm": 5.0,
+    "q_clip_abs": 10000.0,
+    "hidden_size": 256,
+    "reward_scale": 0.01,
+    "init_hover_bias": true,
+    "num_envs": 64,
+    "steps_per_jit": 32,
+    "eval_every": 100352,
+    "eval_episodes": 16,
+    "log_every": 50176,
+    "warm_start_weights": "",
+    "actor_start_update": 0,
+    "caps_temporal": 0.0,
+    "caps_spatial": 0.0,
+    "caps_sigma": 0.02,
+    "bc_weight": 1.0,
+    "bc_hold": 100000,
+    "bc_decay": 400000,
+    "bc_min": 0.2
+  },
+  "env": {
+    "reference_path": "ps2rl/envs/assets/slow_line/quadrotor_slow_line_reference.npz",
+    "dt": 0.02,
+    "gravity": 9.81,
+    "substeps": 2,
+    "policy_mode": "direct",
+    "res_a": 1.5,
+    "res_w_xy": 0.6,
+    "res_w_z": 0.2,
+    "w_res": 0.02,
+    "base_kp": 3.0,
+    "base_kd": 3.0,
+    "base_katt": 8.0,
+    "base_kyaw": 1.0,
+    "a_min": 7.85,
+    "a_max": 11.77,
+    "omega_xy_max": 1.0,
+    "omega_z_max": 0.3,
+    "episode_sec": 15.0,
+    "p_start_zero": 0.3,
+    "init_p_start": 0.5,
+    "init_p": 0.25,
+    "init_v": 0.2,
+    "init_tilt_deg": 5.0,
+    "init_yaw_deg": 10.0,
+    "init_rate": 0.2,
+    "delay_steps_max": 2,
+    "tau_rate_min": 0.02,
+    "tau_rate_max": 0.08,
+    "tau_thrust_min": 0.02,
+    "tau_thrust_max": 0.06,
+    "thrust_gain_min": 0.9,
+    "thrust_gain_max": 1.1,
+    "rate_gain_min": 0.95,
+    "rate_gain_max": 1.05,
+    "dist_amp_max": 0.5,
+    "dist_freq_min_hz": 0.02,
+    "dist_freq_max_hz": 0.5,
+    "dist_z_scale": 0.5,
+    "wind_max": 0.3,
+    "noise_p": 0.01,
+    "noise_v": 0.02,
+    "noise_att": 0.005,
+    "observer_lambda": 5.0,
+    "observer_init_err": 0.1,
+    "preview_steps_1": 25,
+    "preview_steps_2": 50,
+    "obs_pos_scale": 0.2,
+    "obs_vel_scale": 0.5,
+    "s_z": 0.15,
+    "w_z": 1.0,
+    "s_vz": 0.5,
+    "w_vz": 0.5,
+    "s_xy": 0.15,
+    "w_xy": 1.0,
+    "s_vxy": 0.5,
+    "w_vxy": 0.5,
+    "s_tilt": 0.3,
+    "w_tilt": 0.2,
+    "s_yaw": 0.5,
+    "w_yaw": 0.05,
+    "s_wxy": 3.0,
+    "w_wxy": 0.02,
+    "s_wz": 0.5,
+    "w_wz": 1.0,
+    "w_thrust": 0.01,
+    "s_du_a": 1.0,
+    "s_du_w": 0.3,
+    "w_du": 0.05,
+    "delta": 0.1,
+    "floor": 50.0,
+    "lost_pos_error": 1.0,
+    "lost_tilt_deg": 60.0,
+    "terminal_gamma": 0.99
+  },
+  "actor": {
+    "obs_dim": 34,
+    "action_dim": 4,
+    "hidden_sizes": [
+      256,
+      256
+    ],
+    "log_std_min": -5.0,
+    "log_std_max": 2.0,
+    "activation": "relu"
+  },
+  "obs_layout": [
+    [
+      "e_p",
+      3
+    ],
+    [
+      "e_v",
+      3
+    ],
+    [
+      "q",
+      4
+    ],
+    [
+      "q_ref",
+      4
+    ],
+    [
+      "v_ref",
+      3
+    ],
+    [
+      "omega_ref",
+      3
+    ],
+    [
+      "a_ref_rel",
+      1
+    ],
+    [
+      "preview_1",
+      3
+    ],
+    [
+      "preview_2",
+      3
+    ],
+    [
+      "d_hat",
+      3
+    ],
+    [
+      "u_prev",
+      4
+    ]
+  ],
+  "obs_dim": 34,
+  "action_box": {
+    "low": [
+      7.85,
+      -1.0,
+      -1.0,
+      -0.3
+    ],
+    "high": [
+      11.77,
+      1.0,
+      1.0,
+      0.3
+    ]
+  },
+  "policy_box": {
+    "low": [
+      7.849999904632568,
+      -1.0,
+      -1.0,
+      -0.30000001192092896
+    ],
+    "high": [
+      11.770000457763672,
+      1.0,
+      1.0,
+      0.30000001192092896
+    ]
+  },
+  "policy_mode": "direct",
+  "reference": "ps2rl/envs/assets/slow_line/quadrotor_slow_line_reference.npz",
+  "eval_scenarios": {
+    "ideal": {
+      "delay": 0,
+      "tau_rate": 0.005,
+      "tau_thrust": 0.005,
+      "thrust_gain": 1.0,
+      "rate_gain": 1.0,
+      "d_amp": 0.0,
+      "wind": 0.0,
+      "noise_scale": 0.0,
+      "start": "exact"
+    },
+    "nominal": {
+      "delay": 1,
+      "tau_rate": 0.04,
+      "tau_thrust": 0.04,
+      "thrust_gain": 1.0,
+      "rate_gain": 1.0,
+      "d_amp": 0.0,
+      "wind": 0.0,
+      "noise_scale": 1.0,
+      "start": "rest"
+    },
+    "train": {
+      "start": "random"
+    },
+    "slow_actuators": {
+      "delay": 2,
+      "tau_rate": 0.08,
+      "tau_thrust": 0.06,
+      "start": "rest"
+    },
+    "thrust_low": {
+      "thrust_gain": 0.9,
+      "start": "rest"
+    },
+    "thrust_high": {
+      "thrust_gain": 1.1,
+      "start": "rest"
+    },
+    "windy": {
+      "d_amp": 0.5,
+      "wind": 0.3,
+      "start": "rest"
+    },
+    "offset_start": {
+      "start": "offset"
+    }
+  }
+}

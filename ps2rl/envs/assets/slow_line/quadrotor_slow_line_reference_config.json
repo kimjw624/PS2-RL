@@ -1,0 +1,52 @@
+{
+  "slow_loop_config": {
+    "speed": 0.3,
+    "t_acc": 4.0,
+    "l1": 2.0,
+    "l2": 0.0,
+    "radius": 1.5,
+    "ramp": 1.0,
+    "turns": 0.0,
+    "direction": "left",
+    "hover_start": 3.0,
+    "hover_end": 3.0,
+    "z": 0.0,
+    "yaw_deg": 0.0,
+    "dt": 0.02,
+    "out": "ps2rl/envs/assets/slow_line/quadrotor_slow_line_reference.npz"
+  },
+  "phases": {
+    "hover_start_end": 3.0,
+    "cruise_start": 7.0,
+    "decel_start": 9.666666666666668,
+    "rest": 13.666666666666668,
+    "end": 16.666666666666668,
+    "turn_start_s": 2.0,
+    "turn_end_s": 2.0,
+    "path_length": 2.0
+  },
+  "stats": {
+    "num_points": 834,
+    "duration": 16.66,
+    "peak_speed": 0.3,
+    "peak_horizontal_acc": 0.14062187503819124,
+    "peak_tilt_deg": 0.8212708638161745,
+    "a_cmd_min": 9.81,
+    "a_cmd_max": 9.81100786823785,
+    "max_abs_omega": 0.011034508995333724,
+    "x_range": [
+      0.0,
+      2.0
+    ],
+    "y_range": [
+      0.0,
+      0.0
+    ],
+    "end_point": [
+      2.0,
+      0.0,
+      0.0
+    ]
+  },
+  "consistency_drift_m": 0.0004989639822360935
+}

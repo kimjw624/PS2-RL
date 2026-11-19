@@ -1,0 +1,76 @@
+{
+  "name": "line_v4_s0",
+  "source_run": "/home/dev/ws_shared/PS2-RL/outputs/slow_track/line_v4_s0",
+  "source_weights": "best_weights.pkl",
+  "exported": "2026-11-19T02:50:29",
+  "note": "straight line 2 m at <=0.3 m/s; v4_floor recipe; best at 0.4M steps; SITL 20261119_022715",
+  "weights_sha256": "8889b98894230408dc0e4893211eb136c091ca962a2462f951b32f26c4dba7b2",
+  "reference_path": "ps2rl/envs/assets/slow_line/quadrotor_slow_line_reference.npz",
+  "reference_sha256": "5901299b931d62fffcc03d3ffc9938cef83945d95317a0b2d393f2efccdbdeb3",
+  "network": {
+    "activation": "relu",
+    "layer_shapes": [
+      [
+        34,
+        256
+      ],
+      [
+        256,
+        256
+      ],
+      [
+        256,
+        8
+      ]
+    ],
+    "output": "first half of the last layer = mean of the tanh-Gaussian; action = mid + half * tanh(mean)"
+  },
+  "observation_dim": 34,
+  "action": {
+    "order": [
+      "collective thrust / mass [m/s^2]",
+      "p [rad/s]",
+      "q [rad/s]",
+      "r [rad/s]"
+    ],
+    "low": [
+      7.85,
+      -1.0,
+      -1.0,
+      -0.3
+    ],
+    "high": [
+      11.77,
+      1.0,
+      1.0,
+      0.3
+    ]
+  },
+  "control_period_s": 0.02,
+  "observer_lambda": 5.0,
+  "obs_scales": {
+    "position": 0.2,
+    "velocity": 0.5
+  },
+  "eval_score": 0.026024231337942183,
+  "eval_pos_err_mean_cm": {
+    "ideal": 0.81,
+    "nominal": 1.14,
+    "train": 4.25,
+    "slow_actuators": 2.05,
+    "thrust_low": 2.69,
+    "thrust_high": 2.05,
+    "windy": 3.06,
+    "offset_start": 4.77
+  },
+  "eval_lost_rate": {
+    "ideal": 0.0,
+    "nominal": 0.0,
+    "train": 0.0,
+    "slow_actuators": 0.0,
+    "thrust_low": 0.0,
+    "thrust_high": 0.0,
+    "windy": 0.0,
+    "offset_start": 0.0
+  }
+}
