@@ -522,6 +522,26 @@ New defaults in `cyl_online_x500.yaml`: `control_period 0.04`, `process true`, `
 executor:=multi`. Pi test: `cyl_compute_pi_test.sh` (A as flown, B / C new defaults planner / straight, D / E 20 ms with
 the process and one executor thread).
 
+**Second round: the ROS side (2026-11-20, after the Pi measurements; the bridge's `README_cyl_online.md` has the
+details).** With the above, the Pi's bridge process still filled its core (92 %), three quarters of it inside rclpy's
+executor (about 225 passes a second). The steps fell behind: 72 % done, step p95 133 ms. All five flights first lost
+offboard after a time-sync jump. The bridge now has:
+* **`io: poll`** (`polled_loop.py`): no executor.
+  - It sleeps until shortly before the odometry message that makes the next step due, then steps at once
+    (about 50 wake-ups a second).
+  - The stream is quiet while steps publish; `setpoint_rate` is 25.
+* **`outgoing_stamp: receipt`**: stamp 0, which PX4 v1.16 / v1.17 replace with their time of receipt. The old stamp
+  (the guarded odometry clock) was 6 s old after a +6 s time-sync jump, so PX4 counted the offboard signal as lost.
+  The fix also applies to the slow-track node.
+* **Topic names from px4_msgs** (`vehicle_local_position_v1` on v1.17).
+
+Measured against a stand-in PX4 on real ROS 2 topics (`tools/fake_px4.py`, `tools/bench_fake.py`). The bridge and the
+controller each had 15 % of an x86 core ("a Pi core"); with that limit the pushed code reproduced the Pi's failure.
+* Pushed code: 256 / 312 steps, step median / p95 40 / 70 ms, bridge at its limit.
+* `io: poll`: 334 / 334 steps, 4.9 / 14.8 ms, bridge about 40 % of its core.
+* On a core 1.5 times slower again: 337 / 338 steps, 11.8 / 22.9 ms.
+* With time-sync jumps of +6 / +3 / +2.5 s, `receipt` flew to the goal; the old stamping lost offboard.
+
 ## 7. Files
 
 | file | what |
@@ -556,10 +576,11 @@ the process and one executor thread).
 * The blend chatters (lam 1 / 0 from one step to the next) when the filter steps in: right after the start in S1, and
   all the way round the cylinder in the straight-line runs; a rise limit on lam (the strike filter's `lam_rise_max`)
   would smooth it. 3 or 5 blends do not.
-* Hardware (Tarot 450): obstacle positions from sensing / motion capture instead of virtual ones; a frame re-anchor on
+* Hardware (Tarot 650, confirmed 2026-11-20; radius about 0.52 m against the model's 0.35 m): obstacle positions from sensing / motion capture instead of virtual ones; a frame re-anchor on
   estimator resets.
-* Compute on the Pi: confirm the new defaults (process, one executor thread, 40 ms) with `cyl_compute_pi_test.sh`. If
-  still short: numba the decision's Python setup and the command (now ~60 % of the step), or fewer PX4 messages.
+* Compute on the Pi: confirm `io: poll` + receipt stamps on the Pi (`tools/bench_fake.py` there, then the SITL harness).
+  If still short: numba the decision's Python setup and the command (now ~60 % of the step); a C++ I/O node; or a
+  `rate_limit` on vehicle_odometry in PX4's `dds_topics.yaml` (firmware build).
 * Wind (left out for now): the adversarial certificate of the base set (section 1).
 * PS2 (a striker trained through the filter) was not repeated: the go-to-goal nominal is enough for the straight test.
 * The width-128 advantage rests on one training seed per width.
