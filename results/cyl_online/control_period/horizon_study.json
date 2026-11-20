@@ -1,0 +1,325 @@
+{
+ "note": "O3 (cylinder at (1.3, -0.1)), 20 episodes each, 20 ms control period; horizon / period of the filter. Shorter horizons leave the planner flight unchanged and slow the straight-line flight (the hover is held).",
+ "rows": [
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 1.0,
+   "period": 1,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.029000000000002,
+   "min_clear_m": 0.6522714757555795,
+   "lam_mean": 0.9990057665539869,
+   "modes": {
+    "fresh": 0.9990057665539869,
+    "committed": 0.0007953867568104991,
+    "held": 0.00019884668920262477,
+    "none": 0.0
+   },
+   "steps_mean": 11.706502286736926,
+   "steps_max": 51
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 1.0,
+   "period": 1,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 12.081,
+   "min_clear_m": 0.39271630578934535,
+   "lam_mean": 0.4526943133846536,
+   "modes": {
+    "fresh": 0.5275225560797947,
+    "committed": 0.44598957039980136,
+    "held": 0.02433573379687112,
+    "none": 0.00215213972353282
+   },
+   "steps_mean": 42.35261981624038,
+   "steps_max": 51
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 1.0,
+   "period": 2,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.037000000000001,
+   "min_clear_m": 0.6527596947285949,
+   "lam_mean": 0.9988088147706968,
+   "modes": {
+    "fresh": 0.9992066640222134,
+    "committed": 0.0007933359777865926,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "steps_mean": 12.759619198730663,
+   "steps_max": 52
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 1.0,
+   "period": 2,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 12.374,
+   "min_clear_m": 0.38296790132332503,
+   "lam_mean": 0.44173266526588006,
+   "modes": {
+    "fresh": 0.5856889032466484,
+    "committed": 0.3855596834114037,
+    "held": 0.025036343078662576,
+    "none": 0.0037150702632854143
+   },
+   "steps_mean": 43.324503311258276,
+   "steps_max": 52
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.75,
+   "period": 1,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.031000000000001,
+   "min_clear_m": 0.6522714757555795,
+   "lam_mean": 0.9984098588749751,
+   "modes": {
+    "fresh": 0.9986086265156032,
+    "committed": 0.0005963029218843172,
+    "held": 0.0003975352812562115,
+    "none": 0.0003975352812562115
+   },
+   "steps_mean": 11.687537268932617,
+   "steps_max": 39
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.75,
+   "period": 1,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 16.647,
+   "min_clear_m": 0.460154401626366,
+   "lam_mean": 0.3154322100078092,
+   "modes": {
+    "fresh": 0.38403315912777075,
+    "committed": 0.3153120682405238,
+    "held": 0.29236499068901306,
+    "none": 0.008289781942692377
+   },
+   "steps_mean": 34.2167958190665,
+   "steps_max": 39
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.75,
+   "period": 2,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.039000000000001,
+   "min_clear_m": 0.6527596947285949,
+   "lam_mean": 0.9984123834094066,
+   "modes": {
+    "fresh": 0.9988104678826328,
+    "committed": 0.0007930214115781126,
+    "held": 0.0003965107057890563,
+    "none": 0.0
+   },
+   "steps_mean": 12.744250594766058,
+   "steps_max": 40
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.75,
+   "period": 2,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 16.488999999999997,
+   "min_clear_m": 0.4151935690392846,
+   "lam_mean": 0.3208805870580387,
+   "modes": {
+    "fresh": 0.46393502242696083,
+    "committed": 0.2847617893077949,
+    "held": 0.24099890895866166,
+    "none": 0.010304279306582616
+   },
+   "steps_mean": 34.994181112862165,
+   "steps_max": 40
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.5,
+   "period": 1,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.056,
+   "min_clear_m": 0.6526936996660012,
+   "lam_mean": 0.9936708860759493,
+   "modes": {
+    "fresh": 0.9942642405063291,
+    "committed": 0.0037579113924050634,
+    "held": 0.0011867088607594937,
+    "none": 0.0007911392405063291
+   },
+   "steps_mean": 11.541534810126583,
+   "steps_max": 26
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.5,
+   "period": 1,
+   "nominal": "straight",
+   "success": 0.9,
+   "contact": 0.0,
+   "t_goal_s": 34.41555555555556,
+   "min_clear_m": 0.4605394815515037,
+   "lam_mean": 0.14565105506948017,
+   "modes": {
+    "fresh": 0.19545948418825412,
+    "committed": 0.13541487962486418,
+    "held": 0.6659804426145136,
+    "none": 0.003145193572368045
+   },
+   "steps_mean": 24.561531423343055,
+   "steps_max": 26
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.5,
+   "period": 2,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 5.0649999999999995,
+   "min_clear_m": 0.6539551172762442,
+   "lam_mean": 0.992497532082922,
+   "modes": {
+    "fresh": 0.9944773175542406,
+    "committed": 0.0039447731755424065,
+    "held": 0.001183431952662722,
+    "none": 0.0003944773175542406
+   },
+   "steps_mean": 12.570808678500986,
+   "steps_max": 27
+  },
+  {
+   "course": "O3_650",
+   "radius": 0.27,
+   "horizon_s": 0.5,
+   "period": 2,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 28.960999999999995,
+   "min_clear_m": 0.46703035195643505,
+   "lam_mean": 0.18863298919236215,
+   "modes": {
+    "fresh": 0.30475598812728655,
+    "committed": 0.16221439911644922,
+    "held": 0.5272313108303996,
+    "none": 0.005798301925864568
+   },
+   "steps_mean": 25.03002692068751,
+   "steps_max": 27
+  },
+  {
+   "course": "O3",
+   "radius": 0.1,
+   "horizon_s": 0.5,
+   "period": 2,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 4.6819999999999995,
+   "min_clear_m": 0.6749968063081105,
+   "lam_mean": 0.9995728321230244,
+   "modes": {
+    "fresh": 0.9995737425404945,
+    "committed": 0.00042625745950554135,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "steps_mean": 12.030264279624893,
+   "steps_max": 27
+  },
+  {
+   "course": "O3",
+   "radius": 0.1,
+   "horizon_s": 0.5,
+   "period": 2,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 21.601,
+   "min_clear_m": 0.44997660893857394,
+   "lam_mean": 0.2353131799453729,
+   "modes": {
+    "fresh": 0.365537664260596,
+    "committed": 0.17499537294095874,
+    "held": 0.45419211549139366,
+    "none": 0.005274847307051638
+   },
+   "steps_mean": 24.279381824912086,
+   "steps_max": 27
+  },
+  {
+   "course": "O3",
+   "radius": 0.1,
+   "horizon_s": 1.0,
+   "period": 2,
+   "nominal": "planner",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 4.68,
+   "min_clear_m": 0.6749968063081105,
+   "lam_mean": 1.0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "steps_mean": 12.051599147121536,
+   "steps_max": 50
+  },
+  {
+   "course": "O3",
+   "radius": 0.1,
+   "horizon_s": 1.0,
+   "period": 2,
+   "nominal": "straight",
+   "success": 1.0,
+   "contact": 0.0,
+   "t_goal_s": 10.413,
+   "min_clear_m": 0.39016791827496844,
+   "lam_mean": 0.4852588111015077,
+   "modes": {
+    "fresh": 0.6331542594013815,
+    "committed": 0.34458940905602453,
+    "held": 0.019570222563315427,
+    "none": 0.002686108979278588
+   },
+   "steps_mean": 41.37586339217191,
+   "steps_max": 52
+  }
+ ]
+}

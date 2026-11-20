@@ -72,7 +72,7 @@ class CylOnlineFlight(LandingFlight):
         self._hold_time = float(cfg.recover_time)
         self._t_obs: float | None = None
         self._rec.update({k: [] for k in ("t", "x", "u", "u_nom", "omega", "tilt", "clear", "mode", "steps", "decide",
-                                          "dhat", "known", "inb", "intervene")})
+                                          "dhat", "known", "inb", "intervene", "compute")})
         if cfg.log_dir:
             Path(cfg.log_dir).mkdir(parents=True, exist_ok=True)
             self._csv_file = open(Path(cfg.log_dir) / "flight.csv", "w", newline="", encoding="utf-8")
@@ -132,6 +132,7 @@ class CylOnlineFlight(LandingFlight):
         r["omega"].append(np.full(3, np.nan) if omega_meas is None else np.asarray(omega_meas, dtype=np.float64))
         r["clear"].append(float(info["clearance"])); r["mode"].append(info["mode"]); r["steps"].append(int(info["steps"]))
         r["decide"].append(float(info["decide_ms"])); r["dhat"].append(np.asarray(info["d_hat"])); r["known"].append(int(info["known"]))
+        r["compute"].append(float(info.get("compute_ms", 1e3 * out.latency_s)))
         r["inb"].append(bool(out.in_base_set)); r["intervene"].append(bool(info["intervene"]))
         if omega_meas is not None and np.all(np.isfinite(omega_meas)):
             r["rate_err"].append(np.asarray(out.u[1:4]) - np.asarray(omega_meas, dtype=np.float64))
@@ -194,6 +195,9 @@ class CylOnlineFlight(LandingFlight):
             "rollout_steps": {"mean": float(steps.mean()), "p99": float(np.percentile(steps, 99)), "max": int(steps.max())},
             "decide_ms": {"median": float(np.median(dec)), "p95": float(np.percentile(dec, 95)), "max": float(dec.max())},
             "latency_ms": {"median": float(np.median(lat)), "p95": float(np.percentile(lat, 95)), "max": float(lat.max())},
+            "compute_ms": {"median": float(np.median(r["compute"])), "p95": float(np.percentile(r["compute"], 95)),
+                           "max": float(np.max(r["compute"]))},
+            "control_period_ms": 1e3 * float(self.rt.dt),
             "max_tilt_deg": float(np.max(r["tilt"])), "max_speed_m_s": float(np.max(r["speed"])),
             "min_height_m": float(np.min(r["height"])),
             "thrust_cmd_range_m_s2": [float(u[:, 0].min()), float(u[:, 0].max())],
@@ -225,8 +229,8 @@ class CylOnlineFlight(LandingFlight):
             f"held {100 * md['held']:.0f} %, none {100 * md['none']:.0f} %; rollout steps mean {s['rollout_steps']['mean']:.0f}, "
             f"max {s['rollout_steps']['max']}",
             f"  compute: decision median {s['decide_ms']['median']:.2f} / p95 {s['decide_ms']['p95']:.2f} / max "
-            f"{s['decide_ms']['max']:.2f} ms; whole step median {s['latency_ms']['median']:.2f} / max {s['latency_ms']['max']:.2f} ms "
-            f"({self.rt.backend})",
+            f"{s['decide_ms']['max']:.2f} ms; whole step median {s['latency_ms']['median']:.2f} / p95 {s['latency_ms']['p95']:.2f} / "
+            f"max {s['latency_ms']['max']:.2f} ms against a {1e3 * self.rt.dt:.0f} ms control period ({self.rt.backend})",
             f"  commands: thrust {s['thrust_cmd_range_m_s2'][0]:.2f}..{s['thrust_cmd_range_m_s2'][1]:.2f} m/s^2 (saturated "
             f"{s['thrust_saturated_steps']} steps), rates up to {s['max_rate_cmd_rad_s']:.2f} rad/s; tilt up to "
             f"{s['max_tilt_deg']:.1f} deg, speed up to {s['max_speed_m_s']:.2f} m/s, height min {s['min_height_m']:.2f} m; "
@@ -256,6 +260,13 @@ class CylOnlineFlight(LandingFlight):
             row += [f"{v:.6f}" for v in i["d_hat"]] + [f"{i['decide_ms']:.3f}", f"{out.latency_s * 1e3:.3f}"]
         self._csv.writerow(row)
 
+    def close(self) -> None:
+        super().close()
+        try:
+            self.rt.close()
+        except Exception:
+            pass
+
     def _write_summary(self, now: float, x_local) -> None:
         r, s = self._rec, self.stats
         if s.get("steps") and "rate_response" not in s and len(r["t"]) >= 30:
@@ -268,20 +279,22 @@ class CylOnlineFlight(LandingFlight):
             except Exception as exc:
                 self._warn(f"rate-response fit failed: {exc!r}")
         rt = self.rt
+        dsc = rt.describe()
         summary = {
             "outcome": self.outcome or "ended before the controller phase",
             "controller": self.stats,
             "flight_duration_s": float(now - self._t_first) if self._t_first is not None else 0.0,
             "events": self.events,
-            "course": {"label": rt.course_label, "cylinders_xyr": rt.obst[:, 0:3].tolist(), "goal": rt.goal.tolist(),
-                       "goal_radius": rt.cfg.goal_radius, "r_drone": rt.m.r_drone, "rho_xy": rt.m.rho_xy,
-                       "z_floor": rt.m.z_floor},
+            "course": {"label": dsc["course_label"], "cylinders_xyr": dsc["cylinders_xyr"], "goal": dsc["goal"],
+                       "goal_radius": rt.cfg.goal_radius, "r_drone": dsc["r_drone"], "rho_xy": dsc["rho_xy"],
+                       "z_floor": dsc["z_floor"]},
             "ground_point_local": None if self.ground is None else self.ground.tolist(),
             "handover_point_local": None if self.shift is None else self.to_local(self.start_pad).tolist(),
             "final_position_task_frame": None if (x_local is None or self.shift is None) else self.to_pad(x_local)[0:3].tolist(),
-            "runtime": {**asdict(rt.cfg), "label": rt.label, "backend": rt.backend, "dt": rt.dt, "filter": rt.fcfg.as_dict(),
-                        "nominal_config": rt.nominal.cfg.as_dict(), "action_low": rt.action_low.tolist(),
-                        "action_high": rt.action_high.tolist(), "backup_meta": rt.meta},
+            "runtime": {**asdict(rt.cfg), "label": dsc["label"], "backend": dsc["backend"], "dt": dsc["dt"], "hold": dsc["hold"],
+                        "filter": dsc["filter"], "nominal_config": dsc["nominal_config"],
+                        "action_low": np.asarray(rt.action_low).tolist(), "action_high": np.asarray(rt.action_high).tolist(),
+                        "backup_meta": dsc["backup_meta"]},
             "flight_config": {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(self.cfg).items()},
         }
         self.summary = summary

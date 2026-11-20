@@ -9,6 +9,11 @@ actually need, without numpy's per-call overhead. Checked against the numpy path
     kernel(...)   period 1: the blend step u = lam u_nom + (1 - lam) pi(x0) and the backup's first hit of the base set
                   within N steps, for every candidate row; period > 1: the numpy path runs the window (it simulates the
                   nominal) and the kernel the backup from the window's end (``first_step = False``)
+
+Command hold (``hold`` model steps per command, a control period of hold x dt): every command - the blend at x0 and
+each backup command - is computed from the state at a command time and held for ``hold`` model steps (the autopilot
+holds the last rate setpoint); the safe set is checked at every model step, the base set (the hand-over to the hover
+LQR) only at command times. hold = 1 is the original per-step kernel.
 """
 
 from __future__ import annotations
@@ -177,7 +182,7 @@ def _step(x, u, d, dt, g, lo, hi, out):
 def kernel(X0, first_step, full, lam, u_nom, learned, views, obst, D, extra, switch_extra, N, fail_in, hit_in,
            dt, g, lo, hi, z_floor, r_d, c_B, rho_xy, z_ext, S, DT, KtT,
            W0, B0, W1, B1, W2, B2, relu, mid, half, residual_lqr,
-           X_P, b_P, hit_out, fail_out, used_out):
+           X_P, b_P, hit_out, fail_out, used_out, hold):
     """Per row: (first_step) the blend step from X0, then the composed backup until the base set (with the row's
     clearance ``extra``) is hit or the safe set is left, at most N steps. Without first_step X0 is the window's end and
     fail_in / hit_in its verdicts. Writes the state after the first step (X_P), its base margin (b_P), the verdicts
@@ -209,13 +214,16 @@ def kernel(X0, first_step, full, lam, u_nom, learned, views, obst, D, extra, swi
             for a in range(4):
                 u[a] = lam[i] * u_nom[i, a] + (1.0 - lam[i]) * ub[a]
             _clip(u, lo, hi)
-            _step(x, u, d, dt, g, lo, hi, xn)
-            x[:] = xn
-            h, dp, lv, da, az = _parts(x, obst[i], d, g, z_floor, c_B, z_ext, S, DT, r)
-            s, b = _combine(h, dp, lv, da, az, rd, rho_xy)
+            fail = False
+            for k in range(hold):                       # the blend is held for one control period
+                _step(x, u, d, dt, g, lo, hi, xn)
+                x[:] = xn
+                h, dp, lv, da, az = _parts(x, obst[i], d, g, z_floor, c_B, z_ext, S, DT, r)
+                s, b = _combine(h, dp, lv, da, az, rd, rho_xy)
+                if s < 0.0:
+                    fail = True
             X_P[i] = x
             b_P[i] = b
-            fail = s < 0.0
             hit = (b >= 0.0) and not fail
         else:
             fail = fail_in[i]
@@ -225,12 +233,13 @@ def kernel(X0, first_step, full, lam, u_nom, learned, views, obst, D, extra, swi
             done = fail or hit
             h, dp, lv, da, az = _parts(x, obst[i], d, g, z_floor, c_B, z_ext, S, DT, r)
             for j in range(N):
-                sw = _combine(h, dp, lv, da, az, rd_sw, rho_xy)[1] >= 0.0
-                if learned[i] and (full or not sw):           # full (timing): the actor at every step
-                    _actor(x, views[i], r, d, g, z_floor, KtT, lo, hi, W0, B0, W1, B1, W2, B2, relu, mid, half,
-                           residual_lqr, o, h0, h1, ub)
-                if not learned[i] or sw:
-                    _lqr(r, d, g, KtT, lo, hi, ub)
+                if j % hold == 0:                             # a command time: the backup's next command
+                    sw = _combine(h, dp, lv, da, az, rd_sw, rho_xy)[1] >= 0.0
+                    if learned[i] and (full or not sw):       # full (timing): the actor at every command
+                        _actor(x, views[i], r, d, g, z_floor, KtT, lo, hi, W0, B0, W1, B1, W2, B2, relu, mid, half,
+                               residual_lqr, o, h0, h1, ub)
+                    if not learned[i] or sw:
+                        _lqr(r, d, g, KtT, lo, hi, ub)
                 _step(x, ub, d, dt, g, lo, hi, xn)
                 x[:] = xn
                 used += 1
@@ -241,7 +250,7 @@ def kernel(X0, first_step, full, lam, u_nom, learned, views, obst, D, extra, swi
                 if s < 0.0:
                     fail = True
                     done = True
-                elif b >= 0.0:
+                elif b >= 0.0 and (j + 1) % hold == 0:       # the hand-over happens at a command time
                     hit = True
                     done = True
                 if done and not full:

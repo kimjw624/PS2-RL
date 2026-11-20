@@ -302,10 +302,11 @@ class DisturbanceObserver:
         self.d = d * np.minimum(1.0, self.d_max / np.maximum(n, 1e-9))
         return self.d
 
-    def advance(self, x: np.ndarray, u: np.ndarray) -> None:
+    def advance(self, x: np.ndarray, u: np.ndarray, dt: float | None = None) -> None:
+        """xi over dt (default the model step; a held command: the control period) with the command u from x."""
         m = self.m
         acc = body_z(x[..., 6:10]) * np.clip(u[..., 0:1], m.low[0], m.high[0]) - np.array([0.0, 0.0, m.gravity])
-        self.xi = self.xi + m.dt * (acc + self.d)
+        self.xi = self.xi + (m.dt if dt is None else dt) * (acc + self.d)
 
 
 # ------------------------------------------------------------------------- learned backup

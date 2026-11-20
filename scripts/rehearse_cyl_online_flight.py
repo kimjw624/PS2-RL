@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np  # noqa: E402
 
 from ps2rl.deploy.cyl_online_flight import CylFlightConfig, CylOnlineFlight, Phase  # noqa: E402
-from ps2rl.deploy.cyl_online_runtime import CylOnlineRuntime, CylOnlineRuntimeConfig  # noqa: E402
+from ps2rl.deploy.cyl_online_runtime import CylOnlineRuntime, CylOnlineRuntimeConfig, make_runtime  # noqa: E402
 from ps2rl.deploy.landing_plant_sim import FakeVehicle, PlantConfig  # noqa: E402
 from ps2rl.online.model import surface_distance  # noqa: E402
 from rehearse_landing_flight import _typed  # noqa: E402
@@ -67,7 +67,7 @@ def fly(rt: CylOnlineRuntime, fcfg: CylFlightConfig, pcfg: PlantConfig, *, max_t
         cmd = flight.step(veh.t, x, omega_meas=omega, a_meas=a)
         if was:   # true clearance in the task frame
             p_true = veh.p - (true_ground + np.asarray(fcfg.pad_offset)) + rt.pad
-            true_clear.append(float(surface_distance(p_true[0:2][None], rt.obst[None])[0].min()) - rt.m.r_drone)
+            true_clear.append(float(surface_distance(p_true[0:2][None], rt.obst[None])[0].min()) - rt.r_drone)
         veh.apply(cmd)
         veh.advance(rt.dt)
     flight.close()
@@ -77,6 +77,7 @@ def fly(rt: CylOnlineRuntime, fcfg: CylFlightConfig, pcfg: PlantConfig, *, max_t
             "true_min_clear": float(np.min(true_clear)) if true_clear else None, "lam_mean": s.get("lam_mean"),
             "intervene": s.get("intervene_fraction"), "switches": s.get("lam_switches"), "y_range": s.get("y_range_m"),
             "max_tilt": s.get("max_tilt_deg"), "decide_ms": (s.get("decide_ms") or {}).get("max"),
+            "step_ms": (s.get("latency_ms") or {}).get("p95"),
             "d_hat_final": s.get("d_hat_final"), "stats": s}
 
 
@@ -85,11 +86,11 @@ def _row(label: str, res: dict) -> str:
     yr = res["y_range"] or [float("nan")] * 2
     return (f"{label:36s} {res['outcome'][:58]:58s} {f(res['goal_entered_s'], '5.1f')} {f(res['true_min_clear'], '+6.2f')} "
             f"{f(res['lam_mean'], '5.2f')} {f(res['intervene'], '5.2f')} {f(res['switches'], '4d')} {yr[1]:5.2f} "
-            f"{f(res['max_tilt'], '5.1f')} {f(res['decide_ms'], '6.1f')}  {res['landed']}")
+            f"{f(res['max_tilt'], '5.1f')} {f(res['decide_ms'], '6.1f')} {f(res['step_ms'], '6.1f')}  {res['landed']}")
 
 
 HEADER = (f"{'case':36s} {'outcome':58s} {'goal':>5s} {'clear':>6s} {'lam':>5s} {'intv':>5s} {'sw':>4s} {'ymax':>5s} "
-          f"{'tilt':>5s} {'dec ms':>6s}  landed")
+          f"{'tilt':>5s} {'dec ms':>6s} {'stp95':>6s}  landed")
 
 
 def main(argv=None):
@@ -112,8 +113,8 @@ def main(argv=None):
     f_over = _typed(CylFlightConfig, args.flight)
 
     def runtime(course: str, nominal: str) -> CylOnlineRuntime:
-        return CylOnlineRuntime(CylOnlineRuntimeConfig(**{"backup": args.backup, "course": course, "nominal": nominal,
-                                                          "backend": args.backend, **r_over}))
+        return make_runtime(CylOnlineRuntimeConfig(**{"backup": args.backup, "course": course, "nominal": nominal,
+                                                      "backend": args.backend, **r_over}))
 
     rt = runtime(args.course, args.nominal)
     plant0 = replace(PlantConfig(gravity=rt.gravity, thrust_accel_min=0.0, thrust_accel_max=args.thrust_max),
@@ -126,8 +127,9 @@ def main(argv=None):
     print("\n" + HEADER)
     cases = ([(f"{c} {n}", c, n, {}, {}) for c in ("O3", "S1") for n in ("planner", "straight")] if args.all
              else [(f"{args.course} {args.nominal}: {label}", args.course, args.nominal, po, fo) for label, po, fo in SWEEP])
+    rt.close()
     for label, course, nominal, over, f_case in cases:
-        r = rt if (course, nominal) == (args.course, args.nominal) else runtime(course, nominal)
+        r = runtime(course, nominal)                    # a fresh controller per flight (the flight closes it)
         res = fly(r, CylFlightConfig(**{**f_over, **f_case}), replace(plant0, **over), max_time=args.max_time, quiet=True)
         rows.append({"case": label, **{k: v for k, v in res.items() if k != "stats"}, "stats": res["stats"]})
         print(_row(label, res), flush=True)

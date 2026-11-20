@@ -29,6 +29,11 @@ decision, so ``command`` must be given the nominal computed with those (``plan_n
 
 Compute per decision: (|lambdas| x |backups| + 1) rollouts of up to period + N steps, batched in numpy (the Python
 loop runs over steps, not candidates); ``early_exit`` stops once every rollout has reached the base set or failed.
+
+Command hold (``hold``): a control period of hold model steps (hold x dt; the autopilot holds the last rate setpoint
+between commands). Every command - the candidate blend, the nominal simulated in the window, each backup command, the
+held hover - is computed at a command time and held for hold model steps; the window is period x hold model steps; the
+safe set is checked at every model step, the base set (and the latch) only at command times. hold = 1: as before.
 """
 
 from __future__ import annotations
@@ -50,7 +55,8 @@ class FilterConfig:
     lambdas: tuple = (1.0, 0.5, 0.0)
     backups: tuple = ("learned",)
     horizon: float = 1.0          # backup rollout after the window [s]
-    period: int = 1               # control steps per decision
+    period: int = 1               # control steps (commands) per decision
+    hold: int = 1                 # model steps per command (control period = hold x dt)
     obstacle_range: float = 5.0   # the backup's view (Phase I region dist_max) [m]
     margin: float = 0.1           # extra clearance added to the drone radius in every check [m]
     fresh_margin: float = 0.15    # more clearance for new plans (the continuation keeps ``margin`` only) [m]
@@ -69,6 +75,8 @@ class FilterConfig:
         self.backups = tuple(self.backups)
         if int(self.period) < 1:
             raise ValueError("period >= 1")
+        if int(self.hold) < 1:
+            raise ValueError("hold >= 1")
 
     @property
     def n_candidates(self) -> int:
@@ -153,7 +161,7 @@ class OnlineFilter:
         t0 = time.perf_counter()
         m, cfg = self.m, self.cfg
         E, M = x.shape[0], obst.shape[1]
-        P, N = int(cfg.period), self.N
+        P, N, H = int(cfg.period), self.N, int(cfg.hold)
         d = np.zeros((E, 3)) if d is None else np.asarray(d, float)
         com = self.committed
         if com["obst"].shape[1] != M:                     # the known set grew: pad the committed copies
@@ -194,8 +202,10 @@ class OnlineFilter:
             a0 = com["a0"]
             Xh = x.copy()
             ok_h = latched.copy()
-            for i in range(P):
-                Xh = step(m, Xh, held_action(m, Xh, a0, d), d)
+            for i in range(P * H):
+                if i % H == 0:
+                    uh = held_action(m, Xh, a0, d)
+                Xh = step(m, Xh, uh, d)
                 ok_h &= held_level(m, Xh, a0, d) <= m.c_B
             clear = surface_distance(a0[:, 0:2], obst).min(axis=1, initial=ABSENT) - m.rho_xy - m.r_drone - cfg.margin
             ok_h &= (clear >= 0.0) & (a0[:, 2] - m.z_ext - m.z_floor >= 0.0)
@@ -204,20 +214,22 @@ class OnlineFilter:
                             Xh_P, X_P, b_P, used, steps, t0)
 
     def _window_numpy(self, X, P, lam_r, u_nom, R, learned, views, obs_r, d_r, extra, goal_r):
-        """The candidates' window: P control steps of the blend (rows: the candidates, last per vehicle the continuation,
-        lam 0). Returns (X at the window's end, failed, its margin parts, its base margins)."""
+        """The candidates' window: P commands of the blend, each held for hold model steps (rows: the candidates, last per
+        vehicle the continuation, lam 0). Returns (X at the window's end, failed, its margin parts, its base margins)."""
         m = self.m
+        H = int(self.cfg.hold)
         fail = np.zeros(X.shape[0], bool)
         parts = margin_parts(m, X, obs_r, d_r)
-        for i in range(P):
-            ub = self.backup_action(X, views, obs_r, learned, d_r, combine(m, parts, self.switch_extra)[1] >= 0.0)
-            if i == 0 and u_nom is not None:
-                un = np.repeat(u_nom, R, axis=0)
-            elif self.nominal is not None:
-                un = self.nominal(X, goal_r, obs_r, d_r)
-            else:
-                raise ValueError("u_nom is needed")
-            U = np.clip(lam_r[:, None] * un + (1.0 - lam_r[:, None]) * ub, m.low, m.high)
+        for i in range(P * H):
+            if i % H == 0:
+                ub = self.backup_action(X, views, obs_r, learned, d_r, combine(m, parts, self.switch_extra)[1] >= 0.0)
+                if i == 0 and u_nom is not None:
+                    un = np.repeat(u_nom, R, axis=0)
+                elif self.nominal is not None:
+                    un = self.nominal(X, goal_r, obs_r, d_r)
+                else:
+                    raise ValueError("u_nom is needed")
+                U = np.clip(lam_r[:, None] * un + (1.0 - lam_r[:, None]) * ub, m.low, m.high)
             X = step(m, X, U, d_r)
             parts = margin_parts(m, X, obs_r, d_r)
             s_m, b_m = combine(m, parts, extra)
@@ -230,26 +242,28 @@ class OnlineFilter:
         n = X.shape[0]
         X_P = np.empty((n, 10)); b_P = np.empty(n)
         hit = np.zeros(n, bool); fail = np.zeros(n, bool); used = np.zeros(n, np.int64)
+        H = int(self.cfg.hold)
         if P == 1 and u_nom is not None:
             un = np.repeat(u_nom, R, axis=0)
             kernel(np.ascontiguousarray(X), True, not self.cfg.early_exit, np.ascontiguousarray(lam_r, dtype=float), un, learned,
                    np.ascontiguousarray(views), np.ascontiguousarray(obs_r), np.ascontiguousarray(d_r), extra,
-                   self.switch_extra, N, fail, hit, *k, X_P, b_P, hit, fail, used)
-            return hit, fail, used, X_P, b_P, 1 + int(used.max(initial=0))
+                   self.switch_extra, N, fail, hit, *k, X_P, b_P, hit, fail, used, H)
+            return hit, fail, used, X_P, b_P, H + int(used.max(initial=0))
         Xw, fw, _, bw = self._window_numpy(X, P, lam_r, u_nom, R, learned, views, obs_r, d_r, extra, goal_r)
         hit_in = (bw >= 0.0) & ~fw
         kernel(np.ascontiguousarray(Xw), False, not self.cfg.early_exit, np.ascontiguousarray(lam_r, dtype=float),
                np.zeros((n, 4)), learned,
                np.ascontiguousarray(views), np.ascontiguousarray(obs_r), np.ascontiguousarray(d_r), extra,
-               self.switch_extra, N, fw.copy(), hit_in, *k, X_P, b_P, hit, fail, used)
-        return hit, fail, used, Xw, bw, P + int(used.max(initial=0))
+               self.switch_extra, N, fw.copy(), hit_in, *k, X_P, b_P, hit, fail, used, H)
+        return hit, fail, used, Xw, bw, P * H + int(used.max(initial=0))
 
     def _rollouts_numpy(self, X, P, N, lam_r, u_nom, R, learned, views, obs_r, d_r, extra, goal_r):
         """Without early_exit (timing of the worst case) every rollout runs N steps and the actor is evaluated at every
         step (the verdicts are unchanged: inside the base set its action is replaced by the hover LQR's)."""
         m, cfg = self.m, self.cfg
         X, fail, parts, b_m = self._window_numpy(X, P, lam_r, u_nom, R, learned, views, obs_r, d_r, extra, goal_r)
-        steps = P
+        H = int(cfg.hold)
+        steps = P * H
         X_P = X.copy()
         b_P = b_m.copy()
         hit = (b_m >= 0.0) & ~fail
@@ -259,12 +273,13 @@ class OnlineFilter:
             active = ~(hit | fail)
             if cfg.early_exit and not active.any():
                 break
-            inb_sw = combine(m, parts, self.switch_extra)[1] >= 0.0
-            self._force_actor = not cfg.early_exit
-            ub = self.backup_action(X, views, obs_r, learned, d_r, inb_sw)
-            self._force_actor = False
-            if not cfg.early_exit:
-                ub = np.where(inb_sw[:, None], lqr_action(m, X, None, d_r), ub)
+            if j % H == 0:                                 # a command time: the backup's next command
+                inb_sw = combine(m, parts, self.switch_extra)[1] >= 0.0
+                self._force_actor = not cfg.early_exit
+                ub = self.backup_action(X, views, obs_r, learned, d_r, inb_sw)
+                self._force_actor = False
+                if not cfg.early_exit:
+                    ub = np.where(inb_sw[:, None], lqr_action(m, X, None, d_r), ub)
             X = np.where(active[:, None], step(m, X, ub, d_r), X)
             steps += 1
             used += active
@@ -272,7 +287,8 @@ class OnlineFilter:
             s_m, b_m = combine(m, parts, extra)
             nf = active & (s_m < 0.0)
             fail |= nf
-            hit |= active & ~nf & (b_m >= 0.0)
+            if (j + 1) % H == 0:                           # the hand-over to the hover LQR at a command time
+                hit |= active & ~nf & (b_m >= 0.0)
         return hit, fail, used, X_P, b_P, steps
 
     def _choose(self, x, obst, goal, d, E, R, C, P, lam, rows_k, fresh_view, cert, ok_f, i_f, ok_c, latched, ok_h, Xh_P,
@@ -296,7 +312,7 @@ class OnlineFilter:
         self.committed = {"view": view_out, "obst": obst_out, "goal": goal_out, "k": k_out,
                           "latched": new_latched & cfg.hover_latch, "a0": new_a0}
         stats = {"time": time.perf_counter() - t0, "steps": steps, "rows": E * R,
-                 "steps_vehicle": P + used.reshape(E, R).max(axis=1), "n_cert": cert[:, :C].sum(axis=1)}
+                 "steps_vehicle": P * int(cfg.hold) + used.reshape(E, R).max(axis=1), "n_cert": cert[:, :C].sum(axis=1)}
         self.plan = Plan(lam=lam_out, k=k_out, held=use_held, a0=com["a0"].copy(), view=view_out, obst=obst_out,
                          goal=goal_out, d=d.copy(), mode=mode, stats=stats)
         return self.plan

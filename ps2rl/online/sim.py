@@ -243,9 +243,13 @@ class EpisodeLog:
 
 
 def run_episodes(m: CylModel, eps: Episodes, scene: SceneConfig, plant_cfg: PlantConfig, nominal: Nominal,
-                 filt: OnlineFilter | None, *, seed: int = 0, log: bool = False, observer_gain: float = 2.0) -> dict:
+                 filt: OnlineFilter | None, *, seed: int = 0, log: bool = False, observer_gain: float = 2.0,
+                 hold: int | None = None) -> dict:
     """Run every episode to the goal, a contact or the time limit. filt None: the nominal alone. observer_gain > 0: a
-    disturbance observer feeds its push estimate to the filter and the nominal (0: no estimate)."""
+    disturbance observer feeds its push estimate to the filter and the nominal (0: no estimate). hold: model steps per
+    command (default: the filter's ``hold``, else 1) - the controller runs at command times only (estimate, sensing,
+    decision, command, observer update over the control period) and the plant holds the command in between, as on the
+    vehicle with a control period of hold x dt."""
     E, M = eps.obst.shape[0], eps.obst.shape[1]
     plant = Plant(m, plant_cfg, eps.x0, seed)
     n_steps = int(round(scene.episode_sec / m.dt))
@@ -263,37 +267,42 @@ def run_episodes(m: CylModel, eps: Episodes, scene: SceneConfig, plant_cfg: Plan
     steps_v = []                                           # per vehicle and decision: rollout steps an onboard filter runs
     path = np.zeros(E)
     P = filt.cfg.period if filt is not None else 1
+    H = int(hold if hold is not None else (filt.cfg.hold if filt is not None else 1))
+    if filt is not None and int(filt.cfg.hold) != H:
+        raise ValueError(f"hold {H} differs from the filter's {filt.cfg.hold}")
     L = EpisodeLog() if log else None
     plan = None
     obs_d = DisturbanceObserver(m, gain=observer_gain) if observer_gain > 0.0 else None
     for t in range(n_steps):
         xt = plant.x
-        d_true = surface_distance(xt[:, 0:2], eps.obst)
-        known |= present & (d_true <= scene.sensing_range)
-        ok_obst = eps.obst.copy()
-        ok_obst[:, :, 3] = (present & known).astype(float)
-        xe = plant.estimate()
-        d_hat = obs_d.estimate(xe) if obs_d is not None else None
-        if filt is not None:
-            if t == 0:
-                filt.reset(xe, ok_obst, eps.goal)
-            if t % P == 0:
-                u_n0 = nominal(xe, eps.goal, ok_obst, d_hat)
-                plan = filt.decide(xe, ok_obst, eps.goal, u_n0, d_hat)
-                dec_time.append(plan.stats["time"])
-                dec_steps.append(plan.stats["steps"])
-                steps_v.append(plan.stats["steps_vehicle"][active])
-                mode_count[np.arange(E), plan.mode] += active
-            g_p, o_p, d_p = filt.plan_nominal_inputs()
-            u_nom = nominal(xe, g_p, o_p, d_p)
-            u = filt.command(xe, u_nom)
-            lam_now = np.where(plan.held, 0.0, plan.lam)
-        else:
-            u_nom = nominal(xe, eps.goal, ok_obst, d_hat)
-            u = u_nom
-            lam_now = np.ones(E)
-        if obs_d is not None:
-            obs_d.advance(xe, u)
+        if t % H == 0:                                     # a command time
+            c = t // H
+            d_true = surface_distance(xt[:, 0:2], eps.obst)
+            known |= present & (d_true <= scene.sensing_range)
+            ok_obst = eps.obst.copy()
+            ok_obst[:, :, 3] = (present & known).astype(float)
+            xe = plant.estimate()
+            d_hat = obs_d.estimate(xe) if obs_d is not None else None
+            if filt is not None:
+                if t == 0:
+                    filt.reset(xe, ok_obst, eps.goal)
+                if c % P == 0:
+                    u_n0 = nominal(xe, eps.goal, ok_obst, d_hat)
+                    plan = filt.decide(xe, ok_obst, eps.goal, u_n0, d_hat)
+                    dec_time.append(plan.stats["time"])
+                    dec_steps.append(plan.stats["steps"])
+                    steps_v.append(plan.stats["steps_vehicle"][active])
+                    mode_count[np.arange(E), plan.mode] += active
+                g_p, o_p, d_p = filt.plan_nominal_inputs()
+                u_nom = nominal(xe, g_p, o_p, d_p)
+                u = filt.command(xe, u_nom)
+                lam_now = np.where(plan.held, 0.0, plan.lam)
+            else:
+                u_nom = nominal(xe, eps.goal, ok_obst, d_hat)
+                u = u_nom
+                lam_now = np.ones(E)
+            if obs_d is not None:
+                obs_d.advance(xe, u, H * m.dt)
         lam_sum += lam_now * active
         lam_n += active
         intervene += (np.abs(u - u_nom).max(axis=1) > 1e-6) * active

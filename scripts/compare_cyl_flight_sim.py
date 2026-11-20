@@ -72,10 +72,11 @@ def simulate(flight: dict, episodes: int, seed: int) -> dict:
                      start_speed=(0.0, 0.0), episode_sec=40.0)
     nom = Nominal(m, NominalConfig(**ncfg) if ncfg else NominalConfig(cruise=float(rt["cruise"]), margin=float(rt["search_margin"]),
                                                                       search=nominal == "planner"))
+    hold = int(rt.get("hold") or round(float(rt.get("control_period", m.dt)) / m.dt))    # records before 2026-11-20 15:00: 1
     fc = FilterConfig(lambdas=LAMBDA_SETS[int(rt["blends"])], backups=("learned",), horizon=float(rt["horizon"]),
-                      period=int(rt["period"]))
+                      period=int(rt["period"]), hold=hold)
     res = run_episodes(m, eps, sc, PlantConfig(), nom, OnlineFilter(m, actor, fc, nom), seed=seed, log=True,
-                       observer_gain=float(rt.get("observer_gain", 2.0)))
+                       observer_gain=float(rt.get("observer_gain", 2.0)), hold=hold)
     L = res["log"]
     X = L["x"]
     t_goal = np.asarray(res["per_episode"]["t_goal"])

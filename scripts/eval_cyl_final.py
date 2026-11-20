@@ -58,6 +58,7 @@ def parse_args(argv=None):
     p.add_argument("--family", type=int, default=1, choices=(1, 2), help="1: the backup alone, 2: + the hover LQR")
     p.add_argument("--horizon", type=float, default=1.0)
     p.add_argument("--period", type=int, default=1)
+    p.add_argument("--hold", type=int, default=1, help="model steps per command: 2 = a 40 ms control period")
     p.add_argument("--margin", type=float, default=0.1)
     p.add_argument("--fresh_margin", type=float, default=0.15)
     p.add_argument("--cruise", type=float, default=1.0)
@@ -134,8 +135,8 @@ def run_case(m, actor, a, kind: str, only: tuple = ("filter", "nominal", "blind"
                      sensing_range=a.sensing, start_speed=(0.0, 0.0), episode_sec=40.0)
     eps = make_scenes(sc, a.episodes, seed=a.seed)
     backups = ("lqr",) if actor is None else (("learned",) if a.family == 1 else ("learned", "lqr"))
-    fc = FilterConfig(lambdas=LAMBDA_SETS[a.blends], backups=backups, horizon=a.horizon, period=a.period, margin=a.margin,
-                      fresh_margin=a.fresh_margin)
+    fc = FilterConfig(lambdas=LAMBDA_SETS[a.blends], backups=backups, horizon=a.horizon, period=a.period, hold=a.hold,
+                      margin=a.margin, fresh_margin=a.fresh_margin)
     plant = PlantConfig(ideal=a.ideal)
     deploy = NominalConfig(cruise=a.cruise, margin=a.search_margin)
     out = {}
@@ -144,7 +145,7 @@ def run_case(m, actor, a, kind: str, only: tuple = ("filter", "nominal", "blind"
             continue
         nom = Nominal(m, nc)
         f = OnlineFilter(m, actor, fc, nom) if use_f else None
-        out[name] = run_episodes(m, eps, sc, plant, nom, f, seed=a.seed + 11, log=True)
+        out[name] = run_episodes(m, eps, sc, plant, nom, f, seed=a.seed + 11, log=True, hold=a.hold)
     out["scene"] = sc.as_dict()
     out["filter_cfg"] = fc.as_dict()
     out["eps"] = eps

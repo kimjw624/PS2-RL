@@ -481,6 +481,47 @@ estimate; all at once) O3 planner, O3 straight line and S1 planner reach the goa
   (the cylinders are virtual, placed in the estimate's frame), but with real obstacles the task frame would have to be
   re-anchored.
 
+### Compute on a Raspberry Pi 4B (2026-11-20)
+
+Measured on the Pi (by the user): the control step alone 7.7-8.2 ms, but 23-32 ms inside the ROS node (CPU 103-107 %),
+over the 20 ms budget. The step's own work is not the problem; inside the node it shares Python's GIL with the node's
+three executor threads. Changes (bundle `strike_online_sitl_v3`):
+
+* **Controller process** (`process: true`; `ps2rl/deploy/cyl_online_worker.py`): `CylOnlineRuntime` runs in its own
+  interpreter behind a proxy with the same interface; the node's control thread sends the state and waits (releasing
+  the GIL). Offline the flights are identical to the in-process runtime; the round trip adds ~0.5 ms. `worker_cpu` pins
+  it to a core. The flight summary records the round trip (`latency_ms`) and the worker's own time (`compute_ms`); the
+  node logs the controller process's CPU next to its own.
+* **One executor thread** (`executor: single`, or the environment variable `PS2RL_EXECUTOR`).
+* **40 ms control period** (`control_period: 0.04`, 25 Hz): one command per 40 ms, held by PX4. The filter's rollouts
+  hold every command as long (`FilterConfig.hold`, in numpy and in the numba kernel: the safe set checked every 20 ms
+  model step, the base-set hand-over only at command times), and the simulator runs the controller at command times
+  (`run_episodes(hold=)`). The hover LQR still contracts its Lyapunov level with the hold (worst ratio over two steps
+  0.9876 held vs 0.9877 with fresh feedback, linearised). Simulation, 20 episodes, no contact anywhere:
+
+  | case | 20 ms | 40 ms |
+  |---|---|---|
+  | O3 planner | 4.7 s, clearance 0.68 m | 4.7 s, 0.66 m |
+  | O3 straight line | 10.1 s, 0.39 m | 10.2 s, 0.37 m |
+  | S1 planner (weave) | 6.3 s, 0.63 m | 6.3 s, 0.62 m |
+  | S1 straight line | 14.1 s | 13.4 s |
+  | O3, r 0.27 (Pi test cylinder), planner / straight | 5.0 / 12.1 s | 5.0 / 12.2 s |
+
+  The rehearsal (full flight logic) at 40 ms: O3 planner 4.7 s, O3 straight 10.4 s (58 lam switches instead of 142),
+  S1 planner 6.2 s, S1 straight 17.1 s. hold = 1 reproduces every earlier result exactly; numba and numpy make identical
+  decisions for period 1 / 2 and hold 1 / 2 (`check_cyl_online_fast.py --holds 1,2`).
+* **Nominal reuse**: when the filter takes a fresh plan its nominal inputs are this step's, so the second nominal call is
+  skipped (identical commands; the step 13-14 % shorter).
+* **Not changed: the horizon.** 1.0 s stays. Shorter horizons do not show with the planner (the filter is idle) but slow
+  the straight-line flight (the demo): O3 r 0.27 straight 12.1 s at 1.0 s, 16.6 s at 0.75 s, 29-34 s at 0.5 s (the hover
+  held 53-67 % of the time, one timeout in ten) - `results/cyl_online/control_period/horizon_study.json`. A decision
+  period of 2 is free (12.4 s) but does not shorten the decision steps themselves.
+
+New defaults in `cyl_online_x500.yaml`: `control_period 0.04`, `process true`, `executor single` (the node sets
+`policy_rate` from the control period). As flown in SITL on 2026-11-20: `control_period:=0.02 process:=false
+executor:=multi`. Pi test: `cyl_compute_pi_test.sh` (A as flown, B / C new defaults planner / straight, D / E 20 ms with
+the process and one executor thread).
+
 ## 7. Files
 
 | file | what |
@@ -503,6 +544,7 @@ estimate; all at once) O3 planner, O3 straight line and S1 planner reach the goa
 | `scripts/candidates_cyl_final.py` | flies every candidate layout: table and same-scale figures |
 | `checkpoints/cyl_online/` | exported backups: `lqr`, `td3_w{32,64,128}_seed0` |
 | `ps2rl/deploy/cyl_online_runtime.py`, `cyl_online_flight.py` | the onboard controller and flight logic (section 6) |
+| `ps2rl/deploy/cyl_online_worker.py` | the controller in its own process (`process: true`) |
 | `scripts/rehearse_cyl_online_flight.py`, `scripts/plot_cyl_online_flight.py` | offline rehearsal; flight figure |
 | `scripts/compare_cyl_flight_sim.py` | flights (SITL / hardware) against the simulations of the same course |
 | `results/cyl_online/` | bench, sweep and confirmation (table / report / figure), deployment test (`final`: O3 / S1; `final_r03`: the r 0.3 m course), start-distance and slalom-spacing sweeps (r 0.3 m), width comparison, compact candidates, rehearsal, SITL flights, Phase-I runs |
@@ -516,9 +558,8 @@ estimate; all at once) O3 planner, O3 straight line and S1 planner reach the goa
   would smooth it. 3 or 5 blends do not.
 * Hardware (Tarot 450): obstacle positions from sensing / motion capture instead of virtual ones; a frame re-anchor on
   estimator resets.
-* Compute on the Pi: the whole control step (not only the decision) - in SITL the node's ROS executor threads inflated it
-  from 1.3 to ~6 ms median (p99 ~30 ms). Run the controller in its own process, or a slimmer executor; numba the nominal
-  and the command too if needed.
+* Compute on the Pi: confirm the new defaults (process, one executor thread, 40 ms) with `cyl_compute_pi_test.sh`. If
+  still short: numba the decision's Python setup and the command (now ~60 % of the step), or fewer PX4 messages.
 * Wind (left out for now): the adversarial certificate of the base set (section 1).
 * PS2 (a striker trained through the filter) was not repeated: the go-to-goal nominal is enough for the straight test.
 * The width-128 advantage rests on one training seed per width.

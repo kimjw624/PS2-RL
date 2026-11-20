@@ -57,6 +57,12 @@ class CylOnlineRuntimeConfig:
     observer_gain: float = 2.0            # disturbance observer (0: off); it absorbs the thrust-map error
     observer_max: float = 1.0             # cap on the estimate [m/s^2]
     goal_radius: float = 0.5              # "reached": horizontal distance to the goal (as in the simulations) [m]
+    control_period: float = 0.02          # one command per control period, held by the autopilot in between [s]: a
+                                          # multiple of the model step (0.02 s); 0.04 = 25 Hz. The filter's rollouts
+                                          # hold every command for as long (FilterConfig.hold)
+    process: bool = False                 # run this controller in its own process (make_runtime): no GIL shared with
+                                          # the ROS node's threads
+    worker_cpu: int = -1                  # process: pin it to this CPU core (-1: no pinning)
 
 
 def _resolve(path: str, base: Path | None) -> Path:
@@ -105,6 +111,8 @@ def course_layout(cfg: CylOnlineRuntimeConfig, base: Path | None) -> tuple[np.nd
 
 
 class CylOnlineRuntime:
+    """The controller in this process. ``make_runtime`` returns it, or a proxy to it in a worker process."""
+
     def __init__(self, cfg: CylOnlineRuntimeConfig, *, ps2rl_path: str | None = None, logger=None) -> None:
         if cfg.nominal not in NOMINALS:
             raise ValueError(f"nominal must be one of {NOMINALS}, got {cfg.nominal!r}")
@@ -121,12 +129,16 @@ class CylOnlineRuntime:
         self.obst, self.goal, self.course_label = course_layout(cfg, base)
         self.nominal = Nominal(m, NominalConfig(cruise=float(cfg.cruise), margin=float(cfg.search_margin),
                                                 search=cfg.nominal == "planner"))
+        self.hold = int(round(float(cfg.control_period) / m.dt))
+        if self.hold < 1 or abs(self.hold * m.dt - float(cfg.control_period)) > 1e-9:
+            raise ValueError(f"control_period {cfg.control_period} must be a multiple of the model step {m.dt}")
         self.fcfg = FilterConfig(lambdas=LAMBDA_SETS[int(cfg.blends)], backups=("learned",), horizon=float(cfg.horizon),
-                                 period=int(cfg.period), backend=cfg.backend)
+                                 period=int(cfg.period), hold=self.hold, backend=cfg.backend)
         self.filter = OnlineFilter(m, self.actor, self.fcfg, self.nominal)
         self.backend = "numba" if self.filter.use_numba else "numpy"
         # the flight logic's interface (shared with the landing / slow-track runtimes)
-        self.dt = float(m.dt)
+        self.dt = float(self.hold * m.dt)                       # the control period
+        self.r_drone, self.rho_xy, self.z_floor = float(m.r_drone), float(m.rho_xy), float(m.z_floor)
         self.gravity = float(m.gravity)
         self.action_low = np.asarray(m.low, np.float64)
         self.action_high = np.asarray(m.high, np.float64)
@@ -138,7 +150,7 @@ class CylOnlineRuntime:
         self.label = (f"{self.course_label}; nominal {cfg.nominal}"
                       + (f" (search margin {cfg.search_margin:g} m)" if cfg.nominal == "planner" else "")
                       + f"; backup {backup.name} (width {self.actor.width if self.actor else '-'}), {cfg.blends} blends, "
-                        f"horizon {cfg.horizon:g} s, period {cfg.period}, {self.backend}")
+                        f"horizon {cfg.horizon:g} s, period {cfg.period}, control period {1e3 * self.dt:.0f} ms, {self.backend}")
         self.reset()
         t0 = time.perf_counter()
         self._warm_up()
@@ -155,6 +167,13 @@ class CylOnlineRuntime:
             self._info("numpy backend (numba is not installed for this python): about 4-15 ms per control step with the "
                        "planner, up to ~30 ms while the filter slides a straight-line run round a cylinder (50 Hz leaves "
                        "20 ms); numba takes ~1 ms")
+
+    def describe(self) -> dict:
+        """What the flight records keep about the controller (also sent by the worker of a process runtime)."""
+        return {"label": self.label, "backend": self.backend, "course_label": self.course_label,
+                "cylinders_xyr": self.obst[:, 0:3].tolist(), "goal": self.goal.tolist(), "r_drone": self.r_drone,
+                "rho_xy": self.rho_xy, "z_floor": self.z_floor, "dt": self.dt, "hold": self.hold,
+                "filter": self.fcfg.as_dict(), "nominal_config": self.nominal.cfg.as_dict(), "backup_meta": self.meta}
 
     def _info(self, msg: str) -> None:
         (self._log.info if self._log is not None else print)(msg)
@@ -194,6 +213,7 @@ class CylOnlineRuntime:
         return self.d_hat
 
     def _advance(self, x: np.ndarray, a_thrust: float, dt: float) -> None:
+        """xi over dt with the thrust a held (after a command: the control period)."""
         if self.cfg.observer_gain <= 0.0 or self.xi is None:
             return
         a = float(np.clip(a_thrust, self.action_low[0], self.action_high[0]))
@@ -254,11 +274,14 @@ class CylOnlineRuntime:
             self.filter.reset(X, obst, goal)
             self.started = True
         decided = self.k % int(self.fcfg.period) == 0
-        u_n0 = self.nominal(X, goal, obst, d)
+        u_n0 = self.nominal(X, goal, obst, d) if decided else None
         if decided:
             self.plan = self.filter.decide(X, obst, goal, u_n0, d)
         g_p, o_p, d_p = self.filter.plan_nominal_inputs()
-        u_nom = self.nominal(X, g_p, o_p, d_p)
+        if decided and np.array_equal(g_p, goal) and np.array_equal(o_p, obst) and np.array_equal(d_p, d):
+            u_nom = u_n0                       # a fresh plan: the plan's nominal inputs are this step's (the same call)
+        else:
+            u_nom = self.nominal(X, g_p, o_p, d_p)
         u = self.filter.command(X, u_nom)[0]
         self._advance(X[0], float(u[0]), self.dt)
         self.k += 1
@@ -280,4 +303,16 @@ class CylOnlineRuntime:
                              latency_s=time.perf_counter() - t0, info=info)
 
 
-__all__ = ["CylOnlineRuntime", "CylOnlineRuntimeConfig", "LAMBDA_SETS", "NOMINALS", "course_layout"]
+    def close(self) -> None:
+        pass
+
+
+def make_runtime(cfg: CylOnlineRuntimeConfig, *, ps2rl_path: str | None = None, logger=None):
+    """The controller: in this process, or (cfg.process) in a worker process behind a proxy with the same interface."""
+    if cfg.process:
+        from ps2rl.deploy.cyl_online_worker import RuntimeProcess
+        return RuntimeProcess(cfg, ps2rl_path=ps2rl_path, logger=logger)
+    return CylOnlineRuntime(cfg, ps2rl_path=ps2rl_path, logger=logger)
+
+
+__all__ = ["CylOnlineRuntime", "CylOnlineRuntimeConfig", "LAMBDA_SETS", "NOMINALS", "course_layout", "make_runtime"]
