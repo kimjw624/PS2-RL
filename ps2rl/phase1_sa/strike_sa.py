@@ -227,7 +227,11 @@ def build_region_sampler(m: StrikeModel, rc: StrikeRegionConfig) -> Callable:
         d_end = obstacle_distances(p_end[0:2], obst)
         obst = obst.at[:, 6].set(jnp.where(shell & (d_end < clear_shell), 0.0, obst[:, 6]))
 
-        # chaser balls
+        # chaser balls (none without chaser slots: the obstacle-only task, StrikeConfig.n_chaser_slots = 0)
+        if J == 0:
+            walls = draw_walls(ks[14], p_end, shell) if cfg.arena_walls else None
+            scene = join_scene(obst, jnp.zeros((0, 4), jnp.float32), walls)
+            return x, scene, is_safe(m, x, scene)
         n_ch = jnp.where(general | blocked, jax.random.randint(ks[10], (), 0, J + 1), jnp.where(chaser | escape, 1, 0))
         kc = jax.random.split(ks[11], 4)
         bd = u(kc[0], R + rc.ball_gap_min, rc.ball_dist_max, (J,))

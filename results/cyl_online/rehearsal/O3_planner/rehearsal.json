@@ -1,0 +1,866 @@
+[
+ {
+  "case": "O3 planner: ideal plant",
+  "outcome": "goal reached: inside 0.5 m after 4.70 s, below 0.25 m/s after 5.62 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.700000000000468,
+  "true_min_clear": 0.7134709920298749,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   0.0,
+   1.260324157416248
+  ],
+  "max_tilt": 6.039310895306635,
+  "decide_ms": 1.6894540000294,
+  "d_hat_final": [
+   0.001002989396451659,
+   -0.00020098782956762262,
+   5.689009019000892e-05
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.70 s, below 0.25 m/s after 5.62 s",
+   "steps": 281,
+   "duration_s": 5.6200000000007755,
+   "expected_steps": 282,
+   "handover": {
+    "position_error_m": 0.002432060275378012,
+    "speed_m_s": 0.0010883867264472606,
+    "tilt_deg": 0.0,
+    "h_cone_m": 0.8538404810409134,
+    "height_m": 1.497567939724622,
+    "d_hat": [
+     0.0,
+     0.0,
+     2.9639552016746257e-06
+    ],
+    "position_task_frame": [
+     0.0,
+     0.0,
+     1.497567939724622
+    ]
+   },
+   "goal_entered_s": 4.700000000000468,
+   "min_clearance_m": 0.7134709920298749,
+   "y_range_m": [
+    0.0,
+    1.260324157416248
+   ],
+   "x_max_m": 3.2610330401860703,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.2277580071174377,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.088967971530248,
+    "p99": 14.0,
+    "max": 14
+   },
+   "decide_ms": {
+    "median": 0.32457200006774656,
+    "p95": 0.4119170000649319,
+    "max": 1.6894540000294
+   },
+   "latency_ms": {
+    "median": 1.2392730000101437,
+    "p95": 1.3895890000412692,
+    "max": 2.7258729999175557
+   },
+   "max_tilt_deg": 6.039310895306635,
+   "max_speed_m_s": 0.9988643951048375,
+   "min_height_m": 1.4973174738183272,
+   "thrust_cmd_range_m_s2": [
+    9.811994475081192,
+    9.879262964201097
+   ],
+   "max_rate_cmd_rad_s": 0.5234896998772609,
+   "command_change_mean": 0.008418202062573486,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    0.001002989396451659,
+    -0.00020098782956762262,
+    5.689009019000892e-05
+   ],
+   "d_hat_max_norm": 0.011057993790361494,
+   "rate_tracking_rms_rad_s": [
+    0.035069098166659804,
+    0.019757880005718535,
+    5.1078719029941566e-05
+   ],
+   "thrust_tracking_rms_m_s2": 0.002699783378972869,
+   "thrust_tracking_mean_m_s2": 1.995973512375052e-05,
+   "rate_response": {
+    "delay_s": 0.0,
+    "tau_s": 0.0,
+    "effective_delay_s": 0.0,
+    "rms_rad_s": 0.0,
+    "steps": 280
+   }
+  }
+ },
+ {
+  "case": "O3 planner: default (lags, 20 ms delay, noise)",
+  "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.58 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.6800000000004705,
+  "true_min_clear": 0.7203225743759488,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.005498204132286203,
+   1.2564231743452985
+  ],
+  "max_tilt": 6.906767358393335,
+  "decide_ms": 0.4794989999936661,
+  "d_hat_final": [
+   -0.09190805616757675,
+   0.08538962006915762,
+   0.04543601304429447
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.58 s",
+   "steps": 279,
+   "duration_s": 5.580000000000771,
+   "expected_steps": 280,
+   "handover": {
+    "position_error_m": 0.004586406949463963,
+    "speed_m_s": 0.03140386485501889,
+    "tilt_deg": 1.4787793334710982e-06,
+    "h_cone_m": 0.857589640537847,
+    "height_m": 1.4974589631907376,
+    "d_hat": [
+     -0.02775329506317083,
+     0.011251875635491196,
+     0.04976167035140394
+    ],
+    "position_task_frame": [
+     -0.003793412565386632,
+     -0.00043391444874714934,
+     1.4974589631907376
+    ]
+   },
+   "goal_entered_s": 4.6800000000004705,
+   "min_clearance_m": 0.713959111286221,
+   "y_range_m": [
+    -0.005498204132286203,
+    1.2564231743452985
+   ],
+   "x_max_m": 3.2520880697635266,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.23297491039426524,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.35125448028674,
+    "p99": 16.0,
+    "max": 17
+   },
+   "decide_ms": {
+    "median": 0.32167199992727546,
+    "p95": 0.3829100999382717,
+    "max": 0.4794989999936661
+   },
+   "latency_ms": {
+    "median": 1.1859760001016184,
+    "p95": 1.3245157000369545,
+    "max": 1.6230190000214861
+   },
+   "max_tilt_deg": 6.906767358393335,
+   "max_speed_m_s": 1.0408585245152262,
+   "min_height_m": 1.4818227252955778,
+   "thrust_cmd_range_m_s2": [
+    9.58892562231575,
+    10.045094259772661
+   ],
+   "max_rate_cmd_rad_s": 0.5321490089940268,
+   "command_change_mean": 0.09939769606316377,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.09190805616757675,
+    0.08538962006915762,
+    0.04543601304429447
+   ],
+   "d_hat_max_norm": 0.1600739927821853,
+   "rate_tracking_rms_rad_s": [
+    0.06976431854454389,
+    0.04900845861191724,
+    0.0006423661293230083
+   ],
+   "thrust_tracking_rms_m_s2": 0.08336286841399036,
+   "thrust_tracking_mean_m_s2": -0.0002009528478250835,
+   "rate_response": {
+    "delay_s": 0.02,
+    "tau_s": 0.052000000000000005,
+    "effective_delay_s": 0.07200000000000001,
+    "rms_rad_s": 0.0017571626526899024,
+    "steps": 277
+   }
+  }
+ },
+ {
+  "case": "O3 planner: slow rates (0.08 s, yaw 0.40 s)",
+  "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.54 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.660000000000464,
+  "true_min_clear": 0.7214943990204653,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.005604030899866672,
+   1.2550990287690347
+  ],
+  "max_tilt": 7.363693259328608,
+  "decide_ms": 0.6332110000357716,
+  "d_hat_final": [
+   -0.03951228205823809,
+   -0.008364745879174962,
+   -0.01378685282546049
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.54 s",
+   "steps": 277,
+   "duration_s": 5.540000000000758,
+   "expected_steps": 278,
+   "handover": {
+    "position_error_m": 0.004586407813531302,
+    "speed_m_s": 0.03140386539964977,
+    "tilt_deg": 1.4787793334710982e-06,
+    "h_cone_m": 0.8575896391637251,
+    "height_m": 1.4974589632773712,
+    "d_hat": [
+     -0.027753295063481002,
+     0.011251875645970435,
+     0.04976167035128379
+    ],
+    "position_task_frame": [
+     -0.003793412180445376,
+     -0.0004339274542147693,
+     1.4974589632773712
+    ]
+   },
+   "goal_entered_s": 4.660000000000464,
+   "min_clearance_m": 0.7149685995950831,
+   "y_range_m": [
+    -0.005604030899866672,
+    1.2550990287690347
+   ],
+   "x_max_m": 3.2462608193711855,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.23826714801444043,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.454873646209386,
+    "p99": 16.0,
+    "max": 17
+   },
+   "decide_ms": {
+    "median": 0.35446599997612793,
+    "p95": 0.5328859999963241,
+    "max": 0.6332110000357716
+   },
+   "latency_ms": {
+    "median": 1.3496500000655942,
+    "p95": 1.9266662000291035,
+    "max": 2.2122339998986718
+   },
+   "max_tilt_deg": 7.363693259328608,
+   "max_speed_m_s": 1.03905288714046,
+   "min_height_m": 1.4815886517751145,
+   "thrust_cmd_range_m_s2": [
+    9.595420488543821,
+    10.044708876372244
+   ],
+   "max_rate_cmd_rad_s": 0.5432159838208143,
+   "command_change_mean": 0.09993101493404667,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.03951228205823809,
+    -0.008364745879174962,
+    -0.01378685282546049
+   ],
+   "d_hat_max_norm": 0.16000202469323088,
+   "rate_tracking_rms_rad_s": [
+    0.07773250171314551,
+    0.052813904549973735,
+    0.001062679644579944
+   ],
+   "thrust_tracking_rms_m_s2": 0.08346060978737821,
+   "thrust_tracking_mean_m_s2": 0.00012249112040682263,
+   "rate_response": {
+    "delay_s": 0.02,
+    "tau_s": 0.084,
+    "effective_delay_s": 0.10400000000000001,
+    "rms_rad_s": 0.0013501621377837027,
+    "steps": 275
+   }
+  }
+ },
+ {
+  "case": "O3 planner: delay 0.04 s",
+  "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.56 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.660000000000464,
+  "true_min_clear": 0.7212542613000145,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.005819280259261273,
+   1.2538214061647146
+  ],
+  "max_tilt": 7.338688060305024,
+  "decide_ms": 0.7179250000035609,
+  "d_hat_final": [
+   -0.035169226301947965,
+   -0.008774747034354269,
+   -0.005680379125802572
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.56 s",
+   "steps": 278,
+   "duration_s": 5.560000000000764,
+   "expected_steps": 279,
+   "handover": {
+    "position_error_m": 0.004586406949463963,
+    "speed_m_s": 0.03140386485501889,
+    "tilt_deg": 1.4787793334710982e-06,
+    "h_cone_m": 0.857589640537847,
+    "height_m": 1.4974589631907376,
+    "d_hat": [
+     -0.02775329506317083,
+     0.011251875635491196,
+     0.04976167035140394
+    ],
+    "position_task_frame": [
+     -0.003793412565386632,
+     -0.00043391444874714934,
+     1.4974589631907376
+    ]
+   },
+   "goal_entered_s": 4.660000000000464,
+   "min_clearance_m": 0.7147683882700534,
+   "y_range_m": [
+    -0.005819280259261273,
+    1.2538214061647146
+   ],
+   "x_max_m": 3.2522013395408833,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.23741007194244604,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.413669064748202,
+    "p99": 16.0,
+    "max": 17
+   },
+   "decide_ms": {
+    "median": 0.3345085000319159,
+    "p95": 0.5423464999410044,
+    "max": 0.7179250000035609
+   },
+   "latency_ms": {
+    "median": 1.2621120000062547,
+    "p95": 2.127250399996683,
+    "max": 2.397209000037037
+   },
+   "max_tilt_deg": 7.338688060305024,
+   "max_speed_m_s": 1.0395531415114159,
+   "min_height_m": 1.481746975656471,
+   "thrust_cmd_range_m_s2": [
+    9.587137077957854,
+    10.044077594059182
+   ],
+   "max_rate_cmd_rad_s": 0.5549416491924021,
+   "command_change_mean": 0.09961078449675856,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.035169226301947965,
+    -0.008774747034354269,
+    -0.005680379125802572
+   ],
+   "d_hat_max_norm": 0.15964456175438724,
+   "rate_tracking_rms_rad_s": [
+    0.08190304845777371,
+    0.055731268259230395,
+    0.0007752984728388962
+   ],
+   "thrust_tracking_rms_m_s2": 0.08174891859287946,
+   "thrust_tracking_mean_m_s2": 0.0001206777270615216,
+   "rate_response": {
+    "delay_s": 0.04,
+    "tau_s": 0.052000000000000005,
+    "effective_delay_s": 0.092,
+    "rms_rad_s": 0.0017866957284605883,
+    "steps": 275
+   }
+  }
+ },
+ {
+  "case": "O3 planner: thrust 8 % high",
+  "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.60 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.660000000000393,
+  "true_min_clear": 0.7180847549703614,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.008256148266680575,
+   1.2317456733945207
+  ],
+  "max_tilt": 7.2395208749764235,
+  "decide_ms": 0.6430820000105086,
+  "d_hat_final": [
+   -0.023165097018810088,
+   0.08159968893064773,
+   0.7905391121349049
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.66 s, below 0.25 m/s after 5.60 s",
+   "steps": 280,
+   "duration_s": 5.600000000000707,
+   "expected_steps": 281,
+   "handover": {
+    "position_error_m": 0.006603272575346954,
+    "speed_m_s": 0.01970474795692773,
+    "tilt_deg": 1.4787793334710982e-06,
+    "h_cone_m": 0.8572493253031997,
+    "height_m": 1.5056509488904624,
+    "d_hat": [
+     -0.02987887371320002,
+     -0.025538085102550803,
+     -0.00475210580812666
+    ],
+    "position_task_frame": [
+     -0.003381652377804915,
+     0.0004841616851815002,
+     1.5056509488904624
+    ]
+   },
+   "goal_entered_s": 4.660000000000393,
+   "min_clearance_m": 0.7077464440768623,
+   "y_range_m": [
+    -0.008256148266680575,
+    1.2317456733945207
+   ],
+   "x_max_m": 3.245532382517393,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.2392857142857143,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.446428571428571,
+    "p99": 16.0,
+    "max": 17
+   },
+   "decide_ms": {
+    "median": 0.3291599999784012,
+    "p95": 0.5022486000143545,
+    "max": 0.6430820000105086
+   },
+   "latency_ms": {
+    "median": 1.236674500034951,
+    "p95": 1.8435396999734621,
+    "max": 2.0476379999081473
+   },
+   "max_tilt_deg": 7.2395208749764235,
+   "max_speed_m_s": 1.0267994312144384,
+   "min_height_m": 1.4755481688842622,
+   "thrust_cmd_range_m_s2": [
+    8.71785851675015,
+    9.858751468725481
+   ],
+   "max_rate_cmd_rad_s": 0.5922326425638652,
+   "command_change_mean": 0.10351211416639082,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.023165097018810088,
+    0.08159968893064773,
+    0.7905391121349049
+   ],
+   "d_hat_max_norm": 0.8094490961043204,
+   "rate_tracking_rms_rad_s": [
+    0.07344444475295393,
+    0.05112247292932222,
+    0.000698649928194085
+   ],
+   "thrust_tracking_rms_m_s2": 0.7371897755729161,
+   "thrust_tracking_mean_m_s2": -0.7288193141088499,
+   "rate_response": {
+    "delay_s": 0.02,
+    "tau_s": 0.052000000000000005,
+    "effective_delay_s": 0.07200000000000001,
+    "rms_rad_s": 0.0019277682182114759,
+    "steps": 278
+   }
+  }
+ },
+ {
+  "case": "O3 planner: thrust 8 % low",
+  "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.62 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.680000000000586,
+  "true_min_clear": 0.7227909976511014,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.007140407522504596,
+   1.3025876533258132
+  ],
+  "max_tilt": 6.923314250723343,
+  "decide_ms": 1.04579100002411,
+  "d_hat_final": [
+   0.05120219115389463,
+   0.038868253102710915,
+   -0.7855405676780897
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.62 s",
+   "steps": 281,
+   "duration_s": 5.6200000000009,
+   "expected_steps": 282,
+   "handover": {
+    "position_error_m": 0.008507270297872828,
+    "speed_m_s": 0.007034819750908641,
+    "tilt_deg": 1.4787793334710982e-06,
+    "h_cone_m": 0.8480224702970128,
+    "height_m": 1.4982442526122175,
+    "d_hat": [
+     -0.008108206046142024,
+     -0.0024444239777960154,
+     -0.009244288139565501
+    ],
+    "position_task_frame": [
+     0.006270000986530843,
+     0.005475224804541491,
+     1.4982442526122175
+    ]
+   },
+   "goal_entered_s": 4.680000000000586,
+   "min_clearance_m": 0.7193879791154149,
+   "y_range_m": [
+    -0.007140407522504596,
+    1.3025876533258132
+   ],
+   "x_max_m": 3.2741149344600537,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.22419928825622776,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.199288256227758,
+    "p99": 15.0,
+    "max": 16
+   },
+   "decide_ms": {
+    "median": 0.322687999982918,
+    "p95": 0.3925099999833037,
+    "max": 1.04579100002411
+   },
+   "latency_ms": {
+    "median": 1.240150000057838,
+    "p95": 1.3548480000054042,
+    "max": 1.9500910000260774
+   },
+   "max_tilt_deg": 6.923314250723343,
+   "max_speed_m_s": 1.0397988690431919,
+   "min_height_m": 1.3374276879151863,
+   "thrust_cmd_range_m_s2": [
+    9.753725271055586,
+    11.096825216546339
+   ],
+   "max_rate_cmd_rad_s": 0.5591270588526224,
+   "command_change_mean": 0.0946305978369399,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    0.05120219115389463,
+    0.038868253102710915,
+    -0.7855405676780897
+   ],
+   "d_hat_max_norm": 0.9831631419260697,
+   "rate_tracking_rms_rad_s": [
+    0.06668088226128728,
+    0.04531007662420799,
+    0.0006611818373229398
+   ],
+   "thrust_tracking_rms_m_s2": 0.8620301983854028,
+   "thrust_tracking_mean_m_s2": 0.8542999913340524,
+   "rate_response": {
+    "delay_s": 0.02,
+    "tau_s": 0.052000000000000005,
+    "effective_delay_s": 0.07200000000000001,
+    "rms_rad_s": 0.001609177092743041,
+    "steps": 279
+   }
+  }
+ },
+ {
+  "case": "O3 planner: noisy estimate (1.5 cm, 0.05 m/s)",
+  "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.54 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.680000000000346,
+  "true_min_clear": 0.7154181471871218,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.024524439202037375,
+   1.264134393179759
+  ],
+  "max_tilt": 7.285993095801883,
+  "decide_ms": 0.44200299998919945,
+  "d_hat_final": [
+   -0.06120832985501806,
+   0.05596902164159623,
+   -0.04986648530513605
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.54 s",
+   "steps": 277,
+   "duration_s": 5.540000000000633,
+   "expected_steps": 278,
+   "handover": {
+    "position_error_m": 0.02911275638564199,
+    "speed_m_s": 0.13061847329998616,
+    "tilt_deg": 4.90455619685548e-06,
+    "h_cone_m": 0.8397809387167409,
+    "height_m": 1.4840092832342684,
+    "d_hat": [
+     0.20540332471686185,
+     0.18139337720135845,
+     -0.029105344926553603
+    ],
+    "position_task_frame": [
+     0.015683296116507005,
+     0.018597951086338653,
+     1.4840092832342684
+    ]
+   },
+   "goal_entered_s": 4.680000000000346,
+   "min_clearance_m": 0.6883264749530843,
+   "y_range_m": [
+    -0.024524439202037375,
+    1.264134393179759
+   ],
+   "x_max_m": 3.284008731720519,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.21660649819494585,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.624548736462094,
+    "p99": 18.24000000000001,
+    "max": 21
+   },
+   "decide_ms": {
+    "median": 0.32310200003848877,
+    "p95": 0.3778395999233908,
+    "max": 0.44200299998919945
+   },
+   "latency_ms": {
+    "median": 1.1977080000633578,
+    "p95": 1.3264821999428023,
+    "max": 2.741582999988168
+   },
+   "max_tilt_deg": 7.285993095801883,
+   "max_speed_m_s": 1.1062621864399353,
+   "min_height_m": 1.4535940189381718,
+   "thrust_cmd_range_m_s2": [
+    9.256515688562288,
+    10.377843558908534
+   ],
+   "max_rate_cmd_rad_s": 0.5859472087194052,
+   "command_change_mean": 0.25095788314928563,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.06120832985501806,
+    0.05596902164159623,
+    -0.04986648530513605
+   ],
+   "d_hat_max_norm": 0.39734653484636273,
+   "rate_tracking_rms_rad_s": [
+    0.1004264822631239,
+    0.08768196286468107,
+    0.0006982983064179963
+   ],
+   "thrust_tracking_rms_m_s2": 0.2088274428427561,
+   "thrust_tracking_mean_m_s2": 0.0008879285335587208,
+   "rate_response": {
+    "delay_s": 0.02,
+    "tau_s": 0.052000000000000005,
+    "effective_delay_s": 0.07200000000000001,
+    "rms_rad_s": 0.003630697542285255,
+    "steps": 275
+   }
+  }
+ },
+ {
+  "case": "O3 planner: all: slow, 40 ms, 8 % low, noisy",
+  "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.32 s",
+  "finished": true,
+  "landed": true,
+  "goal_entered_s": 4.680000000000586,
+  "true_min_clear": 0.7332514432122529,
+  "lam_mean": 1.0,
+  "intervene": 0.0,
+  "switches": 0,
+  "y_range": [
+   -0.022151298457879845,
+   1.3066913299357477
+  ],
+  "max_tilt": 7.899931570259131,
+  "decide_ms": 0.4597950000970741,
+  "d_hat_final": [
+   -0.19824802345714843,
+   0.18995682738057523,
+   -0.7477537442621293
+  ],
+  "stats": {
+   "outcome": "goal reached: inside 0.5 m after 4.68 s, below 0.25 m/s after 5.32 s",
+   "steps": 266,
+   "duration_s": 5.3200000000008,
+   "expected_steps": 267,
+   "handover": {
+    "position_error_m": 0.025595221299694843,
+    "speed_m_s": 0.016556286464910572,
+    "tilt_deg": 3.078324659199975e-06,
+    "h_cone_m": 0.8364692116339968,
+    "height_m": 1.5056095388068993,
+    "d_hat": [
+     -0.020270515106356933,
+     -0.006111060248497359,
+     -0.023120693569619228
+    ],
+    "position_task_frame": [
+     0.01880997550823083,
+     0.016426601874216094,
+     1.5056095388068993
+    ]
+   },
+   "goal_entered_s": 4.680000000000586,
+   "min_clearance_m": 0.7168974237165716,
+   "y_range_m": [
+    -0.022151298457879845,
+    1.3066913299357477
+   ],
+   "x_max_m": 3.2059847805613075,
+   "lam_mean": 1.0,
+   "intervene_fraction": 0.0,
+   "lam_switches": 0,
+   "modes": {
+    "fresh": 1.0,
+    "committed": 0.0,
+    "held": 0.0,
+    "none": 0.0
+   },
+   "in_base_fraction": 0.20300751879699247,
+   "known_final": 1,
+   "rollout_steps": {
+    "mean": 9.958646616541353,
+    "p99": 18.0,
+    "max": 19
+   },
+   "decide_ms": {
+    "median": 0.3233655000371982,
+    "p95": 0.3872230000183663,
+    "max": 0.4597950000970741
+   },
+   "latency_ms": {
+    "median": 1.2243904999991173,
+    "p95": 1.3573970000493318,
+    "max": 1.4824950000047465
+   },
+   "max_tilt_deg": 7.899931570259131,
+   "max_speed_m_s": 1.1044680700370908,
+   "min_height_m": 1.313009057450757,
+   "thrust_cmd_range_m_s2": [
+    9.665290883312352,
+    11.375115924308181
+   ],
+   "max_rate_cmd_rad_s": 0.6132908609234584,
+   "command_change_mean": 0.23555321068975574,
+   "thrust_saturated_steps": 0,
+   "d_hat_final": [
+    -0.19824802345714843,
+    0.18995682738057523,
+    -0.7477537442621293
+   ],
+   "d_hat_max_norm": 1.0000000000000002,
+   "rate_tracking_rms_rad_s": [
+    0.10937310282582802,
+    0.08630641517156107,
+    0.001237920558880864
+   ],
+   "thrust_tracking_rms_m_s2": 0.8812293575445262,
+   "thrust_tracking_mean_m_s2": 0.8550645416157261,
+   "rate_response": {
+    "delay_s": 0.04,
+    "tau_s": 0.084,
+    "effective_delay_s": 0.124,
+    "rms_rad_s": 0.0024197791310059877,
+    "steps": 263
+   }
+  }
+ }
+]

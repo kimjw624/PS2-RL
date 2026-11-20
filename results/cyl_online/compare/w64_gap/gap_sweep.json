@@ -1,0 +1,70 @@
+{
+  "args": {
+    "backup": "checkpoints/cyl_online/td3_w64_seed0",
+    "blends": 2,
+    "family": 1,
+    "horizon": 1.0,
+    "period": 1,
+    "margin": 0.1,
+    "fresh_margin": 0.15,
+    "cruise": 1.0,
+    "search_margin": 1.0,
+    "episodes": 20,
+    "goal_x": 14.0,
+    "obst_x": 7.0,
+    "radius": 0.3,
+    "gap": 3.0,
+    "low_y": -0.15,
+    "centred": false,
+    "z": 1.5,
+    "sensing": 6.0,
+    "ideal": false,
+    "seed": 0,
+    "gap_sweep": "2.5,3.0",
+    "out": "/home/claude/cyl_runs/gap_w64"
+  },
+  "rows": [
+    {
+      "gap": 2.5,
+      "success": 1.0,
+      "contact": 0.0,
+      "timeout": 0.0,
+      "t_goal": 14.635000000000002,
+      "min_clear": 0.6546695900418439,
+      "lam_mean": 0.9993850358729074,
+      "min_speed_in_gap": 0.8657620449244294,
+      "lam_switches": 0.7,
+      "mode_none": 0.0,
+      "straight_contact": 0.0,
+      "straight_floor": 0.0,
+      "through_gap": 0.95,
+      "routes": {
+        "gap": 0.95,
+        "below": 0.05,
+        "above": 0.0,
+        "not_crossed": 0.0
+      }
+    },
+    {
+      "gap": 3.0,
+      "success": 1.0,
+      "contact": 0.0,
+      "timeout": 0.0,
+      "t_goal": 14.599,
+      "min_clear": 0.680120854168896,
+      "lam_mean": 0.999863004315364,
+      "min_speed_in_gap": 0.9706918352392393,
+      "lam_switches": 0.2,
+      "mode_none": 0.0,
+      "straight_contact": 0.0,
+      "straight_floor": 0.0,
+      "through_gap": 1.0,
+      "routes": {
+        "gap": 1.0,
+        "below": 0.0,
+        "above": 0.0,
+        "not_crossed": 0.0
+      }
+    }
+  ]
+}

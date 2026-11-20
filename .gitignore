@@ -39,6 +39,7 @@ matplotlib-cache/
 /checkpoints/sitl_delay_comparison/policies/*
 # Slow-track tracking policies flown in PX4 SITL (slow loop, straight line); see SLOW_TRACK_ONBOARD.md.
 !/checkpoints/slow_track/
+!/checkpoints/cyl_online/
 
 !/checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/
 /checkpoints/sitl_delay_comparison/policies/nominal_no_delay_no_cil/*

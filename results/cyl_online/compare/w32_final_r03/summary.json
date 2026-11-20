@@ -1,0 +1,276 @@
+{
+  "backup": "checkpoints/cyl_online/td3_w32_seed0",
+  "args": {
+    "backup": "checkpoints/cyl_online/td3_w32_seed0",
+    "blends": 2,
+    "family": 1,
+    "horizon": 1.0,
+    "period": 1,
+    "margin": 0.1,
+    "fresh_margin": 0.15,
+    "cruise": 1.0,
+    "search_margin": 1.0,
+    "episodes": 20,
+    "goal_after": 5.0,
+    "obst_x": 1.5,
+    "radius": 0.3,
+    "layout": "slalom",
+    "first_x": 1.5,
+    "first_y": -0.3,
+    "second_dx": 3.5,
+    "second_y": 1.5,
+    "gap": 3.0,
+    "low_y": -0.15,
+    "centred": false,
+    "z": 1.5,
+    "sensing": 6.0,
+    "ideal": false,
+    "seed": 0,
+    "gap_sweep": "",
+    "start_sweep": "",
+    "spacing_sweep": "",
+    "out": "/home/claude/cyl_runs/cmp_w32"
+  },
+  "cases": {
+    "one": {
+      "scene": {
+        "kind": "one",
+        "goal_x": 14.0,
+        "goal_after": 5.0,
+        "z": 1.5,
+        "start_speed": [
+          0.0,
+          0.0
+        ],
+        "sensing_range": 6.0,
+        "episode_sec": 40.0,
+        "goal_radius": 0.5,
+        "n_obst": [
+          2,
+          4
+        ],
+        "r_min": 0.2,
+        "r_max": 0.5,
+        "x_obst": [
+          4.0,
+          11.0
+        ],
+        "y_half": 2.5,
+        "gap_min": 2.0,
+        "obst_x": 1.5,
+        "radius": 0.3,
+        "two_layout": "slalom",
+        "first_x": 1.5,
+        "first_y": -0.3,
+        "second_dx": 3.5,
+        "second_y": 1.5,
+        "low_y": -0.15,
+        "gap": 3.0,
+        "lateral": 0.0
+      },
+      "filter_cfg": {
+        "lambdas": [
+          1.0,
+          0.0
+        ],
+        "backups": [
+          "learned"
+        ],
+        "horizon": 1.0,
+        "period": 1,
+        "obstacle_range": 5.0,
+        "margin": 0.1,
+        "fresh_margin": 0.15,
+        "hover_latch": true,
+        "early_exit": true,
+        "backend": "auto"
+      },
+      "filter": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 8.906,
+        "min_clear": 0.604198047522199,
+        "min_clear_p05": 0.606279361901973,
+        "lam_mean": 0.8992813833370761,
+        "intervene_frac": 0.10071861666292387,
+        "path_ratio": 1.0890556554691369,
+        "mode_fresh": 0.9020884796766225,
+        "mode_committed": 0.019537390523242756,
+        "mode_held": 0.06894228609925893,
+        "mode_none": 0.009431843700875815,
+        "decisions": 8906,
+        "steps_mean": 16.191668538064228,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 0.6322483169993802
+      },
+      "nominal": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 8.108999999999998,
+        "min_clear": 0.5508508177696528,
+        "min_clear_p05": 0.5695621266766514,
+        "lam_mean": 1.0,
+        "intervene_frac": 0.0,
+        "path_ratio": 1.093715003149811
+      },
+      "blind": {
+        "n": 20,
+        "success": 0.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 1.0,
+        "t_goal_mean": NaN,
+        "min_clear": 0.507063000901779,
+        "min_clear_p05": 0.5079510921607325,
+        "lam_mean": 0.06225,
+        "intervene_frac": 0.93775,
+        "path_ratio": NaN,
+        "mode_fresh": 0.117175,
+        "mode_committed": 0.0073,
+        "mode_held": 0.872975,
+        "mode_none": 0.00255,
+        "decisions": 40000,
+        "steps_mean": 47.956325,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 3.182606516001215
+      }
+    },
+    "two": {
+      "scene": {
+        "kind": "two",
+        "goal_x": 14.0,
+        "goal_after": 5.0,
+        "z": 1.5,
+        "start_speed": [
+          0.0,
+          0.0
+        ],
+        "sensing_range": 6.0,
+        "episode_sec": 40.0,
+        "goal_radius": 0.5,
+        "n_obst": [
+          2,
+          4
+        ],
+        "r_min": 0.2,
+        "r_max": 0.5,
+        "x_obst": [
+          4.0,
+          11.0
+        ],
+        "y_half": 2.5,
+        "gap_min": 2.0,
+        "obst_x": 1.5,
+        "radius": 0.3,
+        "two_layout": "slalom",
+        "first_x": 1.5,
+        "first_y": -0.3,
+        "second_dx": 3.5,
+        "second_y": 1.5,
+        "low_y": -0.15,
+        "gap": 3.0,
+        "lateral": 0.0
+      },
+      "filter_cfg": {
+        "lambdas": [
+          1.0,
+          0.0
+        ],
+        "backups": [
+          "learned"
+        ],
+        "horizon": 1.0,
+        "period": 1,
+        "obstacle_range": 5.0,
+        "margin": 0.1,
+        "fresh_margin": 0.15,
+        "hover_latch": true,
+        "early_exit": true,
+        "backend": "auto"
+      },
+      "filter": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 11.830000000000002,
+        "min_clear": 0.6188127848882482,
+        "min_clear_p05": 0.6208174327752077,
+        "lam_mean": 0.9362637362637363,
+        "intervene_frac": 0.06373626373626373,
+        "path_ratio": 1.0336653457104379,
+        "mode_fresh": 0.9382924767540152,
+        "mode_committed": 0.03110735418427726,
+        "mode_held": 0.024429416737109046,
+        "mode_none": 0.006170752324598478,
+        "decisions": 11830,
+        "steps_mean": 15.839898562975486,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 0.5686682159998782,
+        "routes": {
+          "weave": 1.0,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 0.0
+        }
+      },
+      "nominal": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 11.263,
+        "min_clear": 0.6593200341832527,
+        "min_clear_p05": 0.6642008768265163,
+        "lam_mean": 1.0,
+        "intervene_frac": 0.0,
+        "path_ratio": 1.0404935670082385,
+        "routes": {
+          "weave": 1.0,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 0.0
+        }
+      },
+      "blind": {
+        "n": 20,
+        "success": 0.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 1.0,
+        "t_goal_mean": NaN,
+        "min_clear": 0.49589018611532276,
+        "min_clear_p05": 0.49622575310245626,
+        "lam_mean": 0.126625,
+        "intervene_frac": 0.873375,
+        "path_ratio": NaN,
+        "mode_fresh": 0.16615,
+        "mode_committed": 0.0195,
+        "mode_held": 0.808475,
+        "mode_none": 0.005875,
+        "decisions": 40000,
+        "steps_mean": 45.523825,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 3.611587794001025,
+        "routes": {
+          "weave": 0.05,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 0.95
+        }
+      }
+    }
+  }
+}

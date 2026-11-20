@@ -1,0 +1,287 @@
+{
+  "backup": "checkpoints/cyl_online/td3_w64_seed0",
+  "args": {
+    "backup": "checkpoints/cyl_online/td3_w64_seed0",
+    "blends": 2,
+    "family": 1,
+    "horizon": 1.0,
+    "period": 1,
+    "margin": 0.1,
+    "fresh_margin": 0.15,
+    "cruise": 1.0,
+    "search_margin": 1.0,
+    "episodes": 20,
+    "goal_after": null,
+    "goal_after_one": 2.0,
+    "goal_after_two": 1.2,
+    "obst_x": 1.3,
+    "radius": 0.1,
+    "lateral": -0.1,
+    "layout": "slalom",
+    "first_x": 1.1,
+    "first_y": -0.1,
+    "second_dx": 2.0,
+    "second_y": 1.6,
+    "gap": 3.0,
+    "low_y": -0.15,
+    "centred": false,
+    "z": 1.5,
+    "sensing": 6.0,
+    "ideal": false,
+    "seed": 0,
+    "gap_sweep": "",
+    "start_sweep": "",
+    "spacing_sweep": "",
+    "candidates": "",
+    "candidates_file": "/home/claude/ps2rl-online/docker_batch/configs/cyl_online_candidates.json",
+    "out": "results/cyl_online/compare/w64_final"
+  },
+  "cases": {
+    "one": {
+      "scene": {
+        "kind": "one",
+        "goal_x": 14.0,
+        "goal_after": 2.0,
+        "goal_after_one": 2.0,
+        "goal_after_two": 1.2,
+        "z": 1.5,
+        "start_speed": [
+          0.0,
+          0.0
+        ],
+        "sensing_range": 6.0,
+        "episode_sec": 40.0,
+        "goal_radius": 0.5,
+        "n_obst": [
+          2,
+          4
+        ],
+        "r_min": 0.2,
+        "r_max": 0.5,
+        "x_obst": [
+          4.0,
+          11.0
+        ],
+        "y_half": 2.5,
+        "gap_min": 2.0,
+        "obst_x": 1.3,
+        "radius": 0.1,
+        "two_layout": "slalom",
+        "first_x": 1.1,
+        "first_y": -0.1,
+        "second_dx": 2.0,
+        "second_y": 1.6,
+        "low_y": -0.15,
+        "gap": 3.0,
+        "lateral": -0.1
+      },
+      "filter_cfg": {
+        "lambdas": [
+          1.0,
+          0.0
+        ],
+        "backups": [
+          "learned"
+        ],
+        "horizon": 1.0,
+        "period": 1,
+        "obstacle_range": 5.0,
+        "margin": 0.1,
+        "fresh_margin": 0.15,
+        "hover_latch": true,
+        "early_exit": true,
+        "backend": "auto"
+      },
+      "filter": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 4.729000000000001,
+        "min_clear": 0.6677346133994227,
+        "min_clear_p05": 0.674200332710583,
+        "lam_mean": 0.9873123281877776,
+        "intervene_frac": 0.012687671812222457,
+        "path_ratio": 1.1569641831103228,
+        "mode_fresh": 0.9883696341721294,
+        "mode_committed": 0.010995982237259463,
+        "mode_held": 0.00042292239374074856,
+        "mode_none": 0.00021146119687037428,
+        "decisions": 4729,
+        "steps_mean": 12.044618312539649,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 2.1105018889999485
+      },
+      "nominal": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 4.678999999999999,
+        "min_clear": 0.6771980886178431,
+        "min_clear_p05": 0.6789998984079122,
+        "lam_mean": 1.0,
+        "intervene_frac": 0.0,
+        "path_ratio": 1.1608693726921557
+      },
+      "blind": {
+        "n": 20,
+        "success": 0.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 1.0,
+        "t_goal_mean": NaN,
+        "min_clear": 0.48091189722418093,
+        "min_clear_p05": 0.48879238352477816,
+        "lam_mean": 0.056525,
+        "intervene_frac": 0.943475,
+        "path_ratio": NaN,
+        "mode_fresh": 0.100525,
+        "mode_committed": 0.0136,
+        "mode_held": 0.88255,
+        "mode_none": 0.003325,
+        "decisions": 40000,
+        "steps_mean": 48.379325,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 12.229708122000233
+      },
+      "candidate": "O3"
+    },
+    "two": {
+      "scene": {
+        "kind": "two",
+        "goal_x": 14.0,
+        "goal_after": 1.2,
+        "goal_after_one": 2.0,
+        "goal_after_two": 1.2,
+        "z": 1.5,
+        "start_speed": [
+          0.0,
+          0.0
+        ],
+        "sensing_range": 6.0,
+        "episode_sec": 40.0,
+        "goal_radius": 0.5,
+        "n_obst": [
+          2,
+          4
+        ],
+        "r_min": 0.2,
+        "r_max": 0.5,
+        "x_obst": [
+          4.0,
+          11.0
+        ],
+        "y_half": 2.5,
+        "gap_min": 2.0,
+        "obst_x": 1.3,
+        "radius": 0.1,
+        "two_layout": "slalom",
+        "first_x": 1.1,
+        "first_y": -0.1,
+        "second_dx": 2.0,
+        "second_y": 1.6,
+        "low_y": -0.15,
+        "gap": 3.0,
+        "lateral": -0.1
+      },
+      "filter_cfg": {
+        "lambdas": [
+          1.0,
+          0.0
+        ],
+        "backups": [
+          "learned"
+        ],
+        "horizon": 1.0,
+        "period": 1,
+        "obstacle_range": 5.0,
+        "margin": 0.1,
+        "fresh_margin": 0.15,
+        "hover_latch": true,
+        "early_exit": true,
+        "backend": "auto"
+      },
+      "filter": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 7.206999999999999,
+        "min_clear": 0.6160878506442411,
+        "min_clear_p05": 0.6210832161522145,
+        "lam_mean": 0.8387678645761065,
+        "intervene_frac": 0.16123213542389345,
+        "path_ratio": 1.1917229789441275,
+        "mode_fresh": 0.8444567781323713,
+        "mode_committed": 0.05675038157347024,
+        "mode_held": 0.08491744137643957,
+        "mode_none": 0.013875398917718884,
+        "decisions": 7207,
+        "steps_mean": 16.532399056472872,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 1.1865595120000876,
+        "routes": {
+          "weave": 1.0,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 0.0
+        }
+      },
+      "nominal": {
+        "n": 20,
+        "success": 1.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 0.0,
+        "t_goal_mean": 6.173,
+        "min_clear": 0.6316606394613278,
+        "min_clear_p05": 0.6326682939506351,
+        "lam_mean": 1.0,
+        "intervene_frac": 0.0,
+        "path_ratio": 1.212463436759352,
+        "routes": {
+          "weave": 1.0,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 0.0
+        }
+      },
+      "blind": {
+        "n": 20,
+        "success": 0.0,
+        "contact": 0.0,
+        "floor": 0.0,
+        "timeout": 1.0,
+        "t_goal_mean": NaN,
+        "min_clear": 0.4903656279521019,
+        "min_clear_p05": 0.4959684827774868,
+        "lam_mean": 0.05935,
+        "intervene_frac": 0.94065,
+        "path_ratio": NaN,
+        "mode_fresh": 0.108025,
+        "mode_committed": 0.006275,
+        "mode_held": 0.884675,
+        "mode_none": 0.001025,
+        "decisions": 40000,
+        "steps_mean": 48.189775,
+        "steps_p99": 51.0,
+        "steps_max": 51,
+        "batch_time_s": 9.108515084000729,
+        "routes": {
+          "weave": 0.0,
+          "over_both": 0.0,
+          "under_first": 0.0,
+          "not_past": 1.0
+        }
+      },
+      "candidate": "S1"
+    }
+  }
+}

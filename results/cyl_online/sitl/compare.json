@@ -1,0 +1,87 @@
+{
+  "episodes": 20,
+  "seed": 11,
+  "rows": [
+    {
+      "flight": "20261120_044149-O3_planner",
+      "course": "O3",
+      "nominal": "planner",
+      "outcome": "goal reached: inside 0.5 m after 4.81 s, below 0.25 m/s after 5.87 s",
+      "flight_goal_s": 4.80800461769104,
+      "sim_goal_s": [
+        4.678999999999999,
+        4.64,
+        4.76
+      ],
+      "sim_success": 1.0,
+      "sim_contact": 0.0,
+      "flight_min_clear": 0.7460298136842197,
+      "sim_min_clear": [
+        0.7052729309920446,
+        0.6771980886178431
+      ],
+      "flight_lam": 1.0,
+      "sim_lam": 1.0,
+      "flight_intervene": 0.0,
+      "sim_intervene": 0.0,
+      "flight_switches": 0,
+      "sim_switches": 0.0,
+      "flight_y_max": 1.1403322266414762,
+      "sim_y_max": 1.2634836347029637
+    },
+    {
+      "flight": "20261120_044256-S1_planner",
+      "course": "S1",
+      "nominal": "planner",
+      "outcome": "goal reached: inside 0.5 m after 6.37 s, below 0.25 m/s after 7.42 s",
+      "flight_goal_s": 6.368010997772217,
+      "sim_goal_s": [
+        6.297999999999999,
+        6.2,
+        6.44
+      ],
+      "sim_success": 1.0,
+      "sim_contact": 0.0,
+      "flight_min_clear": 0.5898738031515374,
+      "sim_min_clear": [
+        0.644444497536732,
+        0.6312620065546173
+      ],
+      "flight_lam": 1.0,
+      "sim_lam": 0.9810809675126478,
+      "flight_intervene": 0.0,
+      "sim_intervene": 0.01905366783105748,
+      "flight_switches": 0,
+      "sim_switches": 9.5,
+      "flight_y_max": 1.47444998472929,
+      "sim_y_max": 1.5642836398217943
+    },
+    {
+      "flight": "20261120_044401-O3_straight",
+      "course": "O3",
+      "nominal": "straight",
+      "outcome": "goal reached: inside 0.5 m after 10.94 s, below 0.25 m/s after 12.03 s",
+      "flight_goal_s": 10.944010972976685,
+      "sim_goal_s": [
+        10.148,
+        9.56,
+        10.72
+      ],
+      "sim_success": 1.0,
+      "sim_contact": 0.0,
+      "flight_min_clear": 0.414493141203786,
+      "sim_min_clear": [
+        0.40587007391091695,
+        0.38572757733135365
+      ],
+      "flight_lam": 0.5456081081081081,
+      "sim_lam": 0.49664803028163806,
+      "flight_intervene": 0.4543918918918919,
+      "sim_intervene": 0.5047299960583366,
+      "flight_switches": 38,
+      "sim_switches": 153.9,
+      "flight_y_max": 0.8521059826016426,
+      "sim_y_max": 0.8331236475994046
+    }
+  ]
+}

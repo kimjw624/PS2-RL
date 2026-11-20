@@ -1,0 +1,481 @@
+{
+  "outcome": "goal reached: inside 0.5 m after 10.94 s, below 0.25 m/s after 12.03 s",
+  "controller": {
+    "outcome": "goal reached: inside 0.5 m after 10.94 s, below 0.25 m/s after 12.03 s",
+    "steps": 592,
+    "duration_s": 12.03201174736023,
+    "expected_steps": 603,
+    "handover": {
+      "position_error_m": 0.022854078125334687,
+      "speed_m_s": 0.024760362279775204,
+      "tilt_deg": 0.10935705267350834,
+      "h_cone_m": 0.8351227766753412,
+      "height_m": 1.4975379258394241,
+      "d_hat": [
+        0.0011287567756067401,
+        -0.01477466672505014,
+        7.087427155281524e-05
+      ],
+      "position_task_frame": [
+        0.0177452783100307,
+        -0.014189861714839935,
+        1.4975379258394241
+      ]
+    },
+    "goal_entered_s": 10.944010972976685,
+    "min_clearance_m": 0.414493141203786,
+    "y_range_m": [
+      -0.015376266092061996,
+      0.8521059826016426
+    ],
+    "x_max_m": 3.2409519776701927,
+    "lam_mean": 0.5456081081081081,
+    "intervene_fraction": 0.4543918918918919,
+    "lam_switches": 38,
+    "modes": {
+      "fresh": 0.6486486486486487,
+      "committed": 0.3091216216216216,
+      "held": 0.04222972972972973,
+      "none": 0.0
+    },
+    "in_base_fraction": 0.2635135135135135,
+    "known_final": 1,
+    "rollout_steps": {
+      "mean": 36.83108108108108,
+      "p99": 51.0,
+      "max": 51
+    },
+    "decide_ms": {
+      "median": 1.621159499791247,
+      "p95": 6.209734149888382,
+      "max": 44.62987199985946
+    },
+    "latency_ms": {
+      "median": 5.761475500094093,
+      "p95": 20.500798949888104,
+      "max": 67.01815199994599
+    },
+    "max_tilt_deg": 6.802536716247845,
+    "max_speed_m_s": 0.9162431038993181,
+    "min_height_m": 1.410021260380745,
+    "thrust_cmd_range_m_s2": [
+      9.415895428783353,
+      9.895176663289856
+    ],
+    "max_rate_cmd_rad_s": 0.8255277261825784,
+    "command_change_mean": 0.07964321089046708,
+    "thrust_saturated_steps": 0,
+    "d_hat_final": [
+      -0.046147396163008,
+      0.02678275407609293,
+      0.0010021831023770186
+    ],
+    "d_hat_max_norm": 0.126607089870779,
+    "rate_tracking_rms_rad_s": [
+      0.15936169211344747,
+      0.4165193234818948,
+      0.005199810808429421
+    ],
+    "thrust_tracking_rms_m_s2": 0.1273079329342781,
+    "thrust_tracking_mean_m_s2": -0.05954763260612879,
+    "rate_response": {
+      "delay_s": 0.035,
+      "tau_s": 0.036000000000000004,
+      "effective_delay_s": 0.07100000000000001,
+      "rms_rad_s": 0.03502234184521771,
+      "steps": 589
+    }
+  },
+  "flight_duration_s": 40.49604535102844,
+  "events": [
+    {
+      "t_flight": 15.456016778945923,
+      "phase": "GOTO_START",
+      "event": "the autopilot reset part of its state estimate (odometry reset_counter changed) after the ground point was taken"
+    },
+    {
+      "t_flight": 31.584038257598877,
+      "phase": "RECOVER",
+      "event": "bridge process CPU during the controller phase: 93 % of one core (OPENBLAS_NUM_THREADS=1)"
+    }
+  ],
+  "course": {
+    "label": "O3: one cylinder 1.3 m ahead, goal 2.0 m beyond it (course 3.3 m): more room to come back to the line",
+    "cylinders_xyr": [
+      [
+        1.3,
+        -0.1,
+        0.1
+      ]
+    ],
+    "goal": [
+      3.3,
+      0.0,
+      1.5
+    ],
+    "goal_radius": 0.5,
+    "r_drone": 0.35,
+    "rho_xy": 0.4039099539685922,
+    "z_floor": 0.5
+  },
+  "ground_point_local": [
+    -0.01088472455739975,
+    0.0674925372004509,
+    0.007886573672294617
+  ],
+  "handover_point_local": [
+    -0.01088472455739975,
+    0.0674925372004509,
+    1.5078865736722946
+  ],
+  "final_position_task_frame": [
+    3.225066863000393,
+    0.09089838713407516,
+    0.03626033663749695
+  ],
+  "runtime": {
+    "backup": "/home/dev/ws_shared/PS2-RL/checkpoints/cyl_online/td3_w128_seed0",
+    "course": "O3",
+    "candidates_file": "/home/dev/ws_shared/PS2-RL/docker_batch/configs/cyl_online_candidates.json",
+    "obstacles": "",
+    "goal": "",
+    "nominal": {
+      "cruise": 1.0,
+      "arrive_dist": 1.5,
+      "kv": 1.5,
+      "kz": 1.0,
+      "katt": 4.0,
+      "kyaw": 1.0,
+      "tilt_max_deg": 20.0,
+      "search": false,
+      "lookahead": 4.0,
+      "margin": 1.0,
+      "max_turn_deg": 90.0,
+      "step_deg": 10.0,
+      "n_samples": 8,
+      "heading_weight": 0.5
+    },
+    "search_margin": 1.0,
+    "cruise": 1.0,
+    "blends": 2,
+    "horizon": 1.0,
+    "period": 1,
+    "backend": "numba",
+    "sensing_range": 6.0,
+    "flight_height": 1.5,
+    "observer_gain": 2.0,
+    "observer_max": 1.0,
+    "goal_radius": 0.5,
+    "label": "O3: one cylinder 1.3 m ahead, goal 2.0 m beyond it (course 3.3 m): more room to come back to the line; nominal straight; backup td3_w128_seed0 (width 128), 2 blends, horizon 1 s, period 1, numba",
+    "dt": 0.02,
+    "filter": {
+      "lambdas": [
+        1.0,
+        0.0
+      ],
+      "backups": [
+        "learned"
+      ],
+      "horizon": 1.0,
+      "period": 1,
+      "obstacle_range": 5.0,
+      "margin": 0.1,
+      "fresh_margin": 0.15,
+      "hover_latch": true,
+      "early_exit": true,
+      "backend": "auto"
+    },
+    "action_low": [
+      4.905,
+      -2.0,
+      -2.0,
+      -0.5
+    ],
+    "action_high": [
+      14.715,
+      2.0,
+      2.0,
+      0.5
+    ],
+    "backup_meta": {
+      "run": "results/cyl_online/phase1/td3_w128_seed0",
+      "kind": "learned",
+      "region": {
+        "z_min": 1.0,
+        "z_max": 3.0,
+        "speed_max": 2.0,
+        "fast_speed_min": 0.8,
+        "vz_max": 0.8,
+        "tilt_max_deg": 20.0,
+        "yaw_max_deg": 10.0,
+        "shell_speed_max": 0.8,
+        "shell_vz_max": 0.3,
+        "shell_tilt_max_deg": 8.0,
+        "shell_z_margin": 0.15,
+        "shell_clear_margin": 0.2,
+        "shell_obstacles_max": 3,
+        "shell_dist_min": 1.2,
+        "obstacles_max": 3,
+        "dist_min": 0.8,
+        "dist_max": 5.0,
+        "cyl_fraction": 1.0,
+        "cyl_radius_min": 0.15,
+        "cyl_radius_max": 0.6,
+        "box_half_x_min": 1.5,
+        "box_half_x_max": 3.0,
+        "box_half_y_min": 1.0,
+        "box_half_y_max": 2.5,
+        "blocked_std": 0.4,
+        "ball_gap_min": 0.5,
+        "ball_dist_max": 12.0,
+        "ball_dz_max": 2.0,
+        "chaser_near_extra": 2.0,
+        "escape_gap_max": 2.0,
+        "escape_gap_min": 0.0,
+        "wall_prob": 0.5,
+        "wall_dist_min": 0.5,
+        "wall_dist_max": 12.0,
+        "wall_span_x": [
+          30.0,
+          50.0
+        ],
+        "wall_span_y": [
+          16.0,
+          24.0
+        ],
+        "ceiling_z_min": 8.0,
+        "ceiling_z_max": 12.0,
+        "mix_low": [
+          0.5,
+          0.2,
+          0.0,
+          0.3,
+          0.0
+        ],
+        "mix_high": [
+          0.4,
+          0.4,
+          0.0,
+          0.2,
+          0.0
+        ],
+        "max_tries": 16,
+        "pool_per_region": 50000,
+        "pool_seed": 11,
+        "heldout_seed": 2026,
+        "heldout_val": 1000,
+        "heldout_test": 2000
+      },
+      "sa": {
+        "sa_backbone": "td3",
+        "seed": 0,
+        "total_steps": 4000000,
+        "start_steps": 5000,
+        "update_after": 2000,
+        "update_every": 8,
+        "gradient_steps": 1,
+        "batch_size": 256,
+        "replay_size": 1000000,
+        "beta": 0.99,
+        "tau": 0.0025,
+        "policy_delay": 2,
+        "actor_lr": 0.0001,
+        "critic_lr": 0.0003,
+        "max_grad_norm": 5.0,
+        "critic_huber_delta": 1.0,
+        "action_smoothness_weight": 0.5,
+        "hidden_size": 128,
+        "actor_activation": "relu",
+        "actor_log_std_min": -5.0,
+        "actor_log_std_max": 0.0,
+        "exploration_std": 0.1,
+        "exploration_clip": 0.25,
+        "target_policy_noise_std": 0.0,
+        "target_policy_noise_clip": 0.0,
+        "sac_alpha_init": 0.01,
+        "sac_alpha_min": 0.0001,
+        "sac_alpha_max": 0.05,
+        "sac_alpha_lr": 0.0003,
+        "sac_target_entropy": -4.0,
+        "sac_learn_alpha": true,
+        "episode_max_steps": 112,
+        "eval_every": 100000,
+        "log_every": 50000,
+        "record_update_metrics": true,
+        "update_metric_every": 200,
+        "num_envs": 64,
+        "steps_per_jit": 128,
+        "curriculum_start_scale": 1.0,
+        "curriculum_increment": 0.1,
+        "curriculum_success_threshold": 0.8,
+        "curriculum_window_episodes": 200,
+        "curriculum_min_episodes": 400,
+        "use_handoff": true,
+        "collector_terminate_on_goal": true,
+        "hoeffding_delta": 0.05
+      },
+      "certificate": {
+        "c_B": 20.0,
+        "c_U": 49.575133683850815,
+        "c_chart": 1171.6579985501,
+        "c_lyap": 49.575133683850815,
+        "c_lyap_wind": 49.575133683850815,
+        "wind_accel_max": 0.3,
+        "ratio_at_c_B": 0.9896604823568281,
+        "ratio_at_c_B_wind": 1.0124934006948112,
+        "rho_xy": 0.4039099539685922,
+        "rho": 0.4039099539685922,
+        "z_ext": 0.1698699223536406,
+        "vxy_max_in_B": 0.9183202577605296,
+        "vz_max_in_B": 0.5680606004822685,
+        "tilt_max_in_B_deg": 9.16557523794788,
+        "ok": true
+      },
+      "best_eval_step": 4000000,
+      "test_at_best": {
+        "split": "test",
+        "general": {
+          "n": 2000,
+          "m_hat": 0.972,
+          "crash_rate": 0.026,
+          "timeout_rate": 0.002,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 21.85185185185185,
+          "mean_discounted_score": 0.788049460868306
+        },
+        "blocked": {
+          "n": 2000,
+          "m_hat": 0.3525,
+          "crash_rate": 0.5815,
+          "timeout_rate": 0.066,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 49.44539007092199,
+          "mean_discounted_score": 0.21714050819055866
+        },
+        "chaser": {
+          "n": 2000,
+          "m_hat": 0.957,
+          "crash_rate": 0.0375,
+          "timeout_rate": 0.0055,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 28.11807732497388,
+          "mean_discounted_score": 0.7265632777030389
+        },
+        "shell": {
+          "n": 2000,
+          "m_hat": 1.0,
+          "crash_rate": 0.0,
+          "timeout_rate": 0.0,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 3.2745,
+          "mean_discounted_score": 0.9683667142667978
+        },
+        "escape": {
+          "n": 2000,
+          "m_hat": 0.994,
+          "crash_rate": 0.004,
+          "timeout_rate": 0.002,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 5.545271629778672,
+          "mean_discounted_score": 0.943765345734145
+        },
+        "mu_weighted": 0.7298,
+        "crash_rate": 0.1298
+      },
+      "lqr_test": {
+        "split": "test",
+        "general": {
+          "n": 2000,
+          "m_hat": 0.894,
+          "crash_rate": 0.053,
+          "timeout_rate": 0.053,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 26.251118568232663,
+          "mean_discounted_score": 0.6932718730186032
+        },
+        "blocked": {
+          "n": 2000,
+          "m_hat": 0.033,
+          "crash_rate": 0.817,
+          "timeout_rate": 0.15,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 31.272727272727273,
+          "mean_discounted_score": 0.024272458824496114
+        },
+        "chaser": {
+          "n": 2000,
+          "m_hat": 0.8805,
+          "crash_rate": 0.068,
+          "timeout_rate": 0.0515,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 32.147643384440656,
+          "mean_discounted_score": 0.6414182401618093
+        },
+        "shell": {
+          "n": 2000,
+          "m_hat": 1.0,
+          "crash_rate": 0.0,
+          "timeout_rate": 0.0,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 5.218,
+          "mean_discounted_score": 0.9507351621288428
+        },
+        "escape": {
+          "n": 2000,
+          "m_hat": 0.9165,
+          "crash_rate": 0.016,
+          "timeout_rate": 0.0675,
+          "hoeffding_halfwidth": 0.030368073095415258,
+          "mean_arrival_steps": 5.488816148390616,
+          "mean_discounted_score": 0.8691402828243415
+        },
+        "mu_weighted": 0.5708,
+        "crash_rate": 0.1908
+      },
+      "source_sha256": "98dbe356b912186582f0c10c185d04eba7283a32169ed25dbdd9b601420ecc71",
+      "twin_check": {
+        "observation": 7.968540263192381e-07,
+        "plant_step": 2.266361698310959e-07,
+        "safe_margin": 3.210011172427585e-07,
+        "base_margin": 0.00011156062828376889,
+        "lqr_action": 1.3592602456924396e-06,
+        "backup_action": 1.8430749797460066e-06
+      }
+    }
+  },
+  "flight_config": {
+    "start_position": [],
+    "pad_offset": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "boot_time": 2.0,
+    "ground_spread_tol": 0.1,
+    "max_prearm_tilt_deg": 30.0,
+    "takeoff_tol": 0.3,
+    "start_pos_tol": 0.15,
+    "start_speed_tol": 0.15,
+    "start_tilt_tol_deg": 5.0,
+    "settle_time": 8.0,
+    "start_timeout": 40.0,
+    "zeta_touch": 0.02,
+    "v_touch": 0.3,
+    "touch_steps": 3,
+    "rest_speed": 0.1,
+    "rest_time": 1.5,
+    "policy_timeout": 30.0,
+    "cone_abort_margin": 0.3,
+    "floor_abort_depth": 0.3,
+    "tilt_abort_deg": 35.0,
+    "recover_height": 1.5,
+    "recover_time": 3.0,
+    "log_dir": "/home/dev/ws_shared/experiments/cyl_online/20261120_044401-O3_straight",
+    "arrive_speed": 0.25,
+    "end_hold_time": 3.0,
+    "max_speed": 2.0,
+    "min_height": 0.3,
+    "contact_abort": true,
+    "observer_warmup": true
+  }
+}

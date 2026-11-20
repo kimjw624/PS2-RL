@@ -72,6 +72,11 @@ WALL_FIELDS = 5   # arena walls: x_lo, x_hi, y_lo, y_hi, z_hi (scene) / the five
 _ABSENT = 1.0e3   # distance reported for an empty slot
 
 
+def _min_or_absent(a: Array) -> Array:
+    """min over the last axis; _ABSENT for an empty array (no chaser slots: n_chaser_slots = 0)."""
+    return jnp.min(a) if a.shape[-1] > 0 else jnp.asarray(_ABSENT, a.dtype)
+
+
 @dataclass(frozen=True)
 class StrikeConfig:
     # vehicle (thrust-acceleration and body-rate box) and integration step
@@ -80,6 +85,8 @@ class StrikeConfig:
     a_cmd_min: float = 0.0
     a_cmd_max: float = 39.24
     omega_max: float = 18.0
+    # separate yaw-rate limit [rad/s]; 0 = yaw uses omega_max like roll and pitch (the original box)
+    omega_z_max: float = 0.0
     # backup horizon [s]
     T: float = 1.5
     # floor height, drone radius, chasers (radius, speed limit)
@@ -150,19 +157,25 @@ class StrikeConfig:
         return float(self.chaser_radius + self.r_drone + self.chaser_speed * self.T)
 
     @property
-    def action_low(self) -> tuple[float, float, float, float]:
+    def omega_box(self) -> tuple[float, float, float]:
+        """Body-rate limits (roll, pitch, yaw) [rad/s]."""
         w = float(self.omega_max)
-        return (float(self.a_cmd_min), -w, -w, -w)
+        return (w, w, float(self.omega_z_max) if self.omega_z_max > 0.0 else w)
+
+    @property
+    def action_low(self) -> tuple[float, float, float, float]:
+        wx, wy, wz = self.omega_box
+        return (float(self.a_cmd_min), -wx, -wy, -wz)
 
     @property
     def action_high(self) -> tuple[float, float, float, float]:
-        w = float(self.omega_max)
-        return (float(self.a_cmd_max), w, w, w)
+        wx, wy, wz = self.omega_box
+        return (float(self.a_cmd_max), wx, wy, wz)
 
     @property
     def action_scale(self) -> tuple[float, float, float, float]:
-        w = float(self.omega_max)
-        return (float(self.a_cmd_max), w, w, w)
+        wx, wy, wz = self.omega_box
+        return (float(self.a_cmd_max), wx, wy, wz)
 
     @property
     def moving_chasers(self) -> bool:
@@ -207,7 +220,7 @@ class StrikeConfig:
 
 # fields the plant, contacts and chasers depend on: an environment and a safety filter built from two strike configs (e.g.
 # the striker's observation format and a backup trained with another scene format) must agree on these
-PLANT_FIELDS = ("dt", "gravity", "a_cmd_min", "a_cmd_max", "omega_max", "z_floor", "r_drone", "chaser_radius", "chaser_speed",
+PLANT_FIELDS = ("dt", "gravity", "a_cmd_min", "a_cmd_max", "omega_max", "omega_z_max", "z_floor", "r_drone", "chaser_radius", "chaser_speed",
                 "n_chaser_slots")
 
 
@@ -284,7 +297,8 @@ def _np_chart(q: np.ndarray) -> np.ndarray:
 def _np_step(x: np.ndarray, u: np.ndarray, cfg: StrikeConfig, d: np.ndarray | None = None) -> np.ndarray:
     """Batched explicit-Euler plant step (same model as ``plant_step``), optional acceleration disturbance d."""
     a = np.clip(u[:, 0], cfg.a_cmd_min, cfg.a_cmd_max)
-    w = np.clip(u[:, 1:], -cfg.omega_max, cfg.omega_max)
+    wb = np.asarray(cfg.omega_box)
+    w = np.clip(u[:, 1:], -wb, wb)
     qw, qx, qy, qz = x[:, 6], x[:, 7], x[:, 8], x[:, 9]
     e3 = np.stack([2 * (qx * qz + qw * qy), 2 * (qy * qz - qw * qx), 1 - 2 * (qx * qx + qy * qy)], 1)
     vdot = e3 * a[:, None] - np.array([0.0, 0.0, cfg.gravity]) + (0.0 if d is None else d)
@@ -325,7 +339,7 @@ def certify_base_set(cfg: StrikeConfig, lqr: HoverAnchorLQR | None = None, *, n:
     of the hover LQR without and with the worst moderate wind (c_Lyap). ``ok`` when c_B is below all of them."""
     lqr = lqr or design_hover_lqr(cfg)
     Pi = np.linalg.inv(lqr.P)
-    margins = np.array([min(cfg.gravity - cfg.a_cmd_min, cfg.a_cmd_max - cfg.gravity)] + [cfg.omega_max] * 3)
+    margins = np.array([min(cfg.gravity - cfg.a_cmd_min, cfg.a_cmd_max - cfg.gravity)] + list(cfg.omega_box))
     c_u = float(min(margins[i] ** 2 / (lqr.K[i] @ Pi @ lqr.K[i]) for i in range(4)))
     c_chart = float(4.0 / np.linalg.eigvalsh(Pi[6:9, 6:9]).max())
     hi = min(c_u, c_chart)
@@ -394,7 +408,8 @@ def attitude_chart(q: Array) -> Array:
 
 def plant_step(m: StrikeModel, x: Array, u: Array) -> Array:
     cfg = m.cfg
-    xn = quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, cfg.omega_max)
+    w_max = cfg.omega_max if cfg.omega_z_max <= 0.0 else jnp.asarray(cfg.omega_box, x.dtype)
+    xn = quadrotor_step_euler(x, u, cfg.dt, cfg.gravity, cfg.a_cmd_min, cfg.a_cmd_max, w_max)
     return xn.at[6:10].set(normalize_quaternion(xn[6:10]))
 
 
@@ -578,13 +593,13 @@ def margins_rel(m: StrikeModel, h: Array, v: Array, q: Array, obst_rel: Array, b
     on = balls_rel[:, 3] > 0.5
     if cfg.moving_chasers:
         h_c, _ = escape_margin(cfg, balls_rel[:, 0:3], v)
-        ch_safe = jnp.min(jnp.where(on, h_c, _ABSENT))
-        ch_base = jnp.min(jnp.where(on, hover_chaser_margin(m, balls_rel[:, 0:3] - off[None, :], level), _ABSENT))
+        ch_safe = _min_or_absent(jnp.where(on, h_c, _ABSENT))
+        ch_base = _min_or_absent(jnp.where(on, hover_chaser_margin(m, balls_rel[:, 0:3] - off[None, :], level), _ABSENT))
     else:
         R = cfg.ball_radius
         R_base = R + cfg.chaser_speed * (cfg.chaser_hold if hold is None else hold)
-        ch_safe = jnp.min(ball_distances(zero3, balls_rel, R))
-        ch_base = jnp.min(ball_distances(off, balls_rel, R_base)) - lqr.rho
+        ch_safe = _min_or_absent(ball_distances(zero3, balls_rel, R))
+        ch_base = _min_or_absent(ball_distances(off, balls_rel, R_base)) - lqr.rho
     safe = jnp.minimum(jnp.minimum(h, jnp.min(obstacle_distances(zero2, obst_rel)) - cfg.r_drone), ch_safe)
     base = jnp.minimum(
         jnp.minimum(cfg.c_B - level, jnp.min(obstacle_distances(off[0:2], obst_rel)) - lqr.rho_xy - cfg.r_drone),
